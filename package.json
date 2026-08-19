@@ -1,0 +1,14 @@
+{
+  "name": "cupi-wiki",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "npm run build && DEV_FAKE_AUTH=ab3233@cornell.edu node dev.mjs",
+    "start": "npm run build && node dev.mjs"
+  },
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}

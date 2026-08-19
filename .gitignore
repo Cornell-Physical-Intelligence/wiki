@@ -1,0 +1,5 @@
+node_modules/
+public/index.html
+.devdata.json
+.vercel
+.DS_Store
