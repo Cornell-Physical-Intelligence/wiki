@@ -185,7 +185,7 @@ If you explain something in Slack twice, it belongs on a wiki page. Press **N** 
 | Mechanical | [[CAD Standards (Onshape)]], [[Part Numbering and BOM]], printing and machining |
 | Electrical | [[Altium Workflow and Libraries]], [[Power Distribution Board]], [[Wiring and Connectors]] |
 | Software | [[Dev Environment and Repos]], [[ROS 2 Perception Stack]], [[Flight Testing Procedure]] |
-| Operations | Meeting notes, [[Budget and Purchasing]] |
+| Operations | [[Meeting Notes]], [[Budget and Purchasing]] |
 
 ## House rules
 
@@ -193,7 +193,7 @@ If you explain something in Slack twice, it belongs on a wiki page. Press **N** 
 2. **Attach the source.** Screenshots of CAD go next to a link to the Onshape document; schematic PDFs go next to the Altium 365 link. A picture without the source file is a dead end. See [[How to Use This Wiki]].
 3. **Date your test data.** A measurement without a date and a setup is a rumor.
 
-Questions about access or accounts → [[Onboarding Checklist]] or ask ${'`#general`'}.`,
+Syntax and everything the editor can do: [[Formatting Guide]]. Questions about access or accounts → [[Onboarding Checklist]] or ask ${'`#general`'}.`,
   revs: [
     { ts: ago(180), by: 'ab3233@cornell.edu', summary: 'Created page', body: 'Welcome to the CUPI wiki. More soon.' },
     { ts: ago(90), by: 'nl482@cornell.edu', summary: 'Added house rules', body: `This is CUPI's internal knowledge base.\n\n## House rules\n\n1. Pages over threads.\n2. Attach the source.\n3. Date your test data.` },
@@ -205,6 +205,11 @@ page({
   owner: 'nl482@cornell.edu', created: ago(160), updated: ago(2, 4), updatedBy: 'nl482@cornell.edu',
   tags: ['start-here'],
   body: `Work through this top to bottom. Most items unblock the ones after them. Your lead signs off at the bottom when you're done.
+
+::: note This is the master copy
+Don't check boxes here — **duplicate it** (••• menu → Duplicate), rename your copy to *Onboarding — Your Name*, and tick things off there. Leads keep this master current.
+
+:::
 
 ## Accounts and access
 
@@ -301,13 +306,103 @@ page({
 
 | Date | Decision | Status |
 | --- | --- | --- |
-| 2026-02 | Onshape over SolidWorks for all team CAD | Adopted |
+| 2026-02 | [[ADR: Onshape over SolidWorks]] | Adopted |
 | 2026-03 | Dynamixel XM430 over cheap serial servos for hexapod joints | Adopted |
 | 2026-04 | ESP-NOW (not Wi-Fi) for quad↔hexapod coordination link | Adopted |
 | 2026-05 | Altium 365 workspace over local projects + Drive | Adopted |
 | 2026-07 | Monocular + IMU only policy for VQ2 (rules change) | Forced |
 
-Write the next one with **N → Decision record**. Keep the *Options considered* section honest — the rejected options are the valuable part.`,
+Write the next one with **N → Decision record**. Keep the *Options considered* section honest — the rejected options are the valuable part. [[ADR: Onshape over SolidWorks]] is the exemplar; match its shape.`,
+});
+
+page({
+  id: 'adr-onshape', section: 'getting-started', title: 'ADR: Onshape over SolidWorks',
+  owner: 'am3644@cornell.edu', created: ago(175), updated: ago(175), updatedBy: 'am3644@cornell.edu',
+  parent: 'decisions', tags: ['decision'],
+  body: `**Status:** Adopted · **Deciders:** Alan, Ollie, Andre · **Date:** 2026-02-11
+
+## Context
+
+Cornell's SolidWorks licenses only run on the lab Windows machines, half the team is on Macs, and file exchange through Drive kept producing "which SLDPRT is current" archaeology. We were spending build meetings resolving CAD versions instead of building.
+
+## Options considered
+
+1. **SolidWorks + PDM discipline** — best surfacing tools; but license-locked to lab machines, PDM costs money we don't have, and enforcement failed twice already.
+2. **Fusion 360** — free for students, decent; but per-file cloud model made assemblies of 200+ parts painful in testing, and export lock-in worried us.
+3. **Onshape** — browser-based so every laptop works day one, real branching/versioning built in, free education tier. Weaker surfacing and drawings than SolidWorks.
+
+## Decision
+
+Onshape, for all team CAD. The one reason that mattered most: **version control is the actual problem we have**, and Onshape's branch/merge/version model solves it structurally instead of by discipline.
+
+## Consequences
+
+- Easier: onboarding (nothing to install), design reviews (send a link), [[CAD Standards (Onshape)]] can mandate branching because it's free
+- Harder: complex surfacing; anyone needing it prototypes in SolidWorks on a lab machine, then rebuilds the final in Onshape
+- Revisit if: assemblies exceed Onshape's education-tier performance, or the education tier changes`,
+});
+
+page({
+  id: 'formatting-guide', section: 'getting-started', title: 'Formatting Guide',
+  owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 1), updatedBy: 'ab3233@cornell.edu',
+  tags: ['reference'],
+  body: `Everything is Markdown, with a few team extras. This page is itself editable proof — hit Edit to see its source.
+
+## Text
+
+**Bold**, *italic*, ~~strikethrough~~, ${'`inline code`'}, and [external links](https://cornellphysicalintelligence.com). Headings with ${'`##`'} and ${'`###`'} build the table of contents automatically.
+
+## Linking pages
+
+${'`[[Hexapod]]`'} → [[Hexapod]]. Add a label with ${'`[[Hexapod|the walker]]`'} → [[Hexapod|the walker]]. Link straight to a section: ${'`[[Hexapod#Leg design]]`'}. A link to a page that doesn't exist yet shows red — like [[Landing Gear Study]] — and clicking it creates the page.
+
+## Lists and tasks
+
+- Regular bullets and numbered lists nest by indentation
+- [ ] Task items are live checkboxes — tick them right on the page
+- [x] Done items cross out
+
+## Callouts
+
+::: note Three kinds
+${'`::: note`'} , ${'`::: warn`'} , ${'`::: tip`'} — each with an optional title.
+
+:::
+
+## Tables
+
+Click any column header to sort.
+
+| Rail | Budget | Measured |
+| --- | --- | --- |
+| 5 V | 6 A | 4.4 A |
+| 12 V | 8 A | 6.1 A |
+
+## Code
+
+~~~python
+tau_inv = (w_t - w_prev) / (w_prev * dt)   # optical looming
+~~~
+
+## Pictures, CAD, schematics
+
+Drag any file into the editor, or paste a screenshot:
+
+- Images embed inline with an optional caption, and open in a lightbox
+- STL/OBJ get an interactive 3D viewer, right in the page
+- STEP, SchDoc, PDF, anything else becomes a labeled file card
+- An **Onshape** or **Altium 365** URL pasted on its own line becomes a rich card
+
+## Keyboard
+
+| Key | Does |
+| --- | --- |
+| ⌘K | Search everything |
+| N | New page |
+| E | Edit the page you're reading |
+| ⌘S / ⌘Enter | Save while editing |
+| ? | Shortcut overlay |
+| Esc | Close anything (drafts are kept) |`,
 });
 
 /* ------------------------------- Projects -------------------------------- */
@@ -506,7 +601,7 @@ One Onshape **document per assembly**, named ${'`CUPI-<project>-<assembly>`'} (e
 | Purpose | Format | Where |
 | --- | --- | --- |
 | Print | STL / 3MF | Attach to the part's wiki page |
-| Machine | STEP + PDF drawing | Attach to the wiki page **and** the machining request |
+| Machine | STEP + PDF drawing | Attach to the wiki page **and** the [[Machining Resources|machining request]] |
 | Archive | Onshape version | Link the version, not the workspace |
 
 Example of the pattern done right: [[Hexapod Leg Design]].`,
@@ -907,8 +1002,23 @@ Sim attempts for [[AI Grand Prix]] follow the same card discipline — the repla
 /* ------------------------------- Operations ------------------------------ */
 
 page({
+  id: 'meeting-notes', section: 'operations', title: 'Meeting Notes',
+  owner: 'ab3233@cornell.edu', created: ago(120), updated: ago(4, 20), updatedBy: 'ab3233@cornell.edu',
+  body: `General meetings are Thursdays 19:00, Upson 116. Notes are taken live on a subpage of this one — **N → Meeting notes**, nest it here, title it ${'`General Meeting — YYYY-MM-DD`'}.
+
+## This semester
+
+| Date | Notes | Highlights |
+| --- | --- | --- |
+| 2026-08-14 | [[General Meeting — 2026-08-14]] | Leg rev C adopted · VQ2 sim status · recruiting dates |
+
+Older semesters get archived into a subpage per semester once the table gets long.`,
+});
+
+page({
   id: 'meeting-2026-08-14', section: 'operations', title: 'General Meeting — 2026-08-14',
   owner: 'ab3233@cornell.edu', created: ago(5, 2), updated: ago(4, 22), updatedBy: 'ab3233@cornell.edu',
+  parent: 'meeting-notes',
   tags: ['meeting'],
   body: `**Attending:** Andre, Nicholas, Jonathan, Mic, Alan, Ollie, James, Nick L, Josh · **Notes:** Andre
 

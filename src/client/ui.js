@@ -81,11 +81,16 @@ function renderToasts() {
 /* ------------------------------- router ---------------------------------- */
 
 function parseHash() {
-  const h = location.hash.replace(/^#\/?/, '');
+  let h = location.hash.replace(/^#\/?/, '');
+  // "#/page/leg-design#test-results" → route to the page, remember the anchor.
+  let anchor = null;
+  const ai = h.indexOf('#');
+  if (ai >= 0) { anchor = h.slice(ai + 1); h = h.slice(0, ai); }
   const [path, qs] = h.split('?');
   const seg = path.split('/').filter(Boolean);
   const params = {};
   if (qs) for (const kv of qs.split('&')) { const [k, v] = kv.split('='); params[k] = decodeURIComponent(v || ''); }
+  if (anchor) params.anchor = anchor;
   return { seg, params };
 }
 
@@ -97,6 +102,8 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
+  // The formatting guide is a real (searchable, editable) page now; keep old links working.
+  if (name === 'guide') { UI.route = { name: 'page', params: { id: 'formatting-guide' } }; return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
 
@@ -144,6 +151,31 @@ function viewChooser() {
 
 /* ------------------------------- shell ----------------------------------- */
 
+// True when `id` is `cur` or an ancestor of it — those branches stay open.
+function onPathTo(id, cur) {
+  let p = cur && Store.page(cur);
+  while (p) {
+    if (p.id === id) return true;
+    p = p.parent ? Store.page(p.parent) : null;
+  }
+  return false;
+}
+
+function treeItem(p, cur, prefs, depth) {
+  const kids = Store.childrenOf(p.id);
+  // The Home navlink already marks Welcome; don't double-highlight it here.
+  const active = p.id === cur && cur !== 'welcome';
+  const isCollapsed = kids.length && !onPathTo(p.id, cur) && !prefs['open-' + p.id];
+  return `<div class="tree-item ${isCollapsed ? 'collapsed' : ''}">
+    <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}" style="${depth ? `padding-left:${8 + depth * 18}px` : ''}">
+      ${kids.length ? `<button class="tree-item__toggle" data-action="node-toggle" data-id="${p.id}" aria-label="Toggle children"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>` : '<span class="tree-item__spacer"></span>'}
+      <span class="tree-item__label">${MD.esc(p.title)}</span>
+      ${prefs.starred.includes(p.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
+    </a>
+    ${kids.length ? `<div class="tree-item__kids">${kids.map((k) => treeItem(k, cur, prefs, depth + 1)).join('')}</div>` : ''}
+  </div>`;
+}
+
 function sectionTree(sec) {
   const pages = Store.inSection(sec.id);
   const prefs = Store.prefs();
@@ -156,23 +188,7 @@ function sectionTree(sec) {
       <span class="tree-section__add" data-action="new-page" data-sec="${sec.id}" role="button" aria-label="New page in ${sec.name}" title="New page in ${sec.name}">${I.plus}</span>
     </button>
     <div class="tree-section__body">
-      ${pages.map((p) => {
-        const kids = Store.childrenOf(p.id);
-        const open = kids.some((k) => k.id === cur) || p.id === cur;
-        const isCollapsed = kids.length && !open && !prefs['open-' + p.id];
-        return `<div class="tree-item ${kids.length && isCollapsed ? 'collapsed' : ''}">
-          <a class="tree-item__row ${p.id === cur ? 'active' : ''}" href="#/page/${p.id}">
-            ${kids.length ? `<button class="tree-item__toggle" data-action="node-toggle" data-id="${p.id}" aria-label="Toggle children"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>` : '<span class="tree-item__spacer"></span>'}
-            <span class="tree-item__label">${MD.esc(p.title)}</span>
-            ${prefs.starred.includes(p.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
-          </a>
-          ${kids.length ? `<div class="tree-item__kids">${kids.map((k) => `
-            <div class="tree-item tree-item--child"><a class="tree-item__row ${k.id === cur ? 'active' : ''}" href="#/page/${k.id}">
-              <span class="tree-item__label">${MD.esc(k.title)}</span>
-              ${prefs.starred.includes(k.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
-            </a></div>`).join('')}</div>` : ''}
-        </div>`;
-      }).join('')}
+      ${pages.map((p) => treeItem(p, cur, prefs, 0)).join('')}
     </div>
   </div>`;
 }
@@ -208,7 +224,7 @@ function viewSidebar() {
         <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
       </button>
       ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-      <a class="icon-btn ${r.name === 'guide' ? 'active' : ''}" href="#/guide" aria-label="Formatting guide" title="Formatting guide">${I.help}</a>
+      <a class="icon-btn ${r.params.id === 'formatting-guide' ? 'active' : ''}" href="#/page/formatting-guide" aria-label="Formatting guide" title="Formatting guide">${I.help}</a>
     </div>
   </aside>`;
 }
@@ -264,7 +280,7 @@ function viewPage(id) {
             <span>last edit ${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span>
             <span>${p.revs.length} revision${p.revs.length === 1 ? '' : 's'}</span>
             <span>${Math.max(1, Math.round(MD.mdToText(p.body).split(/\s+/).length / 220))} min read</span>
-            ${(() => { const total = (p.body.match(/^\s*(?:[-*]|\d+[.)])\s+\[( |x|X)\]/gm) || []).length; if (!total) return ''; const done = (p.body.match(/^\s*(?:[-*]|\d+[.)])\s+\[(x|X)\]/gm) || []).length; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
+            ${(() => { const { total, done } = MD.countTasks(p.body); if (!total) return ''; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
           </div>
         </header>
         <div class="prose" data-page="${id}">${html}</div>
@@ -280,7 +296,7 @@ function viewPage(id) {
               <div class="comment__body">
                 <div class="comment__head"><span class="comment__who">${MD.esc(Store.userName(c.by))}</span><span class="comment__when">${relTime(c.ts)}</span>
                 ${c.by === me.email || me.role === 'admin' ? `<button class="icon-btn comment__del" data-action="comment-del" data-id="${c.id}" aria-label="Delete comment" style="width:22px;height:22px">${I.x}</button>` : ''}</div>
-                <p class="comment__text">${MD.renderInline(c.text.replace(/&#39;/g, "'"), mdCtx())}</p>
+                <p class="comment__text">${MD.renderInline(c.text.replace(/&#39;/g, "'"), mdCtx()).replace(/@([a-z0-9.]+)/gi, '<span class="mention">@$1</span>')}</p>
               </div>
             </div>`).join('')}
             <form class="comment-form" data-action="comment-form" data-id="${id}">
@@ -322,12 +338,19 @@ function viewSection(secId) {
 /* ------------------------------- 3D viewer ------------------------------- */
 
 function parseSTL(buf) {
+  if (buf.byteLength < 15) return null; // smaller than the smallest legal ASCII STL
   const dv = new DataView(buf);
   const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(80, buf.byteLength))).trim();
-  if (head.startsWith('solid') && buf.byteLength < 84) return null;
-  const isAscii = head.startsWith('solid') && !(buf.byteLength === 84 + dv.getUint32(80, true) * 50);
+  // Binary detection tolerates trailing padding, and wins even when the 80-byte
+  // header starts with "solid" (SolidWorks exports do this).
+  let isBinary = false;
+  if (buf.byteLength >= 84) {
+    const n = dv.getUint32(80, true);
+    if (n > 0 && buf.byteLength >= 84 + n * 50 && buf.byteLength < 84 + n * 50 + 512) isBinary = true;
+  }
   const verts = [];
-  if (isAscii) {
+  if (!isBinary) {
+    if (!head.startsWith('solid')) return null;
     const txt = new TextDecoder().decode(buf);
     const re = /vertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g;
     let m;
@@ -341,7 +364,8 @@ function parseSTL(buf) {
       }
     }
   }
-  return verts.length ? new Float32Array(verts) : null;
+  if (!verts.length || verts.some((v) => !isFinite(v))) return null;
+  return new Float32Array(verts);
 }
 
 function parseOBJ(text) {
@@ -351,12 +375,14 @@ function parseOBJ(text) {
     if (t[0] === 'v') vs.push([+t[1], +t[2], +t[3]]);
     else if (t[0] === 'f') {
       const idx = t.slice(1).map((s) => { let i = parseInt(s.split('/')[0], 10); return i < 0 ? vs.length + i : i - 1; });
+      if (idx.some((j) => !vs[j])) continue; // skip faces with out-of-range indices
       for (let k = 1; k + 1 < idx.length; k++) {
-        for (const j of [idx[0], idx[k], idx[k + 1]]) { const v = vs[j]; if (v) out.push(v[0], v[1], v[2]); }
+        for (const j of [idx[0], idx[k], idx[k + 1]]) { const v = vs[j]; out.push(v[0], v[1], v[2]); }
       }
     }
   }
-  return out.length ? new Float32Array(out) : null;
+  if (!out.length || out.some((v) => !isFinite(v))) return null;
+  return new Float32Array(out);
 }
 
 async function mountCadViewer(host) {
@@ -374,8 +400,9 @@ async function mountCadViewer(host) {
     try { buffer = await (await fetch(att.url)).arrayBuffer(); } catch (e) { return; }
     if (!canvas.isConnected) return; // page changed while fetching
   } else return;
-  const verts = /\.obj$/i.test(att.name) ? parseOBJ(new TextDecoder().decode(buffer)) : parseSTL(buffer);
-  if (!verts) { host.querySelector('.cad-embed__stage').innerHTML = '<div class="empty" style="padding:24px">Could not parse this model.</div>'; return; }
+  let verts = null;
+  try { verts = /\.obj$/i.test(att.name) ? parseOBJ(new TextDecoder().decode(buffer)) : parseSTL(buffer); } catch (e) { verts = null; }
+  if (!verts) { host.querySelector('.cad-embed__stage').innerHTML = `<div class="empty" style="padding:24px"><b>Couldn't read this model</b><p>${MD.esc(att.name)} doesn't parse as ${/\.obj$/i.test(att.name) ? 'OBJ' : 'STL'} — re-export it and re-attach.</p></div>`; return; }
 
   // Center + scale.
   let min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9];

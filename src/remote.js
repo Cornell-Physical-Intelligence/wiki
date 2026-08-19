@@ -82,7 +82,8 @@ const OP_MAP = {
   restorePage: (a) => ({ op: 'restorePage', args: { id: a[0] } }),
   purgePage: (a) => ({ op: 'purgePage', args: { id: a[0] } }),
   movePage: (a) => ({ op: 'movePage', args: { id: a[0], ...a[1] } }),
-  duplicatePage: (a) => ({ op: 'duplicatePage', args: { id: a[0] } }),
+  // duplicatePage is NOT mapped: the client helper calls createPage internally,
+  // and that wrapped call already sends the op — mapping both would duplicate twice.
   deleteComment: (a) => ({ op: 'deleteComment', args: { id: a[0] } }),
   resendInvite: (a) => ({ op: 'resendInvite', args: { email: a[0] } }),
   revokeInvite: (a) => ({ op: 'revokeInvite', args: { email: a[0] } }),

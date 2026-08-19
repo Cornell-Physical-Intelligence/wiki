@@ -6,26 +6,49 @@
 
 'use strict';
 
-const draftStash = new Map(); // pageId|'new' -> {title, body, section}
+// Drafts survive reloads: mirrored to localStorage on every autosave tick.
+const DRAFT_KEY = 'cupi-wiki-drafts';
+const draftStash = new Map(); // pageId|'new' -> {title, body, section, tags, origBody}
+try {
+  for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'))) draftStash.set(k, v);
+} catch (e) { /* fresh start */ }
 
-function stashDraftIfDirty() {
+function persistDrafts() {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(Object.fromEntries(draftStash))); } catch (e) {}
+}
+
+function stashDraftIfDirty(silent) {
   const e = UI.editor;
   if (e && e.dirty) {
-    draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent });
-    toast('Draft kept', { label: 'Resume', run: () => { const k = e.pageId || 'new'; startEdit(e.pageId, !e.pageId, draftStash.get(k)); } });
+    draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
+    persistDrafts();
+    if (!silent) toast('Draft kept', { label: 'Resume', run: () => { const k = e.pageId || 'new'; startEdit(e.pageId, !e.pageId, draftStash.get(k)); } });
   }
   UI.editor = null;
+}
+
+// Autosave the open editor into the stash so a crash or reload loses nothing.
+let draftTimer = null;
+function autosaveDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    const e = UI.editor;
+    if (!e || !e.dirty) return;
+    draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
+    persistDrafts();
+  }, 900);
 }
 
 function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
   openEditor(pageId, isNew, draft);
-  if (draft) { UI.editor.dirty = true; draftStash.delete(key); }
+  if (draft) { UI.editor.dirty = true; draftStash.delete(key); persistDrafts(); }
   render();
 }
 
 function openMenu(items, anchor) {
+  window.__closeMenu?.();
   const r = anchor.getBoundingClientRect();
   UI.menu = { items };
   const host = document.createElement('div');
@@ -37,7 +60,12 @@ function openMenu(items, anchor) {
   const mw = host.offsetWidth, mh = host.offsetHeight;
   host.style.left = Math.min(r.left, innerWidth - mw - 10) + 'px';
   host.style.top = (r.bottom + mh + 10 > innerHeight ? r.top - mh - 6 : r.bottom + 6) + 'px';
-  const close = () => { host.remove(); UI.menu = null; document.removeEventListener('pointerdown', onAway, true); };
+  const close = () => {
+    host.remove(); UI.menu = null;
+    document.removeEventListener('pointerdown', onAway, true);
+    window.__closeMenu = null;
+  };
+  window.__closeMenu = close; // render() and Esc both close through this
   const onAway = (ev) => { if (!host.contains(ev.target)) close(); };
   document.addEventListener('pointerdown', onAway, true);
   host.addEventListener('click', (ev) => {
@@ -85,6 +113,11 @@ document.addEventListener('click', async (ev) => {
     case 'node-toggle': stop(); Store.prefs()['open-' + el.dataset.id] = !Store.prefs()['open-' + el.dataset.id]; Store.persist(); render(); break;
     case 'user-menu': stop(); openMenu([
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
+      { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
+        const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
+        try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
+        catch (e) { toast('Clipboard unavailable in this sandbox'); }
+      } },
       { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'This is the CUPI wiki preview. Everything works, but data lives in this browser only and sign-in is simulated. The production deployment adds Google OAuth (cornell.edu only), shared storage, real invite emails, and live Onshape/Altium embeds.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
       '-',
       { icon: I.history, label: 'Reset demo data', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Reset demo data?', text: 'Every page, member, and attachment goes back to the seeded state. Your edits in this browser are erased.', confirm: 'Reset', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/page/welcome'); route(); render(); toast('Demo data reset'); }; render(); } },
@@ -128,16 +161,17 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, tpl: 'blank' }; render(); break;
-    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; UI.modal.title = $('.modal [data-m="title"]')?.value || UI.modal.title; UI.modal.section = $('.modal [data-m="section"]')?.value || UI.modal.section; render(); break;
+    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; UI.modal.title = $('.modal [data-m="title"]')?.value || UI.modal.title; UI.modal.section = $('.modal [data-m="section"]')?.value || UI.modal.section; UI.modal.parent = $('.modal [data-m="parent"]')?.value || ''; render(); break;
     case 'new-page-go': {
       stop();
       const title = ($('.modal [data-m="title"]')?.value || '').trim();
       const section = $('.modal [data-m="section"]')?.value || 'projects';
+      const parent = $('.modal [data-m="parent"]')?.value || null;
       if (!title) { UI.modal.error = 'Every page needs a title.'; render(); break; }
       if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they're unique.`; render(); break; }
       const tpl = TEMPLATES.find((t) => t.id === (UI.modal.tpl || 'blank'));
       UI.modal = null;
-      openEditor(null, true, { title, body: tpl.body, section });
+      openEditor(null, true, { title, body: tpl.body, section, parent });
       UI.editor.dirty = true;
       render();
       break;
@@ -254,7 +288,7 @@ document.addEventListener('input', (ev) => {
   if (t.matches('.palette input')) {
     UI.palette.q = t.value;
     UI.palette.sel = 0;
-    render();
+    renderPaletteList(); // input DOM stays put — the caret never jumps
     return;
   }
 
@@ -263,15 +297,22 @@ document.addEventListener('input', (ev) => {
   if (t.matches('[data-ed="title"]')) {
     UI.editor.title = t.value;
     markDirty();
+    autosaveDraft();
     clearTimeout(previewTimer);
     previewTimer = setTimeout(edUpdatePreview, 160);
   }
   if (t.matches('[data-ed="body"]')) {
     UI.editor.body = t.value;
     markDirty();
+    autosaveDraft();
     edAutocomplete(t);
     clearTimeout(previewTimer);
     previewTimer = setTimeout(edUpdatePreview, 160);
+  }
+  if (t.matches('[data-ed-tags]')) {
+    UI.editor.tags = t.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8);
+    markDirty();
+    autosaveDraft();
   }
 });
 
@@ -333,7 +374,7 @@ document.addEventListener('keydown', (ev) => {
       ev.preventDefault();
       const n = UI.palette.count || 0;
       if (n) UI.palette.sel = (UI.palette.sel + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
-      render();
+      renderPaletteList();
       return;
     }
     if (ev.key === 'Enter') {
@@ -347,19 +388,56 @@ document.addEventListener('keydown', (ev) => {
 
   if (mod && ev.key.toLowerCase() === 'k') { ev.preventDefault(); UI.palette ? (UI.palette = null, render()) : openPalette(); return; }
 
+  // Post a comment with ⌘Enter from its textarea.
+  if (mod && ev.key === 'Enter' && ev.target.matches('.comment-form textarea')) {
+    ev.preventDefault();
+    ev.target.closest('form').querySelector('button[type="submit"]').click();
+    return;
+  }
+
   if (ev.key === 'Escape') {
-    if (UI.menu) return; // menu closes itself
+    if (UI.menu) { ev.preventDefault(); window.__closeMenu?.(); return; }
     if (UI.modal) { UI.modal = null; render(); return; }
     if ($('.lightbox')) { $('.lightbox').remove(); return; }
     if (!$('.ed-autocomplete')?.hidden) { $('.ed-autocomplete').hidden = true; return; }
-    if (UI.editor && !typing) { const pid = UI.editor.pageId; stashDraftIfDirty(); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); return; }
+    // Esc closes the editor from anywhere in it — including the textarea,
+    // which is where you always are. The draft is kept.
+    if (UI.editor) { const pid = UI.editor.pageId; stashDraftIfDirty(); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); return; }
     if (UI.navOpen) { UI.navOpen = false; render(); return; }
   }
 
   if (UI.editor) {
+    const inBody = ev.target.matches('[data-ed="body"]');
     if (mod && (ev.key === 's' || ev.key === 'Enter')) { ev.preventDefault(); UI.modal?.kind === 'save-summary' ? $('.modal [data-action="save-commit"]')?.click() : edSave(); return; }
-    if (mod && ev.key.toLowerCase() === 'b' && ev.target.matches('[data-ed="body"]')) { ev.preventDefault(); ED_TOOLS.bold(); return; }
-    if (mod && ev.key.toLowerCase() === 'i' && ev.target.matches('[data-ed="body"]')) { ev.preventDefault(); ED_TOOLS.italic(); return; }
+    if (mod && ev.key.toLowerCase() === 'b' && inBody) { ev.preventDefault(); ED_TOOLS.bold(); return; }
+    if (mod && ev.key.toLowerCase() === 'i' && inBody) { ev.preventDefault(); ED_TOOLS.italic(); return; }
+    // Tab indents instead of leaving the editor.
+    if (ev.key === 'Tab' && inBody && !ev.shiftKey) {
+      ev.preventDefault();
+      ev.target.setRangeText('  ', ev.target.selectionStart, ev.target.selectionEnd, 'end');
+      ev.target.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    // Enter continues lists; Enter on an empty item ends the list.
+    if (ev.key === 'Enter' && inBody && !ev.shiftKey && !mod && $('.ed-autocomplete')?.hidden !== false) {
+      const ta = ev.target;
+      const before = ta.value.slice(0, ta.selectionStart);
+      const line = before.slice(before.lastIndexOf('\n') + 1);
+      const m = line.match(/^(\s*)([-*]|\d+[.)])(\s+\[[ xX]\])?\s+(.*)$/);
+      if (m) {
+        ev.preventDefault();
+        if (!m[4].trim()) {
+          // empty item — remove the marker and end the list
+          const lineStart = ta.selectionStart - line.length;
+          ta.setRangeText('\n', lineStart, ta.selectionEnd, 'end');
+        } else {
+          const num = /\d/.test(m[2][0]) ? (parseInt(m[2], 10) + 1) + m[2].slice(-1) : m[2];
+          ta.setRangeText('\n' + m[1] + num + (m[3] ? ' [ ]' : '') + ' ', ta.selectionStart, ta.selectionEnd, 'end');
+        }
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+    }
     return;
   }
 
@@ -381,10 +459,30 @@ window.addEventListener('beforeunload', (ev) => {
 /* ------------------------------- routing + boot -------------------------- */
 
 window.addEventListener('hashchange', () => {
+  // A bare "#heading" hash is an in-page anchor (TOC, heading permalinks) —
+  // scroll to it without re-routing.
+  if (location.hash && !location.hash.startsWith('#/')) {
+    const el = document.getElementById(location.hash.slice(1));
+    if (el) { el.scrollIntoView({ behavior: 'smooth' }); return; }
+  }
+  // Leaving the inbox is the moment its items count as read.
+  if (UI.route.name === 'inbox') Store.markInboxRead();
   const wasEditing = !!UI.editor;
   if (wasEditing) stashDraftIfDirty();
+  UI.navOpen = false;
   route();
   render();
+});
+
+// Another tab wrote — adopt its state so two tabs can't clobber each other.
+window.addEventListener('storage', (ev) => {
+  if (ev.key !== 'cupi-wiki-v2' || !ev.newValue) return;
+  try {
+    Store.s = JSON.parse(ev.newValue);
+    Store.reindex();
+    if (!UI.editor) render();
+    else toast('This wiki changed in another tab — your editor still has your text.');
+  } catch (e) { /* ignore malformed */ }
 });
 
 function syncViewerTheme() {

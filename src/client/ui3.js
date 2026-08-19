@@ -10,9 +10,15 @@
 Object.assign(Store, {
   isWatching(id) { const p = Store.prefs(); return (p.watched || (p.watched = [])).includes(id); },
   toggleWatch(id) {
-    const w = Store.prefs().watched || (Store.prefs().watched = []);
+    const p = Store.prefs();
+    const w = p.watched || (p.watched = []);
     const i = w.indexOf(id);
-    if (i >= 0) w.splice(i, 1); else w.push(id);
+    if (i >= 0) w.splice(i, 1);
+    else {
+      w.push(id);
+      // Watching starts now — the page's past shouldn't flood in as "unread".
+      if (!p.inboxReadAt) p.inboxReadAt = Date.now();
+    }
     Store.persist();
     return i < 0;
   },
@@ -20,7 +26,9 @@ Object.assign(Store, {
     const p = Store.prefs();
     const watched = new Set(p.watched || []);
     const me = Store.me()?.email;
-    return Store.activity().filter((a) => a.pageId && watched.has(a.pageId) && a.by !== me).slice(0, 60);
+    return Store.activity().filter((a) =>
+      a.by !== me && ((a.pageId && watched.has(a.pageId)) || (a.kind === 'mention' && a.who === me))
+    ).slice(0, 60);
   },
   inboxUnread() {
     const readAt = Store.prefs().inboxReadAt || 0;
@@ -80,7 +88,7 @@ function viewInbox() {
   const items = Store.inbox();
   const readAt = Store.prefs().inboxReadAt || 0;
   const watched = (Store.prefs().watched || []).map((id) => Store.page(id)).filter(Boolean);
-  setTimeout(() => Store.markInboxRead(), 800);
+  // Items count as read when you *leave* the inbox (see the hashchange handler).
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Inbox</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Changes on pages you watch</span><h1>Inbox</h1>
@@ -169,6 +177,8 @@ function killPreview() {
 }
 
 document.addEventListener('pointerover', (ev) => {
+  if (!matchMedia('(hover: hover)').matches) return; // touch devices: taps navigate
+  if (UI.modal || UI.palette) return;
   const a = ev.target.closest('a.wikilink:not(.wikilink--missing)');
   if (!a || a.closest('.ed-autocomplete')) { return; }
   clearTimeout(previewTmr);
@@ -234,7 +244,9 @@ function viewExtraModal(m) {
   }
   if (m.kind === 'move') {
     const p = Store.page(m.id);
-    const parents = Store.s.pages.filter((q) => !q.parent && q.id !== m.id);
+    // Any page can be a parent — except this page and its own descendants.
+    const isDescendant = (q) => { let x = q; while (x) { if (x.id === m.id) return true; x = x.parent ? Store.page(x.parent) : null; } return false; };
+    const parents = [...Store.s.pages].filter((q) => !isDescendant(q)).sort((a, b) => a.title.localeCompare(b.title));
     return `<div class="modal" role="dialog" aria-label="Move page">
       <div class="modal__head"><h3>Move “${MD.esc(p.title)}”</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">

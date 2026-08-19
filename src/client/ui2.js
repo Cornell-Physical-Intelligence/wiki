@@ -14,9 +14,10 @@ function openEditor(pageId, isNew, draft) {
     body: draft?.body ?? p?.body ?? '',
     section: draft?.section ?? p?.section ?? 'projects',
     parent: p?.parent ?? draft?.parent ?? null,
+    tags: draft?.tags ?? (p?.tags ? [...p.tags] : []),
     mode: Store.prefs().editorMode || 'split',
     dirty: false,
-    origTitle: p?.title ?? '', origBody: p?.body ?? '',
+    origTitle: p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
   };
 }
 
@@ -57,6 +58,9 @@ function viewEditor() {
       ${tools.map((t) => t === null ? '<span class="sep"></span>' :
         `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       <span class="spacer"></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Tags
+        <input class="text-input" data-ed-tags style="height:26px;width:150px;font-size:12px" value="${MD.esc(e.tags.join(', '))}" placeholder="comma, separated" aria-label="Tags">
+      </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
         <select class="select" data-action="ed-section" style="height:26px;width:auto;font-size:12px">
           ${SECTIONS.map((s) => `<option value="${s.id}" ${s.id === e.section ? 'selected' : ''}>${s.name}</option>`).join('')}
@@ -82,6 +86,10 @@ function edUpdatePreview() {
   const e = UI.editor;
   const host = $('[data-ed-preview]');
   if (!host) return;
+  // Every remount would otherwise orphan the previous viewers' spin loops —
+  // in the editor, all mounted viewers belong to this preview, so flush them.
+  cadCleanups.forEach((fn) => fn());
+  cadCleanups = [];
   const { html } = MD.render(e.body, mdCtx({ readonly: true }));
   host.innerHTML = (e.title ? `<h1 style="font-size:28px;font-weight:400;margin:0 0 18px">${MD.esc(e.title)}</h1>` : '') + html;
   $$('.cad-embed', host).forEach(mountCadViewer);
@@ -168,17 +176,38 @@ function edSave() {
 
 function edCommit(summary) {
   const e = UI.editor;
+  // Someone else (or another tab) may have changed the page while this editor
+  // was open — never overwrite silently.
+  if (!e.isNew && !e.staleOverride) {
+    const cur = Store.page(e.pageId);
+    if (cur && cur.body !== e.origBody) {
+      UI.modal = {
+        kind: 'confirm', title: 'This page changed while you edited',
+        text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours (their version stays in History). Consider copying your changes out first.`,
+        confirm: 'Save mine anyway', danger: true,
+      };
+      UI.modal.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
+      render();
+      return;
+    }
+  }
   let p;
   if (e.isNew) {
-    p = Store.createPage({ title: e.title.trim(), section: e.section, parent: e.parent, body: e.body });
-    toast('Page created');
+    p = Store.createPage({ title: e.title.trim(), section: e.section, parent: e.parent, body: e.body, summary });
   } else {
-    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary });
-    toast('Saved');
+    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, tags: e.tags, summary });
   }
+  if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
+  toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'NOT saved — storage is full');
+  draftStash.delete(e.pageId || 'new');
+  persistDrafts();
   UI.editor = null;
   UI.modal = null;
+  // nav() alone is not enough: when editing an existing page the hash is
+  // already #/page/<id>, so no hashchange fires — render explicitly.
   nav('#/page/' + p.id);
+  route();
+  render();
 }
 
 /* ------------------------------- history --------------------------------- */
@@ -244,6 +273,7 @@ function activityLine(a) {
     invite: `${who} invited <b>${MD.esc(a.who || '')}</b>`,
     'invite-resend': `${who} re-sent the invite for <b>${MD.esc(a.who || '')}</b>`,
     'invite-revoke': `${who} revoked the invite for <b>${MD.esc(a.who || '')}</b>`,
+    mention: `${who} mentioned <b>${MD.esc(Store.userName(a.who || ''))}</b> in a comment on ${pageRef}`,
     join: `<b>${MD.esc(Store.userName(a.by))}</b> joined the wiki`,
     role: `${who} made <b>${MD.esc(a.who || '')}</b> ${a.role === 'admin' ? 'an admin' : 'a member'}`,
     remove: `${who} removed <b>${MD.esc(a.who || '')}</b> from the roster`,
@@ -374,68 +404,6 @@ function viewTrash() {
   </div></div></div>`;
 }
 
-function viewGuide() {
-  const guide = `Everything is Markdown, with a few team extras. This page is itself editable proof — hit Edit to see its source.
-
-## Text
-
-**Bold**, *italic*, ~~strikethrough~~, ${'`inline code`'}, and [external links](https://cornellphysicalintelligence.com). Headings with ${'`##`'} and ${'`###`'} build the table of contents automatically.
-
-## Linking pages
-
-${'`[[Hexapod]]`'} → [[Hexapod]]. Add a label with ${'`[[Hexapod|the walker]]`'} → [[Hexapod|the walker]]. A link to a page that doesn't exist yet shows red — like [[Landing Gear Study]] — and clicking it creates the page.
-
-## Lists and tasks
-
-- Regular bullets and numbered lists nest by indentation
-- [ ] Task items are live checkboxes — tick them right on the page
-- [x] Done items cross out
-
-## Callouts
-
-::: note Three kinds
-${'`::: note`'} , ${'`::: warn`'} , ${'`::: tip`'} — each with an optional title.
-
-:::
-
-## Tables
-
-| Rail | Budget | Measured |
-| --- | --- | --- |
-| 5 V | 6 A | 4.4 A |
-
-## Code
-
-~~~python
-tau_inv = (w_t - w_prev) / (w_prev * dt)   # optical looming
-~~~
-
-## Pictures, CAD, schematics
-
-Drag any file into the editor, or paste a screenshot:
-
-- Images: ${'`![alt](att:id "caption")`'} — inline, captioned, lightboxed
-- STL/OBJ: an interactive 3D viewer, right in the page
-- STEP, SchDoc, PDF, anything else: a labeled file card
-- An **Onshape** or **Altium 365** URL pasted on its own line becomes a rich card
-
-## Keyboard
-
-| Key | Does |
-| --- | --- |
-| ⌘K | Search everything |
-| N | New page |
-| E | Edit the page you're reading |
-| ⌘S / ⌘Enter | Save while editing |
-| Esc | Close anything |`;
-  const { html } = MD.render(guide, mdCtx({ readonly: true }));
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Formatting guide</span>`) + `
-  <div class="content"><div class="page-wrap"><article class="page-col">
-    <div class="plain-head"><span class="eyebrow">Reference</span><h1>Formatting guide</h1></div>
-    <div class="prose">${html}</div>
-  </article></div></div>`;
-}
-
 /* ------------------------------- palette --------------------------------- */
 
 function openPalette() {
@@ -453,8 +421,7 @@ function paletteResults() {
   return { kind: 'search', items: Store.search(q) };
 }
 
-function viewPalette() {
-  if (!UI.palette) return '';
+function paletteListHtml() {
   const { kind, items } = paletteResults();
   const q = UI.palette.q.trim().toLowerCase();
   const mark = (text) => {
@@ -465,18 +432,27 @@ function viewPalette() {
     return MD.esc(text.slice(0, i)) + '<mark>' + MD.esc(text.slice(i, i + t0.length)) + '</mark>' + MD.esc(text.slice(i + t0.length));
   };
   UI.palette.count = items.length;
+  return `${items.length ? `<div class="palette__group eyebrow">${kind === 'recents' ? 'Recent' : 'Results'}</div>` : ''}
+    ${items.map((r, i) => `<button class="palette__item ${i === UI.palette.sel ? 'sel' : ''}" data-action="palette-go" data-id="${r.page.id}">
+      ${I.page}<span style="min-width:0"><span class="palette__title">${mark(r.page.title)}</span>
+      ${r.snip ? `<br><span class="palette__snip">${mark(r.snip)}</span>` : ''}</span>
+      <span class="palette__where">${SECTIONS.find((s) => s.id === r.page.section)?.name || ''}</span>
+    </button>`).join('')}
+    ${!items.length && q ? `<div class="palette__empty">Nothing matches “${MD.esc(UI.palette.q)}”.<br><button class="btn btn--sm" style="margin-top:10px" data-action="palette-create">${I.plus} Create “${MD.esc(UI.palette.q)}”</button></div>` : ''}`;
+}
+
+// Only the list re-renders while typing — the input (and its caret) stay put.
+function renderPaletteList() {
+  const list = $('.palette__list');
+  if (list) list.innerHTML = paletteListHtml();
+}
+
+function viewPalette() {
+  if (!UI.palette) return '';
   return `<div class="palette-veil" data-action="palette-close">
     <div class="palette" role="dialog" aria-label="Search">
       <div class="palette__head">${I.search}<input placeholder="Search pages, or type to jump…" value="${MD.esc(UI.palette.q)}" aria-label="Search query"><span class="kbd">esc</span></div>
-      <div class="palette__list">
-        ${items.length ? `<div class="palette__group eyebrow">${kind === 'recents' ? 'Recent' : 'Results'}</div>` : ''}
-        ${items.map((r, i) => `<button class="palette__item ${i === UI.palette.sel ? 'sel' : ''}" data-action="palette-go" data-id="${r.page.id}">
-          ${I.page}<span style="min-width:0"><span class="palette__title">${mark(r.page.title)}</span>
-          ${r.snip ? `<br><span class="palette__snip">${mark(r.snip)}</span>` : ''}</span>
-          <span class="palette__where">${SECTIONS.find((s) => s.id === r.page.section)?.name || ''}</span>
-        </button>`).join('')}
-        ${!items.length && q ? `<div class="palette__empty">Nothing matches “${MD.esc(UI.palette.q)}”.<br><button class="btn btn--sm" style="margin-top:10px" data-action="palette-create">${I.plus} Create “${MD.esc(UI.palette.q)}”</button></div>` : ''}
-      </div>
+      <div class="palette__list">${paletteListHtml()}</div>
       <div class="palette__foot"><span>↑↓ navigate</span><span>↵ open</span><span>esc close</span></div>
     </div>
   </div>`;
@@ -494,6 +470,8 @@ function viewModal() {
       <div class="modal__body">
         <label>Title<input class="text-input" data-m="title" placeholder="e.g. Landing Gear Study" value="${MD.esc(m.title || '')}" maxlength="90"></label>
         <label>Section<select class="select" data-m="section">${SECTIONS.map((s) => `<option value="${s.id}" ${s.id === (m.section || 'projects') ? 'selected' : ''}>${s.name}</option>`).join('')}</select></label>
+        <label>Nest under <span class="sub">Optional — makes this a subpage.</span>
+        <select class="select" data-m="parent"><option value="">— top level —</option>${[...Store.s.pages].sort((a, b) => a.title.localeCompare(b.title)).map((q) => `<option value="${q.id}" ${q.id === m.parent ? 'selected' : ''}>${MD.esc(q.title)}</option>`).join('')}</select></label>
         <label>Template<span class="sub">Start from a structure the team already uses.</span></label>
         <div class="tpl-grid">${TEMPLATES.map((t) => `<button class="tpl ${(m.tpl || 'blank') === t.id ? 'sel' : ''}" data-action="tpl-pick" data-tpl="${t.id}"><b>${t.name}</b><span>${t.desc}</span></button>`).join('')}</div>
         ${m.error ? `<span class="field-error">${MD.esc(m.error)}</span>` : ''}
@@ -535,10 +513,18 @@ function viewModal() {
 function render() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
+  window.__closeMenu?.();
   const app = $('#app');
   const me = Store.me();
   let view = '';
   const r = UI.route;
+
+  // Re-renders of the same route (checkbox ticks, comments, stars) must not
+  // throw the reader back to the top of the page.
+  const prevContent = $('.content');
+  const keepScroll = prevContent && UI._lastRouteKey === r.name + '/' + (r.params.id || '');
+  const scrollTop = keepScroll ? prevContent.scrollTop : 0;
+  UI._lastRouteKey = r.name + '/' + (r.params.id || '');
 
   if (!me) {
     app.innerHTML = viewLogin();
@@ -551,7 +537,6 @@ function render() {
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();
   else if (r.name === 'trash') view = viewTrash();
-  else if (r.name === 'guide') view = viewGuide();
   else if (r.name === 'inbox') view = viewInbox();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'tag') view = viewTag(decodeURIComponent(r.params.id || ''));
@@ -564,6 +549,8 @@ function render() {
     <div class="shell__scrim" data-action="nav-close"></div>
   </div>${viewPalette()}${viewModal()}`;
 
+  if (keepScroll) { const c = $('.content'); if (c) c.scrollTop = scrollTop; }
+
   // Mount hooks.
   $$('.cad-embed').forEach(mountCadViewer);
   if (UI.editor) {
@@ -573,10 +560,8 @@ function render() {
   }
   if (UI.palette) { const inp = $('.palette input'); inp?.focus(); inp?.setSelectionRange(inp.value.length, inp.value.length); }
   if (UI.modal) $('.modal [data-m], .modal .btn--primary')?.focus?.();
-  if (r.name === 'page' && location.hash.includes('#') ) {
-    // Support #/page/id#anchor deep links.
-    const anchor = location.hash.split('#')[2];
-    if (anchor) $('#' + CSS.escape(anchor))?.scrollIntoView();
+  if (r.name === 'page' && r.params.anchor) {
+    $('#' + CSS.escape(r.params.anchor))?.scrollIntoView();
   }
   mountTocSpy();
 }

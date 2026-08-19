@@ -47,7 +47,7 @@ const fmtDay = (ts) => {
 function diffLines(a, b) {
   const A = String(a || '').split('\n'), B = String(b || '').split('\n');
   const n = A.length, m = B.length;
-  if (n * m > 500000) {
+  if (n * m > 4000000) {
     // Degenerate fallback for huge docs: whole-body replace.
     return { ops: [...A.map((l) => [-1, l]), ...B.map((l) => [1, l])], add: m, del: n };
   }
@@ -88,9 +88,13 @@ const Files = {
       tx.onerror = () => res();
     });
   },
-  put(f) {
+  put(f, onFail) {
     Files.mem.set(f.id, f);
-    if (Files.db) try { Files.db.transaction('files', 'readwrite').objectStore('files').put(f); } catch (e) {}
+    if (!Files.db) { onFail && onFail(); return; }
+    try {
+      const rq = Files.db.transaction('files', 'readwrite').objectStore('files').put(f);
+      rq.onerror = () => onFail && onFail();
+    } catch (e) { onFail && onFail(); }
   },
   remove(id) {
     Files.mem.delete(id);
@@ -148,9 +152,16 @@ const Store = {
     Store.reindex();
   },
 
+  lastPersistOk: true,
   persist() {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(Store.s)); }
-    catch (e) { Store.onError && Store.onError('Storage is full — remove large attachments or reset demo data.'); }
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(Store.s));
+      Store.lastPersistOk = true;
+    } catch (e) {
+      Store.lastPersistOk = false;
+      Store.onError && Store.onError('Storage is full — this change is NOT saved. Trim the page or remove large content.');
+    }
+    return Store.lastPersistOk;
   },
 
   /* --------------------------- indexes ----------------------------------- */
@@ -214,16 +225,19 @@ const Store = {
 
   /* --------------------------- pages ------------------------------------- */
 
-  createPage({ title, section, parent, body, tags }) {
+  createPage({ title, section, parent, body, tags, summary }) {
     const me = Store.me();
-    const id = MD.slugify(title) + (Store.page(MD.slugify(title)) ? '-' + uid('').slice(1, 5) : '');
+    const slug = MD.slugify(title);
+    // IDs must be unique across live pages AND trash, or a later restore forks the wiki.
+    const taken = (id) => Store.page(id) || Store.s.trash.some((t) => t.id === id);
+    const id = taken(slug) ? slug + '-' + uid('').slice(1, 5) : slug;
     const now = Date.now();
     const p = {
       id, title, section, parent: parent || null, tags: tags || [],
       owner: me.email, created: now, updated: now, updatedBy: me.email,
       order: Store.s.pages.length + 1,
       body: body || '',
-      revs: [{ ts: now, by: me.email, summary: 'Created page', body: body || '' }],
+      revs: [{ ts: now, by: me.email, summary: summary || 'Created page', body: body || '' }],
     };
     Store.s.pages.push(p);
     Store.log({ kind: 'create', by: me.email, pageId: id });
@@ -232,13 +246,31 @@ const Store = {
     return p;
   },
 
+  // Renames rewrite every inbound [[link]] so links survive — page titles are
+  // the link namespace, and breaking them on rename is how wikis rot.
+  rewriteLinks(oldTitle, newTitle) {
+    const escRe = oldTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\[\\[\\s*${escRe}\\s*(?=[\\]#|])`, 'gi');
+    for (const list of [Store.s.pages, Store.s.trash]) {
+      for (const q of list) {
+        if (re.test(q.body)) q.body = q.body.replace(re, '[[' + newTitle);
+        re.lastIndex = 0;
+      }
+    }
+  },
+
   savePage(id, { title, body, summary, section, tags }) {
     const p = Store.page(id);
     if (!p) return null;
+    if (body !== undefined && body.length > 2 * 1024 * 1024) {
+      Store.onError && Store.onError('That page is over the 2 MB text limit — attach big content as files instead.');
+      return null;
+    }
     const me = Store.me();
     const now = Date.now();
     const changedBody = body !== undefined && body !== p.body;
     const changedTitle = title !== undefined && title !== p.title;
+    if (changedTitle) Store.rewriteLinks(p.title, title);
     if (title !== undefined) p.title = title;
     if (section !== undefined) p.section = section;
     if (tags !== undefined) p.tags = tags;
@@ -306,6 +338,10 @@ const Store = {
     if (idx < 0) return;
     const [p] = Store.s.trash.splice(idx, 1);
     delete p.deletedAt; delete p.deletedBy;
+    // If the id or title was reused while this sat in Trash, the restored copy
+    // gets a fresh identity instead of silently forking the live page.
+    if (Store.page(p.id)) p.id = p.id + '-' + uid('').slice(1, 5);
+    while (Store.pageByTitle(p.title)) p.title = p.title + ' (restored)';
     Store.s.pages.push(p);
     Store.log({ kind: 'restore', by: Store.me().email, pageId: p.id });
     Store.reindex();
@@ -316,16 +352,32 @@ const Store = {
   purgePage(id) {
     const idx = Store.s.trash.findIndex((p) => p.id === id);
     if (idx >= 0) Store.s.trash.splice(idx, 1);
+    Store.sweepAttachments();
     Store.persist();
   },
 
   /* --------------------------- comments ---------------------------------- */
+
+  // @first-name or @netid in a comment notifies that member's inbox.
+  mentionsIn(text) {
+    const out = new Set();
+    for (const m of String(text).matchAll(/@([a-z0-9.]+)/gi)) {
+      const tok = m[1].toLowerCase();
+      const u = Store.s.users.find((x) =>
+        x.email.split('@')[0] === tok || x.name.split(/\s+/)[0].toLowerCase() === tok);
+      if (u) out.add(u.email);
+    }
+    return [...out];
+  },
 
   addComment(pageId, text) {
     const me = Store.me();
     const c = { id: uid('c'), pageId, by: me.email, ts: Date.now(), text };
     Store.s.comments.push(c);
     Store.log({ kind: 'comment', by: me.email, pageId });
+    for (const email of Store.mentionsIn(text)) {
+      if (email !== me.email) Store.log({ kind: 'mention', by: me.email, who: email, pageId });
+    }
     Store.persist();
     return c;
   },
@@ -445,8 +497,20 @@ const Store = {
       r.readAsDataURL(file);
     });
     const a = { id: uid('att'), name: file.name, type: file.type || 'application/octet-stream', size: file.size, dataUri, by: Store.me().email, ts: Date.now() };
-    Files.put(a);
+    Files.put(a, () => Store.onError && Store.onError(`${file.name} could not be stored durably — it will vanish on reload.`));
     return a;
+  },
+
+  // Drop attachments nothing references any more (run after purges).
+  sweepAttachments() {
+    const referenced = new Set();
+    for (const list of [Store.s.pages, Store.s.trash]) {
+      for (const p of list) {
+        for (const m of p.body.matchAll(/att:([A-Za-z0-9-]+)/g)) referenced.add(m[1]);
+        for (const rev of p.revs || []) for (const m of String(rev.body).matchAll(/att:([A-Za-z0-9-]+)/g)) referenced.add(m[1]);
+      }
+    }
+    for (const id of [...Files.mem.keys()]) if (!referenced.has(id)) Files.remove(id);
   },
 
   /* --------------------------- search ------------------------------------ */
@@ -458,7 +522,8 @@ const Store = {
     const out = [];
     for (const p of Store.s.pages) {
       const title = p.title.toLowerCase();
-      const text = MD.mdToText(p.body).toLowerCase();
+      const commentText = Store.s.comments.filter((c) => c.pageId === p.id).map((c) => c.text).join(' ');
+      const text = (MD.mdToText(p.body) + ' ' + commentText).toLowerCase();
       let score = 0;
       let allHit = true;
       for (const t of terms) {
