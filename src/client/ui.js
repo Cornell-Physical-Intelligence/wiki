@@ -122,7 +122,7 @@ function viewLogin() {
       <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster.</p>
       <div class="login__rule">or</div>
       <form class="login__invite" data-action="redeem-form">
-        <input class="text-input" name="code" placeholder="Invite code — CUPI-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Invite code">
+        <input class="text-input" name="code" placeholder="CUPI-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Invite code">
         <button class="btn" type="submit">Join</button>
       </form>
       <p class="login__hint">New members: the code is in your invite email.</p>`}
@@ -252,7 +252,7 @@ function viewPage(id) {
   const p = Store.page(id);
   if (!p) return viewMissing(id);
   Store.touchRecent(id);
-  const { html, toc } = MD.render(p.body, mdCtx());
+  const { html, toc } = MD.render(p.body, mdCtx({ pageId: id }));
   const starred = Store.prefs().starred.includes(id);
   const backlinks = Store.backlinks(id);
   const comments = Store.comments(id);
@@ -307,7 +307,7 @@ function viewPage(id) {
           </div>
         </footer>
       </article>
-      ${toc.length > 1 ? `<nav class="toc"><div class="toc__list">${toc.map((t) => `<a href="#${t.id}" class="${t.lvl === 3 ? 'lvl3' : ''}" data-toc="${t.id}">${MD.esc(t.text)}</a>`).join('')}</div></nav>` : ''}
+      ${toc.length > 1 ? `<nav class="toc"><div class="toc__list">${toc.map((t) => `<a href="#/page/${id}#${t.id}" class="${t.lvl === 3 ? 'lvl3' : ''}" data-toc="${t.id}">${MD.esc(t.text)}</a>`).join('')}</div></nav>` : ''}
     </div>
   </div>`;
 }

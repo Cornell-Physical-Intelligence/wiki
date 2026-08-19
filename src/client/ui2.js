@@ -147,9 +147,14 @@ function edAutocomplete(ta) {
   const hits = Store.s.pages.filter((p) => p.title.toLowerCase().includes(q)).slice(0, 6);
   if (!hits.length) { pop.hidden = true; return; }
   pop.innerHTML = hits.map((p, i) => `<button data-action="ed-ac" data-title="${MD.esc(p.title)}" class="${i === 0 ? 'sel' : ''}">${I.page} ${MD.esc(p.title)}</button>`).join('');
+  // Anchor near the caret's line, not the top of the textarea.
   const r = ta.getBoundingClientRect();
+  const lineHeight = 21.6; // 13.5px * 1.6, matching the editor face
+  const caretLine = upto.split('\n').length;
+  const padTop = 26;
+  const caretY = r.top + padTop + caretLine * lineHeight - ta.scrollTop;
   pop.style.left = Math.min(r.left + 40, innerWidth - 260) + 'px';
-  pop.style.top = Math.min(r.top + 120, innerHeight - 200) + 'px';
+  pop.style.top = Math.max(60, Math.min(caretY + 6, innerHeight - 230)) + 'px';
   pop.hidden = false;
 }
 
@@ -193,7 +198,12 @@ function edCommit(summary) {
   }
   let p;
   if (e.isNew) {
-    p = Store.createPage({ title: e.title.trim(), section: e.section, parent: e.parent, body: e.body, summary });
+    p = Store.createPage({ title: e.title.trim(), section: e.section, parent: e.parent, body: e.body, tags: e.tags, summary });
+  } else if (!Store.page(e.pageId)) {
+    // The page was trashed by someone else while this editor was open —
+    // the work is saved as a fresh page instead of vanishing.
+    p = Store.createPage({ title: e.title.trim(), section: e.section, body: e.body, tags: e.tags, summary });
+    toast('The original was deleted while you edited — saved as a new page');
   } else {
     p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, tags: e.tags, summary });
   }
@@ -309,7 +319,14 @@ function viewActivity() {
 /* ------------------------------- admin ----------------------------------- */
 
 function viewAdmin() {
-  if (!Store.isAdmin()) return viewMissing('admin');
+  if (!Store.isAdmin()) {
+    return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
+    <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
+      ${I.users}<b>Members &amp; access is admin-only</b>
+      <p>Ask a team lead if you need someone added to the roster.</p>
+      <a class="btn" href="#/page/welcome" style="text-decoration:none">Back to the wiki</a>
+    </div></div></div></div>`;
+  }
   const users = Store.s.users;
   const active = users.filter((u) => u.status === 'active');
   const invited = users.filter((u) => u.status === 'invited');
@@ -418,7 +435,10 @@ function paletteResults() {
     const recents = Store.quick('');
     return { kind: 'recents', items: recents };
   }
-  return { kind: 'search', items: Store.search(q) };
+  const exact = Store.search(q);
+  if (exact.length) return { kind: 'search', items: exact };
+  // Typo forgiveness: fall back to fuzzy title matches ("hexpod" → Hexapod).
+  return { kind: 'fuzzy', items: Store.quick(q) };
 }
 
 function paletteListHtml() {
@@ -432,7 +452,7 @@ function paletteListHtml() {
     return MD.esc(text.slice(0, i)) + '<mark>' + MD.esc(text.slice(i, i + t0.length)) + '</mark>' + MD.esc(text.slice(i + t0.length));
   };
   UI.palette.count = items.length;
-  return `${items.length ? `<div class="palette__group eyebrow">${kind === 'recents' ? 'Recent' : 'Results'}</div>` : ''}
+  return `${items.length ? `<div class="palette__group eyebrow">${kind === 'recents' ? 'Recent' : kind === 'fuzzy' ? 'Closest matches' : 'Results'}</div>` : ''}
     ${items.map((r, i) => `<button class="palette__item ${i === UI.palette.sel ? 'sel' : ''}" data-action="palette-go" data-id="${r.page.id}">
       ${I.page}<span style="min-width:0"><span class="palette__title">${mark(r.page.title)}</span>
       ${r.snip ? `<br><span class="palette__snip">${mark(r.snip)}</span>` : ''}</span>
@@ -514,6 +534,7 @@ function render() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
   window.__closeMenu?.();
+  killPreview(); // a hover preview must not outlive the page it points into
   const app = $('#app');
   const me = Store.me();
   let view = '';

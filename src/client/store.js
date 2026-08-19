@@ -153,7 +153,9 @@ const Store = {
   },
 
   lastPersistOk: true,
+  _adopting: false, // true while rendering state adopted from another tab
   persist() {
+    if (Store._adopting) return true; // never write back what another tab just wrote
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(Store.s));
       Store.lastPersistOk = true;
@@ -270,7 +272,14 @@ const Store = {
     const now = Date.now();
     const changedBody = body !== undefined && body !== p.body;
     const changedTitle = title !== undefined && title !== p.title;
-    if (changedTitle) Store.rewriteLinks(p.title, title);
+    if (changedTitle) {
+      Store.rewriteLinks(p.title, title);
+      // The incoming editor body may carry self-links under the old title too.
+      if (body !== undefined) {
+        const escRe = p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        body = body.replace(new RegExp(`\\[\\[\\s*${escRe}\\s*(?=[\\]#|])`, 'gi'), '[[' + title);
+      }
+    }
     if (title !== undefined) p.title = title;
     if (section !== undefined) p.section = section;
     if (tags !== undefined) p.tags = tags;
@@ -476,6 +485,7 @@ const Store = {
   },
   touchRecent(id) {
     const p = Store.prefs();
+    if (p.recents[0] === id) return; // re-render of the same page: nothing to write
     const i = p.recents.indexOf(id);
     if (i >= 0) p.recents.splice(i, 1);
     p.recents.unshift(id);

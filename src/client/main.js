@@ -13,14 +13,23 @@ try {
   for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'))) draftStash.set(k, v);
 } catch (e) { /* fresh start */ }
 
+const draftDeleted = new Set(); // keys this tab consumed — don't resurrect from disk
+
 function persistDrafts() {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(Object.fromEntries(draftStash))); } catch (e) {}
+  // Merge with what's on disk so a draft in another tab is never clobbered:
+  // our keys win, keys we consumed are dropped, everything else is preserved.
+  try {
+    const disk = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    for (const k of draftDeleted) delete disk[k];
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...disk, ...Object.fromEntries(draftStash) }));
+  } catch (e) {}
 }
 
 function stashDraftIfDirty(silent) {
   const e = UI.editor;
   if (e && e.dirty) {
     draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
+    draftDeleted.delete(e.pageId || 'new');
     persistDrafts();
     if (!silent) toast('Draft kept', { label: 'Resume', run: () => { const k = e.pageId || 'new'; startEdit(e.pageId, !e.pageId, draftStash.get(k)); } });
   }
@@ -43,7 +52,7 @@ function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
   openEditor(pageId, isNew, draft);
-  if (draft) { UI.editor.dirty = true; draftStash.delete(key); persistDrafts(); }
+  if (draft) { UI.editor.dirty = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
   render();
 }
 
@@ -399,7 +408,8 @@ document.addEventListener('keydown', (ev) => {
     if (UI.menu) { ev.preventDefault(); window.__closeMenu?.(); return; }
     if (UI.modal) { UI.modal = null; render(); return; }
     if ($('.lightbox')) { $('.lightbox').remove(); return; }
-    if (!$('.ed-autocomplete')?.hidden) { $('.ed-autocomplete').hidden = true; return; }
+    const ac = $('.ed-autocomplete');
+    if (ac && !ac.hidden) { ac.hidden = true; return; }
     // Esc closes the editor from anywhere in it — including the textarea,
     // which is where you always are. The draft is kept.
     if (UI.editor) { const pid = UI.editor.pageId; stashDraftIfDirty(); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); return; }
@@ -408,6 +418,24 @@ document.addEventListener('keydown', (ev) => {
 
   if (UI.editor) {
     const inBody = ev.target.matches('[data-ed="body"]');
+    // The [[ autocomplete is keyboard-first: arrows move, Enter/Tab accept.
+    const acPop = $('.ed-autocomplete');
+    if (acPop && !acPop.hidden && inBody) {
+      const items = $$('.ed-autocomplete button');
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        const cur = items.findIndex((b) => b.classList.contains('sel'));
+        const next = (cur + (ev.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+        items.forEach((b, i) => b.classList.toggle('sel', i === next));
+        return;
+      }
+      if (ev.key === 'Enter' || ev.key === 'Tab') {
+        ev.preventDefault();
+        const sel = items.find((b) => b.classList.contains('sel')) || items[0];
+        if (sel) edAcceptAc(sel.dataset.title);
+        return;
+      }
+    }
     if (mod && (ev.key === 's' || ev.key === 'Enter')) { ev.preventDefault(); UI.modal?.kind === 'save-summary' ? $('.modal [data-action="save-commit"]')?.click() : edSave(); return; }
     if (mod && ev.key.toLowerCase() === 'b' && inBody) { ev.preventDefault(); ED_TOOLS.bold(); return; }
     if (mod && ev.key.toLowerCase() === 'i' && inBody) { ev.preventDefault(); ED_TOOLS.italic(); return; }
@@ -475,13 +503,20 @@ window.addEventListener('hashchange', () => {
 });
 
 // Another tab wrote — adopt its state so two tabs can't clobber each other.
+// The adoption render must NOT write back (touchRecent etc. persist), or two
+// open tabs ping-pong storage events forever and echo stale state over fresh
+// saves. Store.persist() is a no-op while _adopting is set.
 window.addEventListener('storage', (ev) => {
   if (ev.key !== 'cupi-wiki-v2' || !ev.newValue) return;
   try {
     Store.s = JSON.parse(ev.newValue);
     Store.reindex();
-    if (!UI.editor) render();
-    else toast('This wiki changed in another tab — your editor still has your text.');
+    if (!UI.editor) {
+      Store._adopting = true;
+      try { render(); } finally { Store._adopting = false; }
+    } else {
+      toast('This wiki changed in another tab — your editor still has your text.');
+    }
   } catch (e) { /* ignore malformed */ }
 });
 

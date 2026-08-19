@@ -869,7 +869,7 @@ Keyed housings make reversal impossible **only if** every board follows this pin
 
 - PA-09 for JST; the good crimper lives in the red toolbox, comes back to the red toolbox
 - Every crimp gets a pull test. Every harness gets continuity-buzzed end to end before first power.
-- Label both ends (${'`P?'} source → destination${'`'}): heat-shrink labels, not tape flags`,
+- Label both ends with source → destination (e.g. ${'`P3: PDB → J3 servo`'}): heat-shrink labels, not tape flags`,
 });
 
 page({
