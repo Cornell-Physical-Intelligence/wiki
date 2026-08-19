@@ -5,8 +5,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const read = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url), 'utf8');
 const font = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url)).toString('base64');
 
-const fonts = `@font-face{font-family:'Questrial';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,${font('questrial.woff2')}) format('woff2');}
-@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${font('playfair.woff2')}) format('woff2');}`;
+// Playfair only — it draws the login wordmark, mirroring the site hero.
+// Everything else rides standard system faces.
+const fonts = `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${font('playfair.woff2')}) format('woff2');}`;
 
 const FAVICON = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#141414"/><text x="32" y="43" font-family="Georgia,serif" font-weight="700" font-size="30" fill="#fff" text-anchor="middle">CW</text></svg>`)}`;
 
