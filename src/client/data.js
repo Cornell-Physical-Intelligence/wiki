@@ -278,7 +278,7 @@ page({
   owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 2), updatedBy: 'ab3233@cornell.edu',
   body: `The wiki is plain Markdown with a few extras built for how a hardware team documents things. Full syntax lives in the **Formatting Guide** (link in the sidebar footer) — this page covers the parts people miss.
 
-**Edit any page** with the **Edit** button at the top right, or press **E** while reading it. Every save is a revision, so edit boldly.
+**Edit any page** with the **Edit** button at the top right. Every save is a revision, so edit boldly.
 
 ## Link pages together
 
@@ -411,7 +411,6 @@ Drag any file into the editor, or paste a screenshot:
 | --- | --- |
 | ⌘K | Search everything |
 | N | New page |
-| E | Edit the page you're reading |
 | ⌘S / ⌘Enter | Save while editing |
 | ⌘F | Find in the editor |
 | ? | Keyboard shortcuts |

@@ -1,7 +1,7 @@
 // The entire backend: auth, state, mutations, attachments. One function.
 // Rewrites in vercel.json send every /api/* request here.
 
-import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts } from '../lib/db.js';
+import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts, StorageNotConfigured } from '../lib/db.js';
 import { applyOp } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome } from '../lib/email.js';
@@ -225,6 +225,7 @@ export default async function handler(req, res) {
 
     return json(res, 404, { error: 'No such endpoint' });
   } catch (e) {
+    if (e instanceof StorageNotConfigured) return json(res, 503, { error: e.message });
     return json(res, 500, { error: e.message || 'Server error' });
   }
 }

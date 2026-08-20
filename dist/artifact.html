@@ -1596,7 +1596,7 @@ page({
   owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 2), updatedBy: 'ab3233@cornell.edu',
   body: `The wiki is plain Markdown with a few extras built for how a hardware team documents things. Full syntax lives in the **Formatting Guide** (link in the sidebar footer) — this page covers the parts people miss.
 
-**Edit any page** with the **Edit** button at the top right, or press **E** while reading it. Every save is a revision, so edit boldly.
+**Edit any page** with the **Edit** button at the top right. Every save is a revision, so edit boldly.
 
 ## Link pages together
 
@@ -1729,7 +1729,6 @@ Drag any file into the editor, or paste a screenshot:
 | --- | --- |
 | ⌘K | Search everything |
 | N | New page |
-| E | Edit the page you're reading |
 | ⌘S / ⌘Enter | Save while editing |
 | ⌘F | Find in the editor |
 | ? | Keyboard shortcuts |
@@ -3739,7 +3738,7 @@ function viewPage(id) {
   const infoOpen = UI.pageInfo === id;
 
   const right = `
-    <button class="btn btn--sm topbar__edit" data-action="edit" data-id="${id}">${I.edit} Edit <span class="kbd">E</span></button>
+    <button class="btn btn--sm topbar__edit" data-action="edit" data-id="${id}">${I.edit} Edit</button>
     ${toc.length > 1 ? `<button class="icon-btn toc-btn" data-action="toc-menu" data-id="${id}" aria-label="Contents" title="Contents">${lucide('ul', 1.8)}</button>` : ''}
     <button class="icon-btn ${starred ? 'active' : ''}" data-action="star" data-id="${id}" aria-label="${starred ? 'Unstar' : 'Star'} page" title="${starred ? 'Unstar' : 'Star'}">${starred ? I.starFill : I.star}</button>
     <a class="icon-btn" href="#/history/${id}" aria-label="Page history" title="History">${I.history}</a>
@@ -4938,7 +4937,7 @@ document.addEventListener('click', (ev) => {
 function viewExtraModal(m) {
   if (m.kind === 'shortcuts') {
     const rows = [
-      ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'], ['E', 'Edit the page you&#39;re reading'],
+      ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'],
       ['⌘S / ⌘↵', 'Save (in editor)'], ['⌘F', 'Find in the editor'], ['⌘B · ⌘I', 'Bold · italic (in editor)'],
       ['[[', 'Link a page (autocompletes)'], ['Esc', 'Close — your draft is kept'], ['?', 'Keyboard shortcuts'],
     ];
@@ -5278,7 +5277,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const id = el.dataset.id;
       openMenu([
-        { icon: I.edit, label: 'Edit', hint: 'E', run: () => startEdit(id, false) },
+        { icon: I.edit, label: 'Edit', run: () => startEdit(id, false) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
         '-',
         { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated — edit away'); } },
@@ -5695,10 +5694,6 @@ document.addEventListener('keydown', (ev) => {
 
   if (ev.key === '?') { ev.preventDefault(); UI.modal = { kind: 'shortcuts' }; render(); return; }
   if (ev.key === 'n' || ev.key === 'N') { ev.preventDefault(); UI.modal = { kind: 'new-page', tpl: 'blank' }; render(); }
-  if ((ev.key === 'e' || ev.key === 'E') && UI.route.name === 'page') {
-    const p = Store.page(UI.route.params.id || 'welcome');
-    if (p) { ev.preventDefault(); startEdit(p.id, false); }
-  }
 });
 
 window.addEventListener('beforeunload', (ev) => {

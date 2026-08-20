@@ -166,7 +166,7 @@ document.addEventListener('click', (ev) => {
 function viewExtraModal(m) {
   if (m.kind === 'shortcuts') {
     const rows = [
-      ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'], ['E', 'Edit the page you&#39;re reading'],
+      ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'],
       ['⌘S / ⌘↵', 'Save (in editor)'], ['⌘F', 'Find in the editor'], ['⌘B · ⌘I', 'Bold · italic (in editor)'],
       ['[[', 'Link a page (autocompletes)'], ['Esc', 'Close — your draft is kept'], ['?', 'Keyboard shortcuts'],
     ];

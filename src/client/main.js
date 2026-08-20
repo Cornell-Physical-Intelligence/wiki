@@ -314,7 +314,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const id = el.dataset.id;
       openMenu([
-        { icon: I.edit, label: 'Edit', hint: 'E', run: () => startEdit(id, false) },
+        { icon: I.edit, label: 'Edit', run: () => startEdit(id, false) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
         '-',
         { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated — edit away'); } },
@@ -731,10 +731,6 @@ document.addEventListener('keydown', (ev) => {
 
   if (ev.key === '?') { ev.preventDefault(); UI.modal = { kind: 'shortcuts' }; render(); return; }
   if (ev.key === 'n' || ev.key === 'N') { ev.preventDefault(); UI.modal = { kind: 'new-page', tpl: 'blank' }; render(); }
-  if ((ev.key === 'e' || ev.key === 'E') && UI.route.name === 'page') {
-    const p = Store.page(UI.route.params.id || 'welcome');
-    if (p) { ev.preventDefault(); startEdit(p.id, false); }
-  }
 });
 
 window.addEventListener('beforeunload', (ev) => {

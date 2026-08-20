@@ -67,7 +67,7 @@ async function sendOp(op, args, after, onError) {
     after?.(out);
     render();
   } catch (e) {
-    toast(e.status === 400 ? e.message : 'Sync failed — check your connection and retry.');
+    toast(e.status === 400 || e.status === 503 ? e.message : 'Sync failed — check your connection and retry.');
     onError?.(e);
     try { adoptServer(await api('/state')); render(); } catch (e2) { /* offline */ }
   } finally { REMOTE.pending--; }
