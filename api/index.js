@@ -113,6 +113,14 @@ export default async function handler(req, res) {
       return json(res, 200, { version, state: shapeState(state, me), files: await listFiles() });
     }
 
+    // Admins can verify the Resend wiring with one click — the real welcome
+    // email, sent only to their own signed-in address.
+    if (path === '/test-email' && req.method === 'POST') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
+      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host });
+      return json(res, 200, out);
+    }
+
     /* ------------------------------ mutations ------------------------------ */
 
     if (path === '/mutate' && req.method === 'POST') {
