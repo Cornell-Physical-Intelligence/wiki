@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 const read = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url), 'utf8');
 const b64 = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url)).toString('base64');
 
-export const FAVICON = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#141414"/><text x="32" y="43" font-family="Georgia,serif" font-weight="700" font-size="30" fill="#fff" text-anchor="middle">CW</text></svg>`)}`;
+// The site's own favicon — the same crab mark as cornellphysicalintelligence.com.
+export const FAVICON = `data:image/png;base64,${b64('cupi-logo-192.png')}`;
 
 export function styles() {
   return `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${b64('playfair.woff2')}) format('woff2');}
@@ -20,6 +21,7 @@ const CUPI_LOGO = 'data:image/png;base64,${b64('cupi-logo-192.png')}';
 const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
   return [
     assets,
+    read('icons.js'),
     read('data.js'),
     read('markdown.js'),
     read('store.js'),

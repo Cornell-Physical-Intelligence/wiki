@@ -42,6 +42,35 @@ const I = {
   shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2.8l7.5 3v6c0 4.6-3 8.3-7.5 9.7-4.5-1.4-7.5-5.1-7.5-9.7v-6z"/><path d="M8.8 12l2.2 2.2 4.2-4.2"/></svg>',
 };
 
+// Standardize the chrome on Lucide (the star keeps its filled variant, the
+// Google mark and CUPI logo stay brand-exact).
+Object.assign(I, {
+  search: lucide('search', 1.8),
+  home: lucide('home', 1.8),
+  clock: lucide('clock', 1.8),
+  star: lucide('star', 1.8),
+  page: lucide('page', 1.8),
+  plus: lucide('plus', 2),
+  edit: lucide('edit', 1.8),
+  dots: lucide('dots', 1.8),
+  menu: lucide('menu', 1.8),
+  history: lucide('historyIcon', 1.8),
+  trash: lucide('trash', 1.8),
+  users: lucide('users', 1.8),
+  link: lucide('wikilink', 1.8),
+  x: lucide('x', 2),
+  help: lucide('help', 1.8),
+  mail: lucide('mail', 1.8),
+  send: lucide('send', 1.8),
+  copy: lucide('copy', 1.8),
+  image: lucide('image', 1.8),
+  paperclip: lucide('attach', 1.8),
+  shield: lucide('shield', 1.8),
+  check: lucide('check', 2.2),
+  info: lucide('info', 1.8),
+  cube: lucide('cube', 1.8),
+});
+
 /* ------------------------------- ui state -------------------------------- */
 
 const UI = {

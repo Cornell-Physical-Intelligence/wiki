@@ -36,25 +36,31 @@ function openEditor(pageId, isNew, draft) {
 
 function viewEditor() {
   const e = UI.editor;
+  // Standard document-editor toolbar, drawn from Lucide — the same visual
+  // vocabulary as Notion/Obsidian-class editors.
+  const T = (tool, icon, label) => [tool, lucide(icon), label];
   const tools = [
-    ['bold', '<b style="font-size:13px">B</b>', 'Bold ⌘B'],
-    ['italic', '<i style="font-size:13px;font-family:serif">I</i>', 'Italic ⌘I'],
-    ['strike', '<s style="font-size:12px">S</s>', 'Strikethrough'],
-    ['code', '<span style="font-family:var(--font-mono);font-size:11px">&lt;/&gt;</span>', 'Code'],
+    T('bold', 'bold', 'Bold ⌘B'),
+    T('italic', 'italic', 'Italic ⌘I'),
+    T('strike', 'strike', 'Strikethrough'),
+    T('code', 'code', 'Inline code'),
     null,
-    ['h2', '<span style="font-size:11px;font-weight:700">H2</span>', 'Heading'],
-    ['h3', '<span style="font-size:11px;font-weight:600">H3</span>', 'Subheading'],
+    T('h2', 'h2', 'Heading'),
+    T('h3', 'h3', 'Subheading'),
     null,
-    ['ul', '<span style="font-size:13px">•≡</span>', 'Bullet list'],
-    ['task', '<span style="font-size:11px">☑</span>', 'Task list'],
-    ['table', '<span style="font-size:11px">⊞</span>', 'Table'],
-    ['quote', '<span style="font-size:13px">"</span>', 'Quote'],
-    ['callout', '<span style="font-size:12px">!</span>', 'Callout'],
-    ['fence', '<span style="font-family:var(--font-mono);font-size:10px">```</span>', 'Code block'],
+    T('ul', 'ul', 'Bulleted list'),
+    T('ol', 'ol', 'Numbered list'),
+    T('task', 'task', 'Task list'),
     null,
-    ['wikilink', I.link, 'Link a page — [['],
-    ['image', I.image, 'Insert image'],
-    ['attach', I.paperclip, 'Attach file (CAD, PDF, anything)'],
+    T('quote', 'quote', 'Quote'),
+    T('fence', 'fence', 'Code block'),
+    T('table', 'table', 'Table'),
+    T('callout', 'callout', 'Callout'),
+    T('hr', 'hr', 'Divider'),
+    null,
+    T('wikilink', 'wikilink', 'Link a page — [['),
+    T('image', 'image', 'Insert image'),
+    T('attach', 'attach', 'Attach file (CAD, PDF, anything)'),
   ];
   return `<div class="editor mode-${e.mode}">
     ${topbar(
@@ -123,6 +129,8 @@ const ED_TOOLS = {
   h2: () => edInsert('\n## ', '', 'Heading'),
   h3: () => edInsert('\n### ', '', 'Subheading'),
   ul: () => edInsert('\n- ', '', 'item'),
+  ol: () => edInsert('\n1. ', '', 'item'),
+  hr: () => edInsert('\n\n---\n\n', '', ''),
   task: () => edInsert('\n- [ ] ', '', 'to do'),
   quote: () => edInsert('\n> ', '', 'quote'),
   fence: () => edInsert('\n~~~\n', '\n~~~\n', 'code'),
