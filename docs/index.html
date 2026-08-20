@@ -1285,6 +1285,33 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .mailview__wordmark { font-family: var(--font-display), Georgia, serif; font-size: 30px; font-weight: 700; margin: 2px 0 2px; }
 .mailview__eyebrow { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; }
 
+
+/* Video embeds — click-to-play facade, provider loads nothing until asked. */
+.video-embed { position: relative; aspect-ratio: 16 / 9; margin: 0 0 16px; border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; background: #0c0c0c; }
+.video-embed__face { position: absolute; inset: 0; width: 100%; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.video-embed__thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.85; }
+.video-embed__btn {
+  position: relative; width: 64px; height: 44px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.72); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  transition: background-color 0.15s ease, scale 0.15s ease;
+}
+.video-embed__face:hover .video-embed__btn { background: rgba(0, 0, 0, 0.92); scale: 1.06; }
+.video-embed__btn svg { width: 22px; height: 22px; }
+.video-embed__tag {
+  position: absolute; left: 10px; bottom: 8px;
+  font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.video-embed__ext {
+  position: absolute; top: 8px; right: 8px; font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.92); background: rgba(0, 0, 0, 0.55);
+  padding: 3px 8px; border-radius: 5px; text-decoration: none;
+}
+.video-embed__ext:hover { background: rgba(0, 0, 0, 0.85); }
+.video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+@media print { .video-embed { display: none; } }
+
 </style>
 </head>
 <body>
@@ -1596,6 +1623,8 @@ Drag any file into the editor (or paste a screenshot straight from the clipboard
 
 Paste an **Onshape** document URL or an **Altium 365** share URL on its own line and it becomes a rich card. On the production wiki these upgrade to live thumbnails and embedded viewers; keep using them now so pages are ready.
 
+Videos work the same way: a **YouTube**, **Vimeo**, or **Loom** link on its own line becomes a player, right in the page — flight footage next to the flight log where it belongs.
+
 ## Templates
 
 **N** opens the new-page dialog: meeting notes, design doc, decision record, test report, bring-up log, procedure. A decision that isn't in a [[Decision Records|decision record]] didn't happen.
@@ -1701,6 +1730,7 @@ Drag any file into the editor, or paste a screenshot:
 - STL/OBJ get an interactive 3D viewer, right in the page
 - STEP, SchDoc, PDF, anything else becomes a labeled file card
 - An **Onshape** or **Altium 365** URL pasted on its own line becomes a rich card
+- A **YouTube**, **Vimeo**, or **Loom** link on its own line becomes an embedded player
 
 ## Keyboard
 
@@ -2478,6 +2508,34 @@ function highlight(code, lang) {
 
 /* ------------------------------- embeds ---------------------------------- */
 
+// Video links on their own line become players. IDs are extracted by these
+// regexes and the embed URL is rebuilt from the ID alone — raw input never
+// reaches an iframe src.
+function parseVideoUrl(url) {
+  let m = url.match(/^https:\/\/(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)([\w-]{11})/i)
+       || url.match(/^https:\/\/youtu\.be\/([\w-]{11})/i);
+  if (m) return { provider: 'youtube', id: m[1], watch: `https://www.youtube.com/watch?v=${m[1]}`, thumb: `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`, label: 'YouTube video' };
+  m = url.match(/^https:\/\/(?:www\.)?vimeo\.com\/(\d{6,12})/);
+  if (m) return { provider: 'vimeo', id: m[1], watch: `https://vimeo.com/${m[1]}`, thumb: null, label: 'Vimeo video' };
+  m = url.match(/^https:\/\/(?:www\.)?loom\.com\/share\/([a-f0-9]{32})/i);
+  if (m) return { provider: 'loom', id: m[1], watch: `https://www.loom.com/share/${m[1]}`, thumb: null, label: 'Loom recording' };
+  return null;
+}
+
+const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
+
+function videoEmbed(v) {
+  // Click-to-play facade: nothing loads from the provider until asked.
+  return `<div class="video-embed">
+    <button type="button" class="video-embed__face" data-action="video-play" data-provider="${v.provider}" data-vid="${esc(v.id)}" aria-label="Play ${esc(v.label)}">
+      ${v.thumb ? `<img class="video-embed__thumb" src="${esc(v.thumb)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      <span class="video-embed__btn">${PLAY_ICON}</span>
+      <span class="video-embed__tag">${esc(v.label)}</span>
+    </button>
+    <a class="video-embed__ext" href="${esc(v.watch)}" target="_blank" rel="noreferrer">Open&nbsp;&#8599;</a>
+  </div>`;
+}
+
 function parseEmbedUrl(url) {
   let m = url.match(/^https:\/\/cad\.onshape\.com\/documents\/([a-f0-9]+)(?:\/[wv]\/([a-f0-9]+))?(?:\/e\/([a-f0-9]+))?/i);
   if (m) return { kind: 'onshape', label: 'Onshape document', ref: `doc ${m[1].slice(0, 8)}…${m[3] ? ' · element ' + m[3].slice(0, 6) + '…' : ''}`, url };
@@ -2752,6 +2810,8 @@ function mdRender(src, ctx) {
 
     // Bare embed URL on its own line
     if (/^https:\/\/\S+$/.test(line.trim())) {
+      const v = parseVideoUrl(line.trim());
+      if (v) { html += videoEmbed(v); i++; continue; }
       const e = parseEmbedUrl(line.trim());
       if (e) { html += embedCard(e); i++; continue; }
     }
@@ -5241,6 +5301,20 @@ document.addEventListener('click', async (ev) => {
           render();
         } },
       ], el);
+      break;
+    }
+    case 'video-play': stop(); {
+      const wrap = el.closest('.video-embed');
+      const provider = el.dataset.provider, id = el.dataset.vid || '';
+      if (!wrap || !/^[\w-]{6,40}$/.test(id)) break;
+      const watch = provider === 'youtube' ? `https://www.youtube.com/watch?v=${id}`
+        : provider === 'vimeo' ? `https://vimeo.com/${id}`
+        : `https://www.loom.com/share/${id}`;
+      if (window.__FRAME_PREAMBLE) { window.open(watch, '_blank', 'noopener'); break; } // artifact sandbox blocks third-party frames
+      const src = provider === 'youtube' ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`
+        : provider === 'vimeo' ? `https://player.vimeo.com/video/${id}?autoplay=1`
+        : `https://www.loom.com/embed/${id}?autoplay=1`;
+      wrap.innerHTML = `<iframe src="${src}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
       break;
     }
     case 'lightbox': stop(); openLightbox(ev.target.src, ev.target.alt); break;

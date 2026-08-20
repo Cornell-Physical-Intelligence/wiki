@@ -330,6 +330,20 @@ document.addEventListener('click', async (ev) => {
       ], el);
       break;
     }
+    case 'video-play': stop(); {
+      const wrap = el.closest('.video-embed');
+      const provider = el.dataset.provider, id = el.dataset.vid || '';
+      if (!wrap || !/^[\w-]{6,40}$/.test(id)) break;
+      const watch = provider === 'youtube' ? `https://www.youtube.com/watch?v=${id}`
+        : provider === 'vimeo' ? `https://vimeo.com/${id}`
+        : `https://www.loom.com/share/${id}`;
+      if (window.__FRAME_PREAMBLE) { window.open(watch, '_blank', 'noopener'); break; } // artifact sandbox blocks third-party frames
+      const src = provider === 'youtube' ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`
+        : provider === 'vimeo' ? `https://player.vimeo.com/video/${id}?autoplay=1`
+        : `https://www.loom.com/embed/${id}?autoplay=1`;
+      wrap.innerHTML = `<iframe src="${src}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      break;
+    }
     case 'lightbox': stop(); openLightbox(ev.target.src, ev.target.alt); break;
     case 'att-open': {
       stop();

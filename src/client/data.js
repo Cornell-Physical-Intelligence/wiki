@@ -296,6 +296,8 @@ Drag any file into the editor (or paste a screenshot straight from the clipboard
 
 Paste an **Onshape** document URL or an **Altium 365** share URL on its own line and it becomes a rich card. On the production wiki these upgrade to live thumbnails and embedded viewers; keep using them now so pages are ready.
 
+Videos work the same way: a **YouTube**, **Vimeo**, or **Loom** link on its own line becomes a player, right in the page — flight footage next to the flight log where it belongs.
+
 ## Templates
 
 **N** opens the new-page dialog: meeting notes, design doc, decision record, test report, bring-up log, procedure. A decision that isn't in a [[Decision Records|decision record]] didn't happen.
@@ -401,6 +403,7 @@ Drag any file into the editor, or paste a screenshot:
 - STL/OBJ get an interactive 3D viewer, right in the page
 - STEP, SchDoc, PDF, anything else becomes a labeled file card
 - An **Onshape** or **Altium 365** URL pasted on its own line becomes a rich card
+- A **YouTube**, **Vimeo**, or **Loom** link on its own line becomes an embedded player
 
 ## Keyboard
 
