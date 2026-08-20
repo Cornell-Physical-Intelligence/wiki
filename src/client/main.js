@@ -487,8 +487,13 @@ document.addEventListener('submit', (ev) => {
     const ok = results.filter((r) => r.ok);
     const bad = results.filter((r) => !r.ok);
     render();
-    if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
-    else if (ok.length > 1) toast(`Added ${ok.length} members — each gets a welcome email`);
+    if (typeof REMOTE === 'undefined') {
+      // Preview only: show the simulated email so the flow can be judged.
+      if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
+      else if (ok.length > 1) toast(`Added ${ok.length} members — each gets a welcome email`);
+    } else if (ok.length) {
+      toast(ok.length === 1 ? `Added ${ok[0].email} — welcome email sent` : `Added ${ok.length} members — welcome emails sent`);
+    }
     bad.forEach((b) => toast(`${b.email}: ${b.reason}`));
   }
 });

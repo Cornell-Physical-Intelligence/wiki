@@ -473,7 +473,7 @@ function viewAdmin() {
             <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(u.email)}</span><span><b>${MD.esc(u.email.split('@')[0])}</b><span class="mail">${u.email}</span></span></span></td>
             <td><span class="mono">${relTime(u.invitedAt)} · by ${MD.esc(Store.userName(u.invitedBy).split(' ')[0])}</span></td>
             <td><span class="actions actions--show">
-              <button class="btn btn--sm" data-action="invite-view" data-email="${u.email}">${I.mail} View email</button>
+              ${typeof REMOTE === 'undefined' ? `<button class="btn btn--sm" data-action="invite-view" data-email="${u.email}">${I.mail} View email</button>` : ''}
               <button class="btn btn--sm btn--danger" data-action="user-remove" data-email="${u.email}">Remove</button>
             </span></td>
           </tr>`).join('')}

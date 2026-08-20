@@ -15,6 +15,8 @@ const html = fullPage({ remote: true });
 writeFileSync(out('index.html'), html);
 
 copyFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url), out('favicon-cupi.png'));
+// The welcome email references this PNG — email clients can't be trusted with webp.
+copyFileSync(new URL('../src/client/welcome-crab.png', import.meta.url), out('welcome-crab.png'));
 
 writeFileSync(
   out('robots.txt'),
