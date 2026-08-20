@@ -393,7 +393,7 @@ const Store = {
     for (const raw of emails) {
       const email = raw.trim().toLowerCase();
       if (!email) continue;
-      if (!/^[a-z0-9._%+-]+@cornell\.edu$/.test(email)) { results.push({ email, ok: false, reason: 'Not a cornell.edu address' }); continue; }
+      if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) { results.push({ email, ok: false, reason: 'Not a valid email address' }); continue; }
       if (Store.user(email)) { results.push({ email, ok: false, reason: 'Already on the roster' }); continue; }
       const u = {
         email, name: email.split('@')[0], role: role || 'member', status: 'invited',

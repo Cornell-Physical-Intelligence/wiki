@@ -457,7 +457,7 @@ function viewAdmin() {
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Add members</h2></div>
-        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets a welcome email — no codes, access is immediate.</p>
+        <p class="admin-block__sub">Paste one or more addresses, comma or space separated. Each gets a welcome email — no codes. Signing in still requires a <b>cornell.edu</b> Google account.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
           ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
