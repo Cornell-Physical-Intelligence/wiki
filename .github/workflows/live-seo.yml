@@ -1,0 +1,27 @@
+name: Live wiki SEO monitor
+
+on:
+  schedule:
+    - cron: '41 13 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-wiki-seo-monitor
+  cancel-in-progress: false
+
+jobs:
+  verify-live-wiki:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify the deployed wiki SEO surface
+        run: npm run verify:live-seo
+        env:
+          LIVE_WIKI_ORIGIN: https://wiki.cornellphysicalintelligence.com

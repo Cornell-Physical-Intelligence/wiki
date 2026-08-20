@@ -280,6 +280,8 @@ label > .dd { width: 100%; }
   font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; line-height: 1.7;
   color: var(--faint); text-align: center; user-select: none;
 }
+.login__foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.login__foot a:hover { color: var(--fg); }
 
 .login__error {
   border: 1px solid var(--bad); border-radius: var(--radius);

@@ -1,5 +1,5 @@
 node_modules/
-public/index.html
+public/
 .devdata.json
 .vercel
 .DS_Store

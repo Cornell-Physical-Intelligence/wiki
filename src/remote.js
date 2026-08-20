@@ -174,7 +174,8 @@ viewLogin = function viewLoginRemote() {
       <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
       <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>
     </div>
-    <p class="login__foot">CUPI is a registered student organization of Cornell University.</p>
+    <p class="login__foot">CUPI is a student robotics organization at Cornell University.<br>
+    <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
   </div>`;
 };
 

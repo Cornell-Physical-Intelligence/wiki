@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:preview": "node scripts/build-preview.mjs",
+    "verify:seo": "node scripts/verify-seo.mjs",
+    "verify:live-seo": "node scripts/verify-live-seo.mjs",
+    "check": "npm run build && npm run build:preview && npm run verify:seo",
     "dev": "npm run build && DEV_FAKE_AUTH=ab3233@cornell.edu node dev.mjs",
     "start": "npm run build && node dev.mjs"
   },

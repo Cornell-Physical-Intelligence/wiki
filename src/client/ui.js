@@ -177,7 +177,7 @@ function viewLogin() {
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
       <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>`}
     </div>
-    <p class="login__foot">Preview build — sign-in is simulated and data stays in this browser.<br>CUPI is a registered student organization of Cornell University.</p>
+    <p class="login__foot">Preview build — sign-in is simulated and data stays in this browser.<br>CUPI is a student robotics organization at Cornell University.</p>
   </div>`;
 }
 
