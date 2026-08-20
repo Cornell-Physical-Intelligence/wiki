@@ -59,7 +59,7 @@ Store.persist = function persistRemote() {
   }, 1200);
 };
 
-async function sendOp(op, args, after) {
+async function sendOp(op, args, after, onError) {
   REMOTE.pending++;
   try {
     const out = await api('/mutate', { method: 'POST', body: JSON.stringify({ op, args }) });
@@ -68,6 +68,7 @@ async function sendOp(op, args, after) {
     render();
   } catch (e) {
     toast(e.status === 400 ? e.message : 'Sync failed — check your connection and retry.');
+    onError?.(e);
     try { adoptServer(await api('/state')); render(); } catch (e2) { /* offline */ }
   } finally { REMOTE.pending--; }
 }
@@ -75,9 +76,8 @@ async function sendOp(op, args, after) {
 // name → how to serialize the client call into op args.
 const OP_MAP = {
   createPage: (a) => ({ op: 'createPage', args: a[0] }),
-  savePage: (a) => ({ op: 'savePage', args: { id: a[0], ...a[1] } }),
   toggleTask: (a) => ({ op: 'toggleTask', args: { id: a[0], n: a[1] } }),
-  restoreRev: (a) => ({ op: 'restoreRev', args: { id: a[0], revIdx: a[1] } }),
+  restoreRev: (a) => ({ op: 'restoreRev', args: { id: a[0], revTs: a[1] } }),
   deletePage: (a) => ({ op: 'deletePage', args: { id: a[0] } }),
   restorePage: (a) => ({ op: 'restorePage', args: { id: a[0] } }),
   purgePage: (a) => ({ op: 'purgePage', args: { id: a[0] } }),
@@ -97,6 +97,21 @@ for (const [name, toOp] of Object.entries(OP_MAP)) {
     const r = orig(...args);          // optimistic local apply
     const { op, args: a } = toOp(args);
     sendOp(op, a);
+    return r;
+  };
+}
+
+// Saves carry their base revision; a server-side edit conflict re-stashes the
+// attempted text as a draft so nothing the author wrote is lost.
+{
+  const orig = Store.savePage.bind(Store);
+  Store.savePage = (id, args) => {
+    const r = orig(id, args);
+    sendOp('savePage', { id, ...args }, null, () => {
+      draftStash.set(id, { title: args.title, body: args.body, section: args.section, origBody: Store.page(id)?.body ?? '' });
+      persistDrafts();
+      toast('Your version is saved as a draft', { label: 'Open draft', run: () => startEdit(id, false) });
+    });
     return r;
   };
 }
@@ -127,17 +142,31 @@ for (const [name, toOp] of Object.entries(OP_MAP)) {
 
 /* ------------------------------- attachments ------------------------------ */
 
+// Uploads are chunked under Vercel's ~4.5 MB request ceiling, so a 25 MB STEP
+// export goes through in ~2.8 MB parts and is assembled server-side.
 Store.addAttachment = async function addAttachmentRemote(file) {
-  if (file.size > 4 * 1048576) throw new Error('File is over the 4 MB upload cap.');
+  if (file.size > 25 * 1048576) throw new Error('File is over the 25 MB upload cap.');
   const data = await new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(String(r.result).split(',')[1]);
     r.onerror = () => rej(new Error('Could not read file'));
     r.readAsDataURL(file);
   });
-  const meta = await api('/att', { method: 'POST', body: JSON.stringify({ name: file.name, type: file.type, data }) });
+  const CHUNK = 2800000; // base64 chars per part (~2.1 MB binary)
+  if (data.length <= CHUNK) {
+    const meta = await api('/att', { method: 'POST', body: JSON.stringify({ name: file.name, type: file.type, data }) });
+    const att = { ...meta, url: meta.url };
+    Files.mem.set(att.id, att);
+    return att;
+  }
+  const { uploadId } = await api('/att/begin', { method: 'POST', body: JSON.stringify({}) });
+  for (let seq = 0; seq * CHUNK < data.length; seq++) {
+    await api('/att/part', { method: 'POST', body: JSON.stringify({ uploadId, seq, data: data.slice(seq * CHUNK, (seq + 1) * CHUNK) }) });
+    toast(`Uploading ${file.name}… ${Math.min(100, Math.round(((seq + 1) * CHUNK / data.length) * 100))}%`);
+  }
+  const meta = await api('/att/finish', { method: 'POST', body: JSON.stringify({ uploadId, name: file.name, type: file.type }) });
   const att = { ...meta, url: meta.url };
-  Files.put ? Files.mem.set(att.id, att) : Files.mem.set(att.id, att);
+  Files.mem.set(att.id, att);
   return att;
 };
 

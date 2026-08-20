@@ -1,7 +1,7 @@
 // The entire backend: auth, state, mutations, attachments. One function.
 // Rewrites in vercel.json send every /api/* request here.
 
-import { getState, updateState, putFile, getFile, listFiles } from '../lib/db.js';
+import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts } from '../lib/db.js';
 import { applyOp } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendInvite } from '../lib/email.js';
@@ -158,10 +158,56 @@ export default async function handler(req, res) {
         emailed.push({ email: opResult.email, ...sent });
       }
 
+      // Purges orphan attachments: sweep anything no live or trashed body references.
+      if (op === 'purgePage') {
+        try {
+          const referenced = new Set();
+          for (const list of [out.state.pages, out.state.trash]) {
+            for (const pg of list) {
+              for (const mm of pg.body.matchAll(/att:([A-Za-z0-9-]+)/g)) referenced.add(mm[1]);
+              for (const rv of pg.revs || []) for (const mm of String(rv.body).matchAll(/att:([A-Za-z0-9-]+)/g)) referenced.add(mm[1]);
+            }
+          }
+          for (const f of await listFiles()) if (!referenced.has(f.id)) await deleteFile(f.id);
+        } catch (e) { /* sweep is best-effort */ }
+      }
+
       return json(res, 200, { version: out.version, state: shapeState(out.state, me), result: opResult, emailed });
     }
 
     /* ------------------------------ attachments ---------------------------- */
+
+    // Chunked uploads: big CAD files arrive in ~2.8 MB base64 parts.
+    if (path === '/att/begin' && req.method === 'POST') {
+      const uploadId = 'up-' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+      return json(res, 200, { uploadId });
+    }
+    if (path === '/att/part' && req.method === 'POST') {
+      const body = await readJson(req);
+      if (!/^up-[a-z0-9]+$/.test(String(body.uploadId || ''))) return json(res, 400, { error: 'Bad upload id' });
+      const part = String(body.data || '');
+      if (!part || part.length > 3200000) return json(res, 400, { error: 'Bad part' });
+      await putPart(body.uploadId, Number(body.seq) || 0, part);
+      return json(res, 200, { ok: true });
+    }
+    if (path === '/att/finish' && req.method === 'POST') {
+      const body = await readJson(req, 64 * 1024);
+      if (!/^up-[a-z0-9]+$/.test(String(body.uploadId || ''))) return json(res, 400, { error: 'Bad upload id' });
+      const parts = await takeParts(body.uploadId);
+      if (!parts.length) return json(res, 400, { error: 'No uploaded parts found' });
+      const data = Buffer.from(parts.join(''), 'base64');
+      if (!data.length) return json(res, 400, { error: 'Empty file' });
+      if (data.length > 25 * 1048576) return json(res, 413, { error: 'File is over the 25 MB cap' });
+      const id = 'att-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      const f = {
+        id,
+        name: String(body.name || 'file').slice(0, 200),
+        type: String(body.type || 'application/octet-stream').slice(0, 100),
+        size: data.length, by: me.email, ts: Date.now(), data,
+      };
+      await putFile(f);
+      return json(res, 200, { id, name: f.name, type: f.type, size: f.size, by: f.by, ts: f.ts, url: '/api/att/' + id });
+    }
 
     if (path === '/att' && req.method === 'POST') {
       const body = await readJson(req);

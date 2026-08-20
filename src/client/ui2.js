@@ -31,6 +31,7 @@ function openEditor(pageId, isNew, draft) {
     mode: Store.prefs().editorMode || 'split',
     dirty: false,
     origTitle: p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
+    baseUpdated: p?.updated ?? null,
   };
 }
 
@@ -77,10 +78,12 @@ function viewEditor() {
       ${tools.map((t) => t === null ? '<span class="sep"></span>' :
         `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       <span class="spacer"></span>
+      <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
         ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
       </label>
     </div>
+    ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft — the page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90">
@@ -105,38 +108,107 @@ function edUpdatePreview() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
   const { html } = MD.render(e.body, mdCtx({ readonly: true }));
-  host.innerHTML = (e.title ? `<h1 style="font-size:28px;font-weight:400;margin:0 0 18px">${MD.esc(e.title)}</h1>` : '') + html;
+  host.innerHTML = (e.title ? `<h1 class="preview-title">${MD.esc(e.title)}</h1>` : '') + html;
   $$('.cad-embed', host).forEach(mountCadViewer);
 }
 
-function edInsert(before, after, placeholder) {
+// All programmatic edits go through execCommand('insertText') so the native
+// undo/redo stack survives every toolbar action and list continuation —
+// the difference between feeling like GitHub's editor and feeling amateur.
+function edType(ta, text) {
+  ta.focus();
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, text); } catch (e) { ok = false; }
+  if (!ok) {
+    ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+// Wrap the selection — or unwrap it when it's already wrapped (toggle).
+function edWrap(before, after, placeholder) {
   const ta = $('[data-ed="body"]');
   if (!ta) return;
-  const { selectionStart: s, selectionEnd: epos, value } = ta;
-  const sel = value.slice(s, epos) || placeholder || '';
-  const insert = before + sel + (after || '');
-  ta.setRangeText(insert, s, epos, 'end');
-  if (!value.slice(s, epos) && placeholder) ta.setSelectionRange(s + before.length, s + before.length + placeholder.length);
-  ta.focus();
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  const { selectionStart: s, selectionEnd: e, value } = ta;
+  const sel = value.slice(s, e);
+  // Toggle off: marks just outside the selection…
+  if (value.slice(s - before.length, s) === before && value.slice(e, e + after.length) === after) {
+    ta.setSelectionRange(s - before.length, e + after.length);
+    edType(ta, sel);
+    ta.setSelectionRange(s - before.length, e - before.length);
+    return;
+  }
+  // …or inside it.
+  if (sel.startsWith(before) && sel.endsWith(after) && sel.length >= before.length + after.length) {
+    const inner = sel.slice(before.length, sel.length - after.length);
+    edType(ta, inner);
+    ta.setSelectionRange(s, s + inner.length);
+    return;
+  }
+  const body = sel || placeholder || '';
+  edType(ta, before + body + after);
+  const base = s + before.length;
+  ta.setSelectionRange(base, base + body.length);
+}
+
+// Line operations: heading/list/quote buttons act on the current line's
+// prefix (GitHub/Docs behavior), never splice into the middle of a sentence.
+function edLine(prefix) {
+  const ta = $('[data-ed="body"]');
+  if (!ta) return;
+  const { value, selectionStart: s } = ta;
+  const ls = value.lastIndexOf('\n', s - 1) + 1;
+  let le = value.indexOf('\n', s);
+  if (le < 0) le = value.length;
+  const line = value.slice(ls, le);
+  const cur = line.match(/^(#{2,4} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] |> )/)?.[1] || '';
+  const rest = line.slice(cur.length);
+  const next = cur === prefix ? rest : prefix + rest; // same prefix toggles off
+  ta.setSelectionRange(ls, le);
+  edType(ta, next);
+  const caret = Math.min(ls + next.length, ls + Math.max(0, s - ls - cur.length + (cur === prefix ? 0 : prefix.length)));
+  ta.setSelectionRange(caret, caret);
+}
+
+// Block inserts land on their own line, at a clean boundary.
+function edBlock(text, selectFrom, selectLen) {
+  const ta = $('[data-ed="body"]');
+  if (!ta) return;
+  const { value, selectionStart: s } = ta;
+  const atLineStart = s === 0 || value[s - 1] === '\n';
+  const pre = atLineStart ? '' : '\n';
+  edType(ta, pre + text);
+  if (selectFrom !== undefined) {
+    const base = s + pre.length + selectFrom;
+    ta.setSelectionRange(base, base + (selectLen || 0));
+  }
 }
 
 const ED_TOOLS = {
-  bold: () => edInsert('**', '**', 'bold'),
-  italic: () => edInsert('*', '*', 'italic'),
-  strike: () => edInsert('~~', '~~', 'text'),
-  code: () => edInsert('`', '`', 'code'),
-  h2: () => edInsert('\n## ', '', 'Heading'),
-  h3: () => edInsert('\n### ', '', 'Subheading'),
-  ul: () => edInsert('\n- ', '', 'item'),
-  ol: () => edInsert('\n1. ', '', 'item'),
-  hr: () => edInsert('\n\n---\n\n', '', ''),
-  task: () => edInsert('\n- [ ] ', '', 'to do'),
-  quote: () => edInsert('\n> ', '', 'quote'),
-  fence: () => edInsert('\n~~~\n', '\n~~~\n', 'code'),
-  callout: () => edInsert('\n::: note Title\n', '\n:::\n', 'The thing worth calling out.'),
-  table: () => edInsert('\n| Column | Column |\n| --- | --- |\n| ', ' |  |\n', 'cell'),
-  wikilink: () => edInsert('[[', ']]', 'Page Title'),
+  bold: () => edWrap('**', '**', 'bold'),
+  italic: () => edWrap('*', '*', 'italic'),
+  strike: () => edWrap('~~', '~~', 'text'),
+  code: () => edWrap('\u0060', '\u0060', 'code'),
+  h2: () => edLine('## '),
+  h3: () => edLine('### '),
+  ul: () => edLine('- '),
+  ol: () => edLine('1. '),
+  task: () => edLine('- [ ] '),
+  quote: () => edLine('> '),
+  hr: () => edBlock('\n---\n\n'),
+  fence: () => edBlock('~~~\ncode\n~~~\n', 4, 4),
+  callout: () => edBlock('::: note Title\nThe thing worth calling out.\n:::\n', 15, 29),
+  table: () => edBlock('| Column | Column |\n| --- | --- |\n| cell |  |\n', 2, 4),
+  wikilink: () => edWrap('[[', ']]', 'Page Title'),
+  mdlink: () => {
+    const ta = $('[data-ed="body"]');
+    if (!ta) return;
+    const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd) || 'link text';
+    const start = ta.selectionStart;
+    edType(ta, '[' + sel + '](https://)');
+    const urlAt = start + 1 + sel.length + 2;
+    ta.setSelectionRange(urlAt, urlAt + 8);
+  },
   image: () => $('[data-ed-file]')?.click(),
   attach: () => $('[data-ed-file]')?.click(),
 };
@@ -145,8 +217,9 @@ async function edHandleFiles(files) {
   for (const f of files) {
     try {
       const att = await Store.addAttachment(f);
-      if (/^image\//.test(att.type)) edInsert(`\n![${f.name.replace(/\.[^.]+$/, '')}](att:${att.id} "")\n`, '', '');
-      else edInsert(`\n!file[${f.name.replace(/\.[^.]+$/, '')}](att:${att.id})\n`, '', '');
+      const label = f.name.replace(/\.[^.]+$/, '');
+      if (/^image\//.test(att.type)) edBlock(`![${label}](att:${att.id} "")\n`);
+      else edBlock(`!file[${label}](att:${att.id})\n`);
       toast(`Attached ${f.name} (${MD.fmtSize(att.size)})`);
     } catch (err) { toast(err.message || 'Upload failed'); }
   }
@@ -180,10 +253,9 @@ function edAcceptAc(title) {
   const m = upto.match(/\[\[([^\][\n]*)$/);
   if (!m) return;
   const start = ta.selectionStart - m[1].length;
-  ta.setRangeText(title + ']]', start, ta.selectionEnd, 'end');
+  ta.setSelectionRange(start, ta.selectionEnd);
+  edType(ta, title + ']]');
   $('.ed-autocomplete').hidden = true;
-  ta.focus();
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function edSave() {
@@ -221,7 +293,7 @@ function edCommit(summary) {
     p = Store.createPage({ title: e.title.trim(), section: e.section, body: e.body, summary });
     toast('The original was deleted while you edited — saved as a new page');
   } else {
-    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary });
+    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary, baseUpdated: e.baseUpdated });
   }
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
   toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'NOT saved — storage is full');
@@ -238,13 +310,32 @@ function edCommit(summary) {
 
 /* ------------------------------- history --------------------------------- */
 
+// Word-ish intraline emphasis: common prefix/suffix of a changed del/add pair.
+function intraline(a, b) {
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let s = 0;
+  while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  const mark = (t) => `${MD.esc(t.slice(0, p))}<mark>${MD.esc(t.slice(p, t.length - s)) || ' '}</mark>${MD.esc(t.slice(t.length - s))}`;
+  return [mark(a), mark(b)];
+}
+
 function viewHistory(id) {
   const p = Store.page(id);
   if (!p) return viewMissing(id);
   const selIdx = UI.route.params.rev !== undefined ? +UI.route.params.rev : p.revs.length - 1;
   const rev = p.revs[selIdx];
   const prev = p.revs[selIdx - 1];
+  const showRendered = UI.route.params.view === 'rendered';
   const d = diffLines(prev ? prev.body : '', rev ? rev.body : '');
+  // Pair adjacent del/add lines for intraline emphasis.
+  for (let k = 0; k < d.ops.length - 1; k++) {
+    if (d.ops[k][0] === -1 && d.ops[k + 1][0] === 1) {
+      const [da, db] = intraline(d.ops[k][1], d.ops[k + 1][1]);
+      d.ops[k][2] = da; d.ops[k + 1][2] = db;
+      k++;
+    }
+  }
   // Collapse long unchanged runs.
   let rows = '', run = [];
   const flushRun = () => {
@@ -255,15 +346,16 @@ function viewHistory(id) {
     } else rows += run.join('');
     run = [];
   };
-  for (const [op, line] of d.ops) {
-    const h = `<div class="diff__line ${op === 1 ? 'diff__line--add' : op === -1 ? 'diff__line--del' : ''}"><span class="diff__gut">${op === 1 ? '+' : op === -1 ? '−' : ''}</span><span class="diff__txt">${MD.esc(line) || '&nbsp;'}</span></div>`;
+  for (const [op, line, marked] of d.ops) {
+    const txt = marked || MD.esc(line) || '&nbsp;';
+    const h = `<div class="diff__line ${op === 1 ? 'diff__line--add' : op === -1 ? 'diff__line--del' : ''}"><span class="diff__gut">${op === 1 ? '+' : op === -1 ? '−' : ''}</span><span class="diff__txt">${txt}</span></div>`;
     if (op === 0) run.push(h); else { flushRun(); rows += h; }
   }
   flushRun();
 
   return topbar(
     `<a href="#/page/${id}">${MD.esc(p.title)}</a><span class="crumbs__sep">/</span><span class="crumbs__here">History</span>`,
-    selIdx < p.revs.length - 1 ? `<button class="btn" data-action="rev-restore" data-id="${id}" data-rev="${selIdx}">Restore this version</button>` : ''
+    selIdx < p.revs.length - 1 ? `<button class="btn" data-action="rev-restore" data-id="${id}" data-ts="${rev ? rev.ts : 0}">Restore this version</button>` : ''
   ) + `
   <div class="content"><div class="page-wrap"><div class="page-col" style="max-width:860px">
     <div class="plain-head"><span class="eyebrow">Page history</span><h1>${MD.esc(p.title)}</h1>
@@ -279,8 +371,16 @@ function viewHistory(id) {
       </a>`;
       }).reverse().join('')}
     </div>
-    <div class="plain-head" style="margin-top:28px"><span class="eyebrow">Changes in selected revision</span></div>
-    <div class="diff">${rows || '<div class="diff__line"><span class="diff__gut"></span><span class="diff__txt" style="color:var(--faint)">No text changes.</span></div>'}</div>
+    <div class="plain-head" style="margin-top:28px;display:flex;align-items:baseline;gap:14px">
+      <span class="eyebrow">Selected revision</span>
+      <div class="editor__mode" role="tablist" style="margin-left:auto">
+        <a role="tab" class="${!showRendered ? 'active' : ''}" style="padding:4px 12px;font-size:12px;text-decoration:none;color:${!showRendered ? 'var(--fg)' : 'var(--muted)'}" href="#/history/${id}?rev=${selIdx}">Changes</a>
+        <a role="tab" class="${showRendered ? 'active' : ''}" style="padding:4px 12px;font-size:12px;text-decoration:none;color:${showRendered ? 'var(--fg)' : 'var(--muted)'}" href="#/history/${id}?rev=${selIdx}&view=rendered">Rendered</a>
+      </div>
+    </div>
+    ${showRendered
+      ? `<div class="prose" style="border:1px solid var(--hairline);border-radius:var(--radius);padding:20px 24px">${MD.render(rev ? rev.body : '', mdCtx({ readonly: true })).html}</div>`
+      : `<div class="diff">${rows || '<div class="diff__line"><span class="diff__gut"></span><span class="diff__txt" style="color:var(--faint)">No text changes.</span></div>'}</div>`}
   </div></div></div>`;
 }
 
@@ -296,6 +396,8 @@ function activityLine(a) {
     comment: `${who} commented on ${pageRef}`,
     delete: `${who} moved ${pageRef} to Trash`,
     restore: `${who} restored ${pageRef}`,
+    move: `${who} moved ${pageRef} to another section`,
+    purge: `${who} permanently deleted ${pageRef}`,
     invite: `${who} invited <b>${MD.esc(a.who || '')}</b>`,
     'invite-resend': `${who} re-sent the invite for <b>${MD.esc(a.who || '')}</b>`,
     'invite-revoke': `${who} revoked the invite for <b>${MD.esc(a.who || '')}</b>`,
@@ -599,6 +701,15 @@ function render() {
   $$('.cad-embed').forEach(mountCadViewer);
   if (UI.editor) {
     edUpdatePreview();
+    const src = $('[data-ed="body"]');
+    const prev = $('.editor__pane--preview');
+    if (src && prev && !src._syncBound) {
+      src._syncBound = true;
+      src.addEventListener('scroll', () => {
+        const ratio = src.scrollTop / Math.max(1, src.scrollHeight - src.clientHeight);
+        prev.scrollTop = ratio * (prev.scrollHeight - prev.clientHeight);
+      }, { passive: true });
+    }
     const ta = $('[data-ed="body"]');
     if (ta && !UI.editor._focused) { (UI.editor.isNew && !UI.editor.title ? $('[data-ed="title"]') : ta)?.focus(); UI.editor._focused = true; }
   }

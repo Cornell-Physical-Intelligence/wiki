@@ -313,9 +313,9 @@ const Store = {
     Store.persist();
   },
 
-  restoreRev(pageId, revIdx) {
+  restoreRev(pageId, revTs) {
     const p = Store.page(pageId);
-    const rev = p?.revs[revIdx];
+    const rev = p?.revs.find((r) => r.ts === revTs);
     if (!rev) return;
     const me = Store.me();
     p.body = rev.body;
@@ -360,7 +360,9 @@ const Store = {
 
   purgePage(id) {
     const idx = Store.s.trash.findIndex((p) => p.id === id);
-    if (idx >= 0) Store.s.trash.splice(idx, 1);
+    if (idx < 0) return;
+    const [p] = Store.s.trash.splice(idx, 1);
+    Store.log({ kind: 'purge', by: Store.me().email, title: p.title });
     Store.sweepAttachments();
     Store.persist();
   },
@@ -534,8 +536,9 @@ const Store = {
       const title = p.title.toLowerCase();
       const commentText = Store.s.comments.filter((c) => c.pageId === p.id).map((c) => c.text).join(' ');
       const text = (MD.mdToText(p.body) + ' ' + commentText).toLowerCase();
-      let score = 0;
-      let allHit = true;
+      // OR-scored with an all-terms bonus: "buck converter" still surfaces the
+      // page that only says "buck" instead of returning nothing.
+      let score = 0, hits = 0;
       for (const t of terms) {
         let hit = 0;
         if (title === t) hit += 120;
@@ -543,10 +546,12 @@ const Store = {
         else if (title.includes(t)) hit += 40;
         const n = text.split(t).length - 1;
         if (n) hit += Math.min(24, 8 + n * 2);
-        if (!hit) { allHit = false; break; }
+        if (hit) hits++;
         score += hit;
       }
-      if (!allHit || !score) continue;
+      if (!hits) continue;
+      if (hits === terms.length) score *= 2; // full matches rank first
+      else score = Math.round(score * (hits / terms.length));
       // Snippet centered on the first body hit.
       const raw = MD.mdToText(p.body);
       const pos = raw.toLowerCase().indexOf(terms[0]);

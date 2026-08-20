@@ -277,6 +277,7 @@ function viewPage(id) {
   const infoOpen = UI.pageInfo === id;
 
   const right = `
+    ${toc.length > 1 ? `<button class="icon-btn toc-btn" data-action="toc-menu" data-id="${id}" aria-label="Contents" title="Contents">${lucide('ul', 1.8)}</button>` : ''}
     <button class="icon-btn ${starred ? 'active' : ''}" data-action="star" data-id="${id}" aria-label="${starred ? 'Unstar' : 'Star'} page" title="${starred ? 'Unstar' : 'Star'}">${starred ? I.starFill : I.star}</button>
     <a class="icon-btn" href="#/history/${id}" aria-label="Page history" title="History">${I.history}</a>
     <button class="icon-btn" data-action="page-menu" data-id="${id}" aria-label="Page options" title="Page options">${I.dots}</button>`;

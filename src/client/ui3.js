@@ -50,6 +50,7 @@ Object.assign(Store, {
     if (!p) return;
     p.section = String(section || p.section);
     p.parent = null;
+    Store.log({ kind: 'move', by: Store.me().email, pageId: id });
     Store.persist();
     Store.reindex();
   },

@@ -43,8 +43,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --page: #000000;
-    --fg: #ffffff;
-    --fg-rgb: 255, 255, 255;
+    --fg: #e8e8e8;
+    --fg-rgb: 232, 232, 232;
     --page-rgb: 0, 0, 0;
     --muted: rgba(255, 255, 255, 0.55);
     --faint: rgba(255, 255, 255, 0.46);
@@ -70,8 +70,8 @@
 
 :root[data-theme='dark'] {
   --page: #000000;
-  --fg: #ffffff;
-  --fg-rgb: 255, 255, 255;
+  --fg: #e8e8e8;
+  --fg-rgb: 232, 232, 232;
   --page-rgb: 0, 0, 0;
   --muted: rgba(255, 255, 255, 0.55);
   --faint: rgba(255, 255, 255, 0.46);
@@ -438,7 +438,11 @@ label > .dd { width: 100%; }
 .toc a:hover { color: var(--fg); }
 .toc a.here { color: var(--fg); border-left-color: var(--fg); }
 .toc a.lvl3 { padding-left: 26px; }
-@media (max-width: 1180px) { .toc { display: none; } }
+.toc-btn { display: none; }
+@media (max-width: 1180px) {
+  .toc { display: none; }
+  .toc-btn { display: inline-flex; }
+}
 
 .page-head { padding-bottom: 14px; border-bottom: 1px solid var(--hairline); margin-bottom: 26px; }
 .page-head h1 {
@@ -472,7 +476,7 @@ label > .dd { width: 100%; }
    Prose — rendered markdown
    ------------------------------------------------------------------------- */
 
-.prose { font-size: 15px; line-height: 1.65; text-wrap: pretty; }
+.prose { font-size: 16px; line-height: 1.7; text-wrap: pretty; }
 .prose > *:first-child { margin-top: 0; }
 
 .prose h2, .prose h3, .prose h4 { font-weight: 600; line-height: 1.25; scroll-margin-top: 68px; position: relative; text-wrap: balance; }
@@ -591,6 +595,43 @@ label > .dd { width: 100%; }
 }
 .editor__tools .icon-btn { width: 28px; height: 28px; border-radius: 5px; }
 .editor__tools .icon-btn svg { width: 16px; height: 16px; }
+.editor__count {
+  font-size: 12px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums;
+  margin-right: 10px; user-select: none;
+}
+.editor__draftbar {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+.editor__draftbar svg { width: 15px; height: 15px; color: var(--accent); flex: none; }
+.editor__draftbar .btn { margin-left: auto; }
+
+.findbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--hover);
+}
+.findbar input {
+  width: 260px; height: 28px; padding: 0 10px;
+  background: var(--page); border: 1px solid var(--hairline); border-radius: var(--radius);
+  font-size: 13px;
+}
+.findbar input:focus { outline: none; border-color: var(--rule); }
+.findbar__count { font-size: 12px; color: var(--muted); min-width: 70px; font-variant-numeric: tabular-nums; }
+.findbar .icon-btn { width: 26px; height: 26px; }
+
+/* The preview shows exactly what publishes: page-title styles, page measure. */
+.preview-title {
+  font-size: clamp(28px, 4vw, 40px); font-weight: 400; line-height: 1.15;
+  letter-spacing: 0.005em; margin: 0 0 12px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline); text-wrap: balance;
+}
+.editor__pane--preview .prose { max-width: 760px; }
+
 .editor__tools .sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 8px; flex: none; }
 .editor__tools .spacer { flex: 1; }
 .editor__mode { display: flex; border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; }
@@ -612,7 +653,10 @@ label > .dd { width: 100%; }
 .editor.mode-preview .editor__pane--src { display: none; }
 .editor.mode-preview .editor__pane--preview { border-left: none; }
 .editor.mode-preview .editor__pane--preview .prose, .editor.mode-preview .preview-tag { max-width: 800px; margin: 0 auto; }
-@media (max-width: 900px) { .editor.mode-split .editor__pane--preview { display: none; } }
+@media (max-width: 900px) {
+  .editor.mode-split .editor__pane--preview { display: none; }
+  .editor__mode [data-mode="split"] { display: none; }
+}
 
 .editor__title {
   border: none; background: var(--page); color: var(--fg); width: 100%;
@@ -1031,6 +1075,10 @@ a.feed__row:hover { background: var(--hover); }
   filter: invert(1) hue-rotate(180deg);
   background: #000;
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .prose img:not([src^='data:image/svg']) { filter: brightness(0.88); }
+}
+:root[data-theme='dark'] .prose img:not([src^='data:image/svg']) { filter: brightness(0.88); }
 
 .mention {
   display: inline-block; padding: 0 5px; border-radius: 4px;
@@ -1070,8 +1118,8 @@ a.feed__row:hover { background: var(--hover); }
   /* Invite form stacks; the email field keeps a usable width. */
   .invite-add { flex-wrap: wrap; }
   .invite-add .text-input { flex: 1 1 100%; min-width: 0; }
-  /* Editor topbar: split view doesn't exist at this width; drop the tabs
-     and the shortcut hint so Save and Cancel keep room. */
-  .editor__mode { display: none; }
+  /* Split has no room here, but Write|Preview must survive — a phone user
+     still needs to see rendered output before saving. */
   .editor .btn .kbd { display: none; }
+  .editor__mode button { padding: 4px 9px; }
 }

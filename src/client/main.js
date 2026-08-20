@@ -52,7 +52,7 @@ function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
   openEditor(pageId, isNew, draft);
-  if (draft) { UI.editor.dirty = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
+  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
   render();
 }
 
@@ -83,6 +83,61 @@ function openMenu(items, anchor) {
     close();
     items[+b.dataset.menuI].run();
   });
+}
+
+/* ------------------------------- find in editor --------------------------- */
+
+// Imperative overlay: re-rendering the editor would destroy the undo stack.
+function edFindOpen() {
+  const ed = $('.editor');
+  const ta = $('[data-ed="body"]');
+  if (!ed || !ta) return;
+  let bar = $('.findbar');
+  if (bar) { $('.findbar input').select(); return; }
+  bar = document.createElement('div');
+  bar.className = 'findbar';
+  bar.innerHTML = `<input type="text" placeholder="Find in page…" aria-label="Find in page">
+    <span class="findbar__count"></span>
+    <button class="icon-btn" data-find="prev" aria-label="Previous match">${lucide('h2', 2).replace(/<svg[^>]*>[\s\S]*<\/svg>/, '')}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg></button>
+    <button class="icon-btn" data-find="next" aria-label="Next match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="icon-btn" data-find="close" aria-label="Close find">${I.x}</button>`;
+  ed.insertBefore(bar, ed.querySelector('.editor__panes'));
+  const input = bar.querySelector('input');
+  const count = bar.querySelector('.findbar__count');
+  let at = -1;
+
+  const jump = (dir) => {
+    const q = input.value;
+    if (!q) { count.textContent = ''; return; }
+    const hay = ta.value.toLowerCase();
+    const needle = q.toLowerCase();
+    const all = [];
+    for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + 1)) all.push(i);
+    if (!all.length) { count.textContent = '0 results'; return; }
+    if (dir === 'next') at = (at + 1) % all.length;
+    else if (dir === 'prev') at = (at - 1 + all.length) % all.length;
+    else at = 0;
+    count.textContent = (at + 1) + ' of ' + all.length;
+    const pos = all[at];
+    ta.focus();
+    ta.setSelectionRange(pos, pos + q.length);
+    const lines = ta.value.slice(0, pos).split('\n').length;
+    ta.scrollTop = Math.max(0, lines * 21.6 - ta.clientHeight / 2);
+    input.focus();
+  };
+
+  input.addEventListener('input', () => { at = -1; jump('next'); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? 'prev' : 'next'); }
+    if (e.key === 'Escape') { e.preventDefault(); bar.remove(); ta.focus(); }
+  });
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-find]');
+    if (!b) return;
+    if (b.dataset.find === 'close') { bar.remove(); ta.focus(); }
+    else jump(b.dataset.find);
+  });
+  input.focus();
 }
 
 /* ------------------------------- click delegation ------------------------ */
@@ -134,6 +189,18 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- page ---- */
     case 'edit': stop(); startEdit(el.dataset.id, false); break;
+    case 'toc-menu': {
+      stop();
+      const p = Store.page(el.dataset.id);
+      if (!p) break;
+      const { toc } = MD.render(p.body, mdCtx({ pageId: p.id, readonly: true }));
+      openMenu(toc.map((h) => ({
+        icon: '<span style="width:14px;flex:none"></span>',
+        label: (h.lvl === 3 ? '   ' : '') + h.text,
+        run: () => { document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' }); },
+      })), el);
+      break;
+    }
     case 'page-info': stop(); UI.pageInfo = UI.pageInfo === el.dataset.id ? null : el.dataset.id; render(); break;
 
     // The global custom dropdown: opens the app's styled menu, never the OS picker.
@@ -206,13 +273,25 @@ document.addEventListener('click', async (ev) => {
     /* ---- editor ---- */
     case 'ed-mode': stop(); UI.editor.mode = el.dataset.mode; Store.prefs().editorMode = el.dataset.mode; Store.persist(); render(); break;
     case 'ed-tool': stop(); ED_TOOLS[el.dataset.tool]?.(); break;
+    case 'ed-discard-draft': {
+      stop();
+      const pid = UI.editor.pageId;
+      draftStash.delete(pid || 'new');
+      draftDeleted.add(pid || 'new');
+      persistDrafts();
+      UI.editor = null;
+      openEditor(pid, !pid);
+      render();
+      toast('Draft discarded — editing the current version');
+      break;
+    }
     case 'ed-cancel': stop(); { const pid = UI.editor.pageId; stashDraftIfDirty(); if (!UI.editor) { nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); } } break;
     case 'ed-save': stop(); edSave(); break;
     case 'ed-ac': stop(); edAcceptAc(el.dataset.title); break;
     case 'save-commit': stop(); edCommit(($('.modal [data-m="summary"]')?.value || '').trim()); break;
 
     /* ---- history ---- */
-    case 'rev-restore': stop(); Store.restoreRev(el.dataset.id, +el.dataset.rev); nav('#/page/' + el.dataset.id); route(); render(); toast('Version restored'); break;
+    case 'rev-restore': stop(); Store.restoreRev(el.dataset.id, +el.dataset.ts); nav('#/page/' + el.dataset.id); route(); render(); toast('Version restored'); break;
 
     /* ---- palette ---- */
     case 'palette': stop(); openPalette(); break;
@@ -329,6 +408,8 @@ document.addEventListener('input', (ev) => {
   }
   if (t.matches('[data-ed="body"]')) {
     UI.editor.body = t.value;
+    const wc = $('[data-ed-count]');
+    if (wc) wc.textContent = (t.value.trim() ? t.value.trim().split(/\s+/).length : 0) + ' words';
     markDirty();
     autosaveDraft();
     edAutocomplete(t);
@@ -386,7 +467,17 @@ document.addEventListener('keydown', (ev) => {
 
   // Palette navigation.
   if (UI.palette) {
-    if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
+    // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
+  if (ev.key === 'Tab' && UI.modal && $('.modal')) {
+    const focusables = $('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
+    if (focusables.length) {
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && (document.activeElement === last || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); first.focus(); }
+    }
+  }
+
+  if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
       const n = UI.palette.count || 0;
@@ -403,7 +494,12 @@ document.addEventListener('keydown', (ev) => {
     }
   }
 
-  if (mod && ev.key.toLowerCase() === 'k') { ev.preventDefault(); UI.palette ? (UI.palette = null, render()) : openPalette(); return; }
+  if (mod && ev.key.toLowerCase() === 'k') {
+    ev.preventDefault();
+    if (UI.editor && ev.target.matches('[data-ed="body"]')) { ED_TOOLS.mdlink(); return; } // editors mean "insert link" here
+    UI.palette ? (UI.palette = null, render()) : openPalette();
+    return;
+  }
 
   // Post a comment with ⌘Enter from its textarea.
   if (mod && ev.key === 'Enter' && ev.target.matches('.comment-form textarea')) {
@@ -422,6 +518,14 @@ document.addEventListener('keydown', (ev) => {
     // which is where you always are. The draft is kept.
     if (UI.editor) { const pid = UI.editor.pageId; stashDraftIfDirty(); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); return; }
     if (UI.navOpen) { UI.navOpen = false; render(); return; }
+  }
+
+  // Save-summary dialog: Enter saves (checked before the editor block, which
+  // otherwise swallows plain Enter for list continuation).
+  if (UI.modal?.kind === 'save-summary' && ev.key === 'Enter' && !ev.shiftKey) {
+    ev.preventDefault();
+    $('.modal [data-action="save-commit"]')?.click();
+    return;
   }
 
   if (UI.editor) {
@@ -444,14 +548,14 @@ document.addEventListener('keydown', (ev) => {
         return;
       }
     }
+    if (mod && ev.key.toLowerCase() === 'f') { ev.preventDefault(); edFindOpen(); return; }
     if (mod && (ev.key === 's' || ev.key === 'Enter')) { ev.preventDefault(); UI.modal?.kind === 'save-summary' ? $('.modal [data-action="save-commit"]')?.click() : edSave(); return; }
     if (mod && ev.key.toLowerCase() === 'b' && inBody) { ev.preventDefault(); ED_TOOLS.bold(); return; }
     if (mod && ev.key.toLowerCase() === 'i' && inBody) { ev.preventDefault(); ED_TOOLS.italic(); return; }
     // Tab indents instead of leaving the editor.
     if (ev.key === 'Tab' && inBody && !ev.shiftKey) {
       ev.preventDefault();
-      ev.target.setRangeText('  ', ev.target.selectionStart, ev.target.selectionEnd, 'end');
-      ev.target.dispatchEvent(new Event('input', { bubbles: true }));
+      edType(ev.target, '  ');
       return;
     }
     // Enter continues lists; Enter on an empty item ends the list.
@@ -465,12 +569,12 @@ document.addEventListener('keydown', (ev) => {
         if (!m[4].trim()) {
           // empty item — remove the marker and end the list
           const lineStart = ta.selectionStart - line.length;
-          ta.setRangeText('\n', lineStart, ta.selectionEnd, 'end');
+          ta.setSelectionRange(lineStart, ta.selectionEnd);
+          edType(ta, '\n');
         } else {
           const num = /\d/.test(m[2][0]) ? (parseInt(m[2], 10) + 1) + m[2].slice(-1) : m[2];
-          ta.setRangeText('\n' + m[1] + num + (m[3] ? ' [ ]' : '') + ' ', ta.selectionStart, ta.selectionEnd, 'end');
+          edType(ta, '\n' + m[1] + num + (m[3] ? ' [ ]' : '') + ' ');
         }
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
         return;
       }
     }

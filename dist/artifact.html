@@ -46,8 +46,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --page: #000000;
-    --fg: #ffffff;
-    --fg-rgb: 255, 255, 255;
+    --fg: #e8e8e8;
+    --fg-rgb: 232, 232, 232;
     --page-rgb: 0, 0, 0;
     --muted: rgba(255, 255, 255, 0.55);
     --faint: rgba(255, 255, 255, 0.46);
@@ -73,8 +73,8 @@
 
 :root[data-theme='dark'] {
   --page: #000000;
-  --fg: #ffffff;
-  --fg-rgb: 255, 255, 255;
+  --fg: #e8e8e8;
+  --fg-rgb: 232, 232, 232;
   --page-rgb: 0, 0, 0;
   --muted: rgba(255, 255, 255, 0.55);
   --faint: rgba(255, 255, 255, 0.46);
@@ -441,7 +441,11 @@ label > .dd { width: 100%; }
 .toc a:hover { color: var(--fg); }
 .toc a.here { color: var(--fg); border-left-color: var(--fg); }
 .toc a.lvl3 { padding-left: 26px; }
-@media (max-width: 1180px) { .toc { display: none; } }
+.toc-btn { display: none; }
+@media (max-width: 1180px) {
+  .toc { display: none; }
+  .toc-btn { display: inline-flex; }
+}
 
 .page-head { padding-bottom: 14px; border-bottom: 1px solid var(--hairline); margin-bottom: 26px; }
 .page-head h1 {
@@ -475,7 +479,7 @@ label > .dd { width: 100%; }
    Prose — rendered markdown
    ------------------------------------------------------------------------- */
 
-.prose { font-size: 15px; line-height: 1.65; text-wrap: pretty; }
+.prose { font-size: 16px; line-height: 1.7; text-wrap: pretty; }
 .prose > *:first-child { margin-top: 0; }
 
 .prose h2, .prose h3, .prose h4 { font-weight: 600; line-height: 1.25; scroll-margin-top: 68px; position: relative; text-wrap: balance; }
@@ -594,6 +598,43 @@ label > .dd { width: 100%; }
 }
 .editor__tools .icon-btn { width: 28px; height: 28px; border-radius: 5px; }
 .editor__tools .icon-btn svg { width: 16px; height: 16px; }
+.editor__count {
+  font-size: 12px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums;
+  margin-right: 10px; user-select: none;
+}
+.editor__draftbar {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+.editor__draftbar svg { width: 15px; height: 15px; color: var(--accent); flex: none; }
+.editor__draftbar .btn { margin-left: auto; }
+
+.findbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--hover);
+}
+.findbar input {
+  width: 260px; height: 28px; padding: 0 10px;
+  background: var(--page); border: 1px solid var(--hairline); border-radius: var(--radius);
+  font-size: 13px;
+}
+.findbar input:focus { outline: none; border-color: var(--rule); }
+.findbar__count { font-size: 12px; color: var(--muted); min-width: 70px; font-variant-numeric: tabular-nums; }
+.findbar .icon-btn { width: 26px; height: 26px; }
+
+/* The preview shows exactly what publishes: page-title styles, page measure. */
+.preview-title {
+  font-size: clamp(28px, 4vw, 40px); font-weight: 400; line-height: 1.15;
+  letter-spacing: 0.005em; margin: 0 0 12px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline); text-wrap: balance;
+}
+.editor__pane--preview .prose { max-width: 760px; }
+
 .editor__tools .sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 8px; flex: none; }
 .editor__tools .spacer { flex: 1; }
 .editor__mode { display: flex; border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; }
@@ -615,7 +656,10 @@ label > .dd { width: 100%; }
 .editor.mode-preview .editor__pane--src { display: none; }
 .editor.mode-preview .editor__pane--preview { border-left: none; }
 .editor.mode-preview .editor__pane--preview .prose, .editor.mode-preview .preview-tag { max-width: 800px; margin: 0 auto; }
-@media (max-width: 900px) { .editor.mode-split .editor__pane--preview { display: none; } }
+@media (max-width: 900px) {
+  .editor.mode-split .editor__pane--preview { display: none; }
+  .editor__mode [data-mode="split"] { display: none; }
+}
 
 .editor__title {
   border: none; background: var(--page); color: var(--fg); width: 100%;
@@ -1034,6 +1078,10 @@ a.feed__row:hover { background: var(--hover); }
   filter: invert(1) hue-rotate(180deg);
   background: #000;
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .prose img:not([src^='data:image/svg']) { filter: brightness(0.88); }
+}
+:root[data-theme='dark'] .prose img:not([src^='data:image/svg']) { filter: brightness(0.88); }
 
 .mention {
   display: inline-block; padding: 0 5px; border-radius: 4px;
@@ -1073,10 +1121,10 @@ a.feed__row:hover { background: var(--hover); }
   /* Invite form stacks; the email field keeps a usable width. */
   .invite-add { flex-wrap: wrap; }
   .invite-add .text-input { flex: 1 1 100%; min-width: 0; }
-  /* Editor topbar: split view doesn't exist at this width; drop the tabs
-     and the shortcut hint so Save and Cancel keep room. */
-  .editor__mode { display: none; }
+  /* Split has no room here, but Write|Preview must survive — a phone user
+     still needs to see rendered output before saving. */
   .editor .btn .kbd { display: none; }
+  .editor__mode button { padding: 4px 9px; }
 }
 
 </style>
@@ -2333,6 +2381,8 @@ function renderInline(src, ctx, opts = {}) {
 
   // Protect code spans first.
   const stash = [];
+  // Double-backtick spans first (GFM: allows single backticks inside).
+  s = s.replace(/``([^\n]+?)``/g, (_, c) => { stash.push(`<code>${c.trim()}</code>`); return `\x00${stash.length - 1}\x00`; });
   s = s.replace(/`([^`\n]+)`/g, (_, c) => { stash.push(`<code>${c}</code>`); return ` ${stash.length - 1} `; });
 
   // Images: ![alt](src "caption")
@@ -2365,12 +2415,19 @@ function renderInline(src, ctx, opts = {}) {
   });
 
   // Autolinks
-  s = s.replace(/(^|[\s(])((?:https?:\/\/)[^\s<)\x00]+)/g, (_, pre, u) => `${pre}<a href="${u}" target="_blank" rel="noreferrer" class="ext">${u.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>`);
+  s = s.replace(/(^|[\s(])((?:https?:\/\/)[^\s<)\x00]+)/g, (_, pre, u) => {
+    // GFM: trailing punctuation belongs to the sentence, not the URL.
+    const m = u.match(/[.,;:!?]+$/);
+    const trail = m ? m[0] : '';
+    if (trail) u = u.slice(0, -trail.length);
+    return `${pre}<a href="${u}" target="_blank" rel="noreferrer" class="ext">${u.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>${trail}`;
+  });
 
   // Emphasis / strike
   s = s.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[\s(>])__([^\n]+?)__(?![\w])/g, '$1<strong>$2</strong>');
   s = s.replace(/(^|[\s(>])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-  s = s.replace(/(^|[\s(>])_([^_\n]+)_/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[\s(>])_([^_\n]+)_(?![\w])/g, '$1<em>$2</em>'); // no intra-word emphasis (GFM)
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
 
   if (!opts.noBreaks) s = s.replace(/\n/g, '<br>');
@@ -2409,7 +2466,7 @@ function mdRender(src, ctx) {
   function listAt(start, baseIndent) {
     // Parses a (possibly nested) list starting at `start`. Returns [html, next].
     let out = '', k = start, ordered = null, open = false, startNum = 1;
-    const itemRe = /^(\s*)([-*]|\d+[.)])\s+(.*)$/;
+    const itemRe = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
     while (k < lines.length) {
       const m = lines[k].match(itemRe);
       if (!m) break;
@@ -2470,9 +2527,9 @@ function mdRender(src, ctx) {
     }
 
     // Headings
-    m = line.match(/^(#{1,4})\s+(.*)$/);
+    m = line.match(/^(#{1,6})\s+(.*)$/);
     if (m) {
-      const lvl = Math.max(2, m[1].length); // h1 is the page title; demote
+      const lvl = Math.min(4, Math.max(2, m[1].length)); // h1 is the page title; deep levels clamp to h4
       const text = m[2].trim();
       const id = headingId(text);
       if (lvl <= 3) toc.push({ lvl, id, text: text.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/[*_`]/g, '') });
@@ -2498,19 +2555,27 @@ function mdRender(src, ctx) {
     // Table — rows tolerate a missing trailing pipe rather than vanishing.
     if (/^\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\|[\s:|-]+\|?\s*$/.test(lines[i + 1])) {
       const heads = line.replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
+      // GFM alignment row: :--- left, :---: center, ---: right.
+      const aligns = lines[i + 1].replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map((c) => {
+        c = c.trim();
+        if (/^:-+:$/.test(c)) return 'center';
+        if (/^-+:$/.test(c)) return 'right';
+        return null;
+      });
+      const al = (k) => aligns[k] ? ` style="text-align:${aligns[k]}"` : '';
       i += 2;
       let rows = '';
       while (i < lines.length && /^\|/.test(lines[i]) && lines[i].trim() !== '') {
         const cells = lines[i].replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
-        rows += `<tr>${cells.map((c) => `<td>${renderInline(c, ctx, { noBreaks: true })}</td>`).join('')}</tr>`;
+        rows += `<tr>${cells.map((c, k) => `<td${al(k)}>${renderInline(c, ctx, { noBreaks: true })}</td>`).join('')}</tr>`;
         i++;
       }
-      html += `<div class="tablewrap"><table><thead><tr>${heads.map((h) => `<th>${renderInline(h, ctx, { noBreaks: true })}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+      html += `<div class="tablewrap"><table><thead><tr>${heads.map((h, k) => `<th${al(k)}>${renderInline(h, ctx, { noBreaks: true })}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
       continue;
     }
 
     // Lists
-    if (/^(\s*)([-*]|\d+[.)])\s+/.test(line)) {
+    if (/^(\s*)([-*+]|\d+[.)])\s+/.test(line)) {
       const [out, next] = listAt(i, line.match(/^(\s*)/)[1].length);
       html += out;
       i = next;
@@ -2532,7 +2597,7 @@ function mdRender(src, ctx) {
     i++;
     while (
       i < lines.length && lines[i].trim() &&
-      !/^(#{1,4}\s|>\s?|(\s*)([-*]|\d+[.)])\s|```|~~~|:::|\|.*\||!file\[|(-{3,}|\*{3,})\s*$)/.test(lines[i]) &&
+      !/^(#{1,4}\s|>\s?|(\s*)([-*+]|\d+[.)])\s|```|~~~|:::|\|.*\||!file\[|(-{3,}|\*{3,})\s*$)/.test(lines[i]) &&
       !/^https:\/\/\S+$/.test(lines[i].trim())
     ) { buf.push(lines[i]); i++; }
     html += `<p>${renderInline(buf.join('\n'), ctx)}</p>`;
@@ -2559,7 +2624,7 @@ function walkTasks(src, visit) {
     const f = bare.match(/^(```|~~~)\s*(\w*)\s*$/); // must mirror the renderer's fence rule exactly
     if (f) { fence = f[1]; continue; }
     // (?=\s): the renderer only treats "[x] " (with a following space) as a task.
-    const m = bare.match(/^(\s*(?:[-*]|\d+[.)])\s+\[)( |x|X)(\])(?=\s)/);
+    const m = bare.match(/^(\s*(?:[-*+]|\d+[.)])\s+\[)( |x|X)(\])(?=\s)/);
     if (!m) continue;
     const out = visit(idx, m[2], line, i);
     if (out !== undefined) { lines[i] = out; return lines.join('\n'); }
@@ -2572,7 +2637,7 @@ function walkTasks(src, visit) {
 function toggleTaskInSource(src, n) {
   const out = walkTasks(src, (idx, state, line) => {
     if (idx !== n) return undefined;
-    return line.replace(/^((?:\s*>\s?)*\s*(?:[-*]|\d+[.)])\s+\[)( |x|X)(\])(?=\s)/, (_, pre, st, post) =>
+    return line.replace(/^((?:\s*>\s?)*\s*(?:[-*+]|\d+[.)])\s+\[)( |x|X)(\])(?=\s)/, (_, pre, st, post) =>
       pre + (st.trim() ? ' ' : 'x') + post);
   });
   return out === null ? String(src) : out;
@@ -2603,7 +2668,8 @@ function mdToText(src) {
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, ' $1 ')
     .replace(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]/g, (_, t, l) => l || t)
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/^:::.*$|^[#>|*-]+\s*/gm, ' ')
+    .replace(/^:::.*$|^[#>|*+-]+\s*/gm, ' ')
+    .replace(/\[( |x|X)\]\s*/g, ' ')
     .replace(/[`*~]/g, '') // keep underscores — identifiers like TAU_COMMIT must stay searchable
     .replace(/\s+/g, ' ')
     .trim();
@@ -2926,9 +2992,9 @@ const Store = {
     Store.persist();
   },
 
-  restoreRev(pageId, revIdx) {
+  restoreRev(pageId, revTs) {
     const p = Store.page(pageId);
-    const rev = p?.revs[revIdx];
+    const rev = p?.revs.find((r) => r.ts === revTs);
     if (!rev) return;
     const me = Store.me();
     p.body = rev.body;
@@ -2973,7 +3039,9 @@ const Store = {
 
   purgePage(id) {
     const idx = Store.s.trash.findIndex((p) => p.id === id);
-    if (idx >= 0) Store.s.trash.splice(idx, 1);
+    if (idx < 0) return;
+    const [p] = Store.s.trash.splice(idx, 1);
+    Store.log({ kind: 'purge', by: Store.me().email, title: p.title });
     Store.sweepAttachments();
     Store.persist();
   },
@@ -3147,8 +3215,9 @@ const Store = {
       const title = p.title.toLowerCase();
       const commentText = Store.s.comments.filter((c) => c.pageId === p.id).map((c) => c.text).join(' ');
       const text = (MD.mdToText(p.body) + ' ' + commentText).toLowerCase();
-      let score = 0;
-      let allHit = true;
+      // OR-scored with an all-terms bonus: "buck converter" still surfaces the
+      // page that only says "buck" instead of returning nothing.
+      let score = 0, hits = 0;
       for (const t of terms) {
         let hit = 0;
         if (title === t) hit += 120;
@@ -3156,10 +3225,12 @@ const Store = {
         else if (title.includes(t)) hit += 40;
         const n = text.split(t).length - 1;
         if (n) hit += Math.min(24, 8 + n * 2);
-        if (!hit) { allHit = false; break; }
+        if (hit) hits++;
         score += hit;
       }
-      if (!allHit || !score) continue;
+      if (!hits) continue;
+      if (hits === terms.length) score *= 2; // full matches rank first
+      else score = Math.round(score * (hits / terms.length));
       // Snippet centered on the first body hit.
       const raw = MD.mdToText(p.body);
       const pos = raw.toLowerCase().indexOf(terms[0]);
@@ -3472,6 +3543,7 @@ function viewPage(id) {
   const infoOpen = UI.pageInfo === id;
 
   const right = `
+    ${toc.length > 1 ? `<button class="icon-btn toc-btn" data-action="toc-menu" data-id="${id}" aria-label="Contents" title="Contents">${lucide('ul', 1.8)}</button>` : ''}
     <button class="icon-btn ${starred ? 'active' : ''}" data-action="star" data-id="${id}" aria-label="${starred ? 'Unstar' : 'Star'} page" title="${starred ? 'Unstar' : 'Star'}">${starred ? I.starFill : I.star}</button>
     <a class="icon-btn" href="#/history/${id}" aria-label="Page history" title="History">${I.history}</a>
     <button class="icon-btn" data-action="page-menu" data-id="${id}" aria-label="Page options" title="Page options">${I.dots}</button>`;
@@ -3749,6 +3821,7 @@ function openEditor(pageId, isNew, draft) {
     mode: Store.prefs().editorMode || 'split',
     dirty: false,
     origTitle: p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
+    baseUpdated: p?.updated ?? null,
   };
 }
 
@@ -3795,10 +3868,12 @@ function viewEditor() {
       ${tools.map((t) => t === null ? '<span class="sep"></span>' :
         `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       <span class="spacer"></span>
+      <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
         ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
       </label>
     </div>
+    ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft — the page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90">
@@ -3823,38 +3898,107 @@ function edUpdatePreview() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
   const { html } = MD.render(e.body, mdCtx({ readonly: true }));
-  host.innerHTML = (e.title ? `<h1 style="font-size:28px;font-weight:400;margin:0 0 18px">${MD.esc(e.title)}</h1>` : '') + html;
+  host.innerHTML = (e.title ? `<h1 class="preview-title">${MD.esc(e.title)}</h1>` : '') + html;
   $$('.cad-embed', host).forEach(mountCadViewer);
 }
 
-function edInsert(before, after, placeholder) {
+// All programmatic edits go through execCommand('insertText') so the native
+// undo/redo stack survives every toolbar action and list continuation —
+// the difference between feeling like GitHub's editor and feeling amateur.
+function edType(ta, text) {
+  ta.focus();
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, text); } catch (e) { ok = false; }
+  if (!ok) {
+    ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+// Wrap the selection — or unwrap it when it's already wrapped (toggle).
+function edWrap(before, after, placeholder) {
   const ta = $('[data-ed="body"]');
   if (!ta) return;
-  const { selectionStart: s, selectionEnd: epos, value } = ta;
-  const sel = value.slice(s, epos) || placeholder || '';
-  const insert = before + sel + (after || '');
-  ta.setRangeText(insert, s, epos, 'end');
-  if (!value.slice(s, epos) && placeholder) ta.setSelectionRange(s + before.length, s + before.length + placeholder.length);
-  ta.focus();
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  const { selectionStart: s, selectionEnd: e, value } = ta;
+  const sel = value.slice(s, e);
+  // Toggle off: marks just outside the selection…
+  if (value.slice(s - before.length, s) === before && value.slice(e, e + after.length) === after) {
+    ta.setSelectionRange(s - before.length, e + after.length);
+    edType(ta, sel);
+    ta.setSelectionRange(s - before.length, e - before.length);
+    return;
+  }
+  // …or inside it.
+  if (sel.startsWith(before) && sel.endsWith(after) && sel.length >= before.length + after.length) {
+    const inner = sel.slice(before.length, sel.length - after.length);
+    edType(ta, inner);
+    ta.setSelectionRange(s, s + inner.length);
+    return;
+  }
+  const body = sel || placeholder || '';
+  edType(ta, before + body + after);
+  const base = s + before.length;
+  ta.setSelectionRange(base, base + body.length);
+}
+
+// Line operations: heading/list/quote buttons act on the current line's
+// prefix (GitHub/Docs behavior), never splice into the middle of a sentence.
+function edLine(prefix) {
+  const ta = $('[data-ed="body"]');
+  if (!ta) return;
+  const { value, selectionStart: s } = ta;
+  const ls = value.lastIndexOf('\n', s - 1) + 1;
+  let le = value.indexOf('\n', s);
+  if (le < 0) le = value.length;
+  const line = value.slice(ls, le);
+  const cur = line.match(/^(#{2,4} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] |> )/)?.[1] || '';
+  const rest = line.slice(cur.length);
+  const next = cur === prefix ? rest : prefix + rest; // same prefix toggles off
+  ta.setSelectionRange(ls, le);
+  edType(ta, next);
+  const caret = Math.min(ls + next.length, ls + Math.max(0, s - ls - cur.length + (cur === prefix ? 0 : prefix.length)));
+  ta.setSelectionRange(caret, caret);
+}
+
+// Block inserts land on their own line, at a clean boundary.
+function edBlock(text, selectFrom, selectLen) {
+  const ta = $('[data-ed="body"]');
+  if (!ta) return;
+  const { value, selectionStart: s } = ta;
+  const atLineStart = s === 0 || value[s - 1] === '\n';
+  const pre = atLineStart ? '' : '\n';
+  edType(ta, pre + text);
+  if (selectFrom !== undefined) {
+    const base = s + pre.length + selectFrom;
+    ta.setSelectionRange(base, base + (selectLen || 0));
+  }
 }
 
 const ED_TOOLS = {
-  bold: () => edInsert('**', '**', 'bold'),
-  italic: () => edInsert('*', '*', 'italic'),
-  strike: () => edInsert('~~', '~~', 'text'),
-  code: () => edInsert('`', '`', 'code'),
-  h2: () => edInsert('\n## ', '', 'Heading'),
-  h3: () => edInsert('\n### ', '', 'Subheading'),
-  ul: () => edInsert('\n- ', '', 'item'),
-  ol: () => edInsert('\n1. ', '', 'item'),
-  hr: () => edInsert('\n\n---\n\n', '', ''),
-  task: () => edInsert('\n- [ ] ', '', 'to do'),
-  quote: () => edInsert('\n> ', '', 'quote'),
-  fence: () => edInsert('\n~~~\n', '\n~~~\n', 'code'),
-  callout: () => edInsert('\n::: note Title\n', '\n:::\n', 'The thing worth calling out.'),
-  table: () => edInsert('\n| Column | Column |\n| --- | --- |\n| ', ' |  |\n', 'cell'),
-  wikilink: () => edInsert('[[', ']]', 'Page Title'),
+  bold: () => edWrap('**', '**', 'bold'),
+  italic: () => edWrap('*', '*', 'italic'),
+  strike: () => edWrap('~~', '~~', 'text'),
+  code: () => edWrap('\u0060', '\u0060', 'code'),
+  h2: () => edLine('## '),
+  h3: () => edLine('### '),
+  ul: () => edLine('- '),
+  ol: () => edLine('1. '),
+  task: () => edLine('- [ ] '),
+  quote: () => edLine('> '),
+  hr: () => edBlock('\n---\n\n'),
+  fence: () => edBlock('~~~\ncode\n~~~\n', 4, 4),
+  callout: () => edBlock('::: note Title\nThe thing worth calling out.\n:::\n', 15, 29),
+  table: () => edBlock('| Column | Column |\n| --- | --- |\n| cell |  |\n', 2, 4),
+  wikilink: () => edWrap('[[', ']]', 'Page Title'),
+  mdlink: () => {
+    const ta = $('[data-ed="body"]');
+    if (!ta) return;
+    const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd) || 'link text';
+    const start = ta.selectionStart;
+    edType(ta, '[' + sel + '](https://)');
+    const urlAt = start + 1 + sel.length + 2;
+    ta.setSelectionRange(urlAt, urlAt + 8);
+  },
   image: () => $('[data-ed-file]')?.click(),
   attach: () => $('[data-ed-file]')?.click(),
 };
@@ -3863,8 +4007,9 @@ async function edHandleFiles(files) {
   for (const f of files) {
     try {
       const att = await Store.addAttachment(f);
-      if (/^image\//.test(att.type)) edInsert(`\n![${f.name.replace(/\.[^.]+$/, '')}](att:${att.id} "")\n`, '', '');
-      else edInsert(`\n!file[${f.name.replace(/\.[^.]+$/, '')}](att:${att.id})\n`, '', '');
+      const label = f.name.replace(/\.[^.]+$/, '');
+      if (/^image\//.test(att.type)) edBlock(`![${label}](att:${att.id} "")\n`);
+      else edBlock(`!file[${label}](att:${att.id})\n`);
       toast(`Attached ${f.name} (${MD.fmtSize(att.size)})`);
     } catch (err) { toast(err.message || 'Upload failed'); }
   }
@@ -3898,10 +4043,9 @@ function edAcceptAc(title) {
   const m = upto.match(/\[\[([^\][\n]*)$/);
   if (!m) return;
   const start = ta.selectionStart - m[1].length;
-  ta.setRangeText(title + ']]', start, ta.selectionEnd, 'end');
+  ta.setSelectionRange(start, ta.selectionEnd);
+  edType(ta, title + ']]');
   $('.ed-autocomplete').hidden = true;
-  ta.focus();
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function edSave() {
@@ -3939,7 +4083,7 @@ function edCommit(summary) {
     p = Store.createPage({ title: e.title.trim(), section: e.section, body: e.body, summary });
     toast('The original was deleted while you edited — saved as a new page');
   } else {
-    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary });
+    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary, baseUpdated: e.baseUpdated });
   }
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
   toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'NOT saved — storage is full');
@@ -3956,13 +4100,32 @@ function edCommit(summary) {
 
 /* ------------------------------- history --------------------------------- */
 
+// Word-ish intraline emphasis: common prefix/suffix of a changed del/add pair.
+function intraline(a, b) {
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let s = 0;
+  while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  const mark = (t) => `${MD.esc(t.slice(0, p))}<mark>${MD.esc(t.slice(p, t.length - s)) || ' '}</mark>${MD.esc(t.slice(t.length - s))}`;
+  return [mark(a), mark(b)];
+}
+
 function viewHistory(id) {
   const p = Store.page(id);
   if (!p) return viewMissing(id);
   const selIdx = UI.route.params.rev !== undefined ? +UI.route.params.rev : p.revs.length - 1;
   const rev = p.revs[selIdx];
   const prev = p.revs[selIdx - 1];
+  const showRendered = UI.route.params.view === 'rendered';
   const d = diffLines(prev ? prev.body : '', rev ? rev.body : '');
+  // Pair adjacent del/add lines for intraline emphasis.
+  for (let k = 0; k < d.ops.length - 1; k++) {
+    if (d.ops[k][0] === -1 && d.ops[k + 1][0] === 1) {
+      const [da, db] = intraline(d.ops[k][1], d.ops[k + 1][1]);
+      d.ops[k][2] = da; d.ops[k + 1][2] = db;
+      k++;
+    }
+  }
   // Collapse long unchanged runs.
   let rows = '', run = [];
   const flushRun = () => {
@@ -3973,15 +4136,16 @@ function viewHistory(id) {
     } else rows += run.join('');
     run = [];
   };
-  for (const [op, line] of d.ops) {
-    const h = `<div class="diff__line ${op === 1 ? 'diff__line--add' : op === -1 ? 'diff__line--del' : ''}"><span class="diff__gut">${op === 1 ? '+' : op === -1 ? '−' : ''}</span><span class="diff__txt">${MD.esc(line) || '&nbsp;'}</span></div>`;
+  for (const [op, line, marked] of d.ops) {
+    const txt = marked || MD.esc(line) || '&nbsp;';
+    const h = `<div class="diff__line ${op === 1 ? 'diff__line--add' : op === -1 ? 'diff__line--del' : ''}"><span class="diff__gut">${op === 1 ? '+' : op === -1 ? '−' : ''}</span><span class="diff__txt">${txt}</span></div>`;
     if (op === 0) run.push(h); else { flushRun(); rows += h; }
   }
   flushRun();
 
   return topbar(
     `<a href="#/page/${id}">${MD.esc(p.title)}</a><span class="crumbs__sep">/</span><span class="crumbs__here">History</span>`,
-    selIdx < p.revs.length - 1 ? `<button class="btn" data-action="rev-restore" data-id="${id}" data-rev="${selIdx}">Restore this version</button>` : ''
+    selIdx < p.revs.length - 1 ? `<button class="btn" data-action="rev-restore" data-id="${id}" data-ts="${rev ? rev.ts : 0}">Restore this version</button>` : ''
   ) + `
   <div class="content"><div class="page-wrap"><div class="page-col" style="max-width:860px">
     <div class="plain-head"><span class="eyebrow">Page history</span><h1>${MD.esc(p.title)}</h1>
@@ -3997,8 +4161,16 @@ function viewHistory(id) {
       </a>`;
       }).reverse().join('')}
     </div>
-    <div class="plain-head" style="margin-top:28px"><span class="eyebrow">Changes in selected revision</span></div>
-    <div class="diff">${rows || '<div class="diff__line"><span class="diff__gut"></span><span class="diff__txt" style="color:var(--faint)">No text changes.</span></div>'}</div>
+    <div class="plain-head" style="margin-top:28px;display:flex;align-items:baseline;gap:14px">
+      <span class="eyebrow">Selected revision</span>
+      <div class="editor__mode" role="tablist" style="margin-left:auto">
+        <a role="tab" class="${!showRendered ? 'active' : ''}" style="padding:4px 12px;font-size:12px;text-decoration:none;color:${!showRendered ? 'var(--fg)' : 'var(--muted)'}" href="#/history/${id}?rev=${selIdx}">Changes</a>
+        <a role="tab" class="${showRendered ? 'active' : ''}" style="padding:4px 12px;font-size:12px;text-decoration:none;color:${showRendered ? 'var(--fg)' : 'var(--muted)'}" href="#/history/${id}?rev=${selIdx}&view=rendered">Rendered</a>
+      </div>
+    </div>
+    ${showRendered
+      ? `<div class="prose" style="border:1px solid var(--hairline);border-radius:var(--radius);padding:20px 24px">${MD.render(rev ? rev.body : '', mdCtx({ readonly: true })).html}</div>`
+      : `<div class="diff">${rows || '<div class="diff__line"><span class="diff__gut"></span><span class="diff__txt" style="color:var(--faint)">No text changes.</span></div>'}</div>`}
   </div></div></div>`;
 }
 
@@ -4014,6 +4186,8 @@ function activityLine(a) {
     comment: `${who} commented on ${pageRef}`,
     delete: `${who} moved ${pageRef} to Trash`,
     restore: `${who} restored ${pageRef}`,
+    move: `${who} moved ${pageRef} to another section`,
+    purge: `${who} permanently deleted ${pageRef}`,
     invite: `${who} invited <b>${MD.esc(a.who || '')}</b>`,
     'invite-resend': `${who} re-sent the invite for <b>${MD.esc(a.who || '')}</b>`,
     'invite-revoke': `${who} revoked the invite for <b>${MD.esc(a.who || '')}</b>`,
@@ -4317,6 +4491,15 @@ function render() {
   $$('.cad-embed').forEach(mountCadViewer);
   if (UI.editor) {
     edUpdatePreview();
+    const src = $('[data-ed="body"]');
+    const prev = $('.editor__pane--preview');
+    if (src && prev && !src._syncBound) {
+      src._syncBound = true;
+      src.addEventListener('scroll', () => {
+        const ratio = src.scrollTop / Math.max(1, src.scrollHeight - src.clientHeight);
+        prev.scrollTop = ratio * (prev.scrollHeight - prev.clientHeight);
+      }, { passive: true });
+    }
     const ta = $('[data-ed="body"]');
     if (ta && !UI.editor._focused) { (UI.editor.isNew && !UI.editor.title ? $('[data-ed="title"]') : ta)?.focus(); UI.editor._focused = true; }
   }
@@ -4394,6 +4577,7 @@ Object.assign(Store, {
     if (!p) return;
     p.section = String(section || p.section);
     p.parent = null;
+    Store.log({ kind: 'move', by: Store.me().email, pageId: id });
     Store.persist();
     Store.reindex();
   },
@@ -4631,7 +4815,7 @@ function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
   openEditor(pageId, isNew, draft);
-  if (draft) { UI.editor.dirty = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
+  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
   render();
 }
 
@@ -4662,6 +4846,61 @@ function openMenu(items, anchor) {
     close();
     items[+b.dataset.menuI].run();
   });
+}
+
+/* ------------------------------- find in editor --------------------------- */
+
+// Imperative overlay: re-rendering the editor would destroy the undo stack.
+function edFindOpen() {
+  const ed = $('.editor');
+  const ta = $('[data-ed="body"]');
+  if (!ed || !ta) return;
+  let bar = $('.findbar');
+  if (bar) { $('.findbar input').select(); return; }
+  bar = document.createElement('div');
+  bar.className = 'findbar';
+  bar.innerHTML = `<input type="text" placeholder="Find in page…" aria-label="Find in page">
+    <span class="findbar__count"></span>
+    <button class="icon-btn" data-find="prev" aria-label="Previous match">${lucide('h2', 2).replace(/<svg[^>]*>[\s\S]*<\/svg>/, '')}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg></button>
+    <button class="icon-btn" data-find="next" aria-label="Next match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="icon-btn" data-find="close" aria-label="Close find">${I.x}</button>`;
+  ed.insertBefore(bar, ed.querySelector('.editor__panes'));
+  const input = bar.querySelector('input');
+  const count = bar.querySelector('.findbar__count');
+  let at = -1;
+
+  const jump = (dir) => {
+    const q = input.value;
+    if (!q) { count.textContent = ''; return; }
+    const hay = ta.value.toLowerCase();
+    const needle = q.toLowerCase();
+    const all = [];
+    for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + 1)) all.push(i);
+    if (!all.length) { count.textContent = '0 results'; return; }
+    if (dir === 'next') at = (at + 1) % all.length;
+    else if (dir === 'prev') at = (at - 1 + all.length) % all.length;
+    else at = 0;
+    count.textContent = (at + 1) + ' of ' + all.length;
+    const pos = all[at];
+    ta.focus();
+    ta.setSelectionRange(pos, pos + q.length);
+    const lines = ta.value.slice(0, pos).split('\n').length;
+    ta.scrollTop = Math.max(0, lines * 21.6 - ta.clientHeight / 2);
+    input.focus();
+  };
+
+  input.addEventListener('input', () => { at = -1; jump('next'); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? 'prev' : 'next'); }
+    if (e.key === 'Escape') { e.preventDefault(); bar.remove(); ta.focus(); }
+  });
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-find]');
+    if (!b) return;
+    if (b.dataset.find === 'close') { bar.remove(); ta.focus(); }
+    else jump(b.dataset.find);
+  });
+  input.focus();
 }
 
 /* ------------------------------- click delegation ------------------------ */
@@ -4713,6 +4952,18 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- page ---- */
     case 'edit': stop(); startEdit(el.dataset.id, false); break;
+    case 'toc-menu': {
+      stop();
+      const p = Store.page(el.dataset.id);
+      if (!p) break;
+      const { toc } = MD.render(p.body, mdCtx({ pageId: p.id, readonly: true }));
+      openMenu(toc.map((h) => ({
+        icon: '<span style="width:14px;flex:none"></span>',
+        label: (h.lvl === 3 ? '   ' : '') + h.text,
+        run: () => { document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' }); },
+      })), el);
+      break;
+    }
     case 'page-info': stop(); UI.pageInfo = UI.pageInfo === el.dataset.id ? null : el.dataset.id; render(); break;
 
     // The global custom dropdown: opens the app's styled menu, never the OS picker.
@@ -4785,13 +5036,25 @@ document.addEventListener('click', async (ev) => {
     /* ---- editor ---- */
     case 'ed-mode': stop(); UI.editor.mode = el.dataset.mode; Store.prefs().editorMode = el.dataset.mode; Store.persist(); render(); break;
     case 'ed-tool': stop(); ED_TOOLS[el.dataset.tool]?.(); break;
+    case 'ed-discard-draft': {
+      stop();
+      const pid = UI.editor.pageId;
+      draftStash.delete(pid || 'new');
+      draftDeleted.add(pid || 'new');
+      persistDrafts();
+      UI.editor = null;
+      openEditor(pid, !pid);
+      render();
+      toast('Draft discarded — editing the current version');
+      break;
+    }
     case 'ed-cancel': stop(); { const pid = UI.editor.pageId; stashDraftIfDirty(); if (!UI.editor) { nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); } } break;
     case 'ed-save': stop(); edSave(); break;
     case 'ed-ac': stop(); edAcceptAc(el.dataset.title); break;
     case 'save-commit': stop(); edCommit(($('.modal [data-m="summary"]')?.value || '').trim()); break;
 
     /* ---- history ---- */
-    case 'rev-restore': stop(); Store.restoreRev(el.dataset.id, +el.dataset.rev); nav('#/page/' + el.dataset.id); route(); render(); toast('Version restored'); break;
+    case 'rev-restore': stop(); Store.restoreRev(el.dataset.id, +el.dataset.ts); nav('#/page/' + el.dataset.id); route(); render(); toast('Version restored'); break;
 
     /* ---- palette ---- */
     case 'palette': stop(); openPalette(); break;
@@ -4908,6 +5171,8 @@ document.addEventListener('input', (ev) => {
   }
   if (t.matches('[data-ed="body"]')) {
     UI.editor.body = t.value;
+    const wc = $('[data-ed-count]');
+    if (wc) wc.textContent = (t.value.trim() ? t.value.trim().split(/\s+/).length : 0) + ' words';
     markDirty();
     autosaveDraft();
     edAutocomplete(t);
@@ -4965,7 +5230,17 @@ document.addEventListener('keydown', (ev) => {
 
   // Palette navigation.
   if (UI.palette) {
-    if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
+    // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
+  if (ev.key === 'Tab' && UI.modal && $('.modal')) {
+    const focusables = $('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
+    if (focusables.length) {
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && (document.activeElement === last || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); first.focus(); }
+    }
+  }
+
+  if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
       const n = UI.palette.count || 0;
@@ -4982,7 +5257,12 @@ document.addEventListener('keydown', (ev) => {
     }
   }
 
-  if (mod && ev.key.toLowerCase() === 'k') { ev.preventDefault(); UI.palette ? (UI.palette = null, render()) : openPalette(); return; }
+  if (mod && ev.key.toLowerCase() === 'k') {
+    ev.preventDefault();
+    if (UI.editor && ev.target.matches('[data-ed="body"]')) { ED_TOOLS.mdlink(); return; } // editors mean "insert link" here
+    UI.palette ? (UI.palette = null, render()) : openPalette();
+    return;
+  }
 
   // Post a comment with ⌘Enter from its textarea.
   if (mod && ev.key === 'Enter' && ev.target.matches('.comment-form textarea')) {
@@ -5001,6 +5281,14 @@ document.addEventListener('keydown', (ev) => {
     // which is where you always are. The draft is kept.
     if (UI.editor) { const pid = UI.editor.pageId; stashDraftIfDirty(); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); return; }
     if (UI.navOpen) { UI.navOpen = false; render(); return; }
+  }
+
+  // Save-summary dialog: Enter saves (checked before the editor block, which
+  // otherwise swallows plain Enter for list continuation).
+  if (UI.modal?.kind === 'save-summary' && ev.key === 'Enter' && !ev.shiftKey) {
+    ev.preventDefault();
+    $('.modal [data-action="save-commit"]')?.click();
+    return;
   }
 
   if (UI.editor) {
@@ -5023,14 +5311,14 @@ document.addEventListener('keydown', (ev) => {
         return;
       }
     }
+    if (mod && ev.key.toLowerCase() === 'f') { ev.preventDefault(); edFindOpen(); return; }
     if (mod && (ev.key === 's' || ev.key === 'Enter')) { ev.preventDefault(); UI.modal?.kind === 'save-summary' ? $('.modal [data-action="save-commit"]')?.click() : edSave(); return; }
     if (mod && ev.key.toLowerCase() === 'b' && inBody) { ev.preventDefault(); ED_TOOLS.bold(); return; }
     if (mod && ev.key.toLowerCase() === 'i' && inBody) { ev.preventDefault(); ED_TOOLS.italic(); return; }
     // Tab indents instead of leaving the editor.
     if (ev.key === 'Tab' && inBody && !ev.shiftKey) {
       ev.preventDefault();
-      ev.target.setRangeText('  ', ev.target.selectionStart, ev.target.selectionEnd, 'end');
-      ev.target.dispatchEvent(new Event('input', { bubbles: true }));
+      edType(ev.target, '  ');
       return;
     }
     // Enter continues lists; Enter on an empty item ends the list.
@@ -5044,12 +5332,12 @@ document.addEventListener('keydown', (ev) => {
         if (!m[4].trim()) {
           // empty item — remove the marker and end the list
           const lineStart = ta.selectionStart - line.length;
-          ta.setRangeText('\n', lineStart, ta.selectionEnd, 'end');
+          ta.setSelectionRange(lineStart, ta.selectionEnd);
+          edType(ta, '\n');
         } else {
           const num = /\d/.test(m[2][0]) ? (parseInt(m[2], 10) + 1) + m[2].slice(-1) : m[2];
-          ta.setRangeText('\n' + m[1] + num + (m[3] ? ' [ ]' : '') + ' ', ta.selectionStart, ta.selectionEnd, 'end');
+          edType(ta, '\n' + m[1] + num + (m[3] ? ' [ ]' : '') + ' ');
         }
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
         return;
       }
     }
