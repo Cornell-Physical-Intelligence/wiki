@@ -1299,18 +1299,36 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .video-embed__face:hover .video-embed__btn { background: rgba(0, 0, 0, 0.92); scale: 1.06; }
 .video-embed__btn svg { width: 22px; height: 22px; }
 .video-embed__tag {
-  position: absolute; left: 10px; bottom: 8px;
+  position: absolute; left: 10px; right: 10px; bottom: 8px; text-align: left;
   font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
   color: rgba(255, 255, 255, 0.9); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; /* real titles can run long */
 }
+/* Sits on top of a photo, so its colors are theme-independent: a light pill
+   stays legible on dark and light imagery alike. */
 .video-embed__ext {
   position: absolute; top: 8px; right: 8px; font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.92); background: rgba(0, 0, 0, 0.55);
+  color: rgba(17, 17, 17, 0.92); background: rgba(255, 255, 255, 0.92);
   padding: 3px 8px; border-radius: 5px; text-decoration: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
-.video-embed__ext:hover { background: rgba(0, 0, 0, 0.85); }
+.video-embed__ext:hover { background: #fff; color: #111; }
 .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 @media print { .video-embed { display: none; } }
+
+
+/* Landing: the team site's voice, condensed onto the signed-out page. */
+.login__mission {
+  max-width: 440px; text-align: center;
+  font-size: 14px; line-height: 1.65; color: var(--muted);
+  margin: 14px 0 0; text-wrap: pretty;
+}
+.login__crab { width: min(280px, 72vw); margin: 10px 0 0; user-select: none; }
+.login__pillars {
+  font-family: var(--font-label); font-size: 10.5px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--faint); margin: 18px 0 0;
+}
 
 </style>
 </head>
@@ -2509,11 +2527,14 @@ function highlight(code, lang) {
 
 // Video links on their own line become players. IDs are extracted by these
 // regexes and the embed URL is rebuilt from the ID alone — raw input never
-// reaches an iframe src.
+// reaches an iframe src. Rendering is synchronous, so the facade starts with
+// a generic provider label and the sharpest guessable thumbnail; at view time
+// mountVideoMeta (ui2.js) swaps in the real title via oEmbed and walks the
+// thumbnail down to a size the video actually has.
 function parseVideoUrl(url) {
   let m = url.match(/^https:\/\/(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)([\w-]{11})/i)
        || url.match(/^https:\/\/youtu\.be\/([\w-]{11})/i);
-  if (m) return { provider: 'youtube', id: m[1], watch: `https://www.youtube.com/watch?v=${m[1]}`, thumb: `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`, label: 'YouTube video' };
+  if (m) return { provider: 'youtube', id: m[1], watch: `https://www.youtube.com/watch?v=${m[1]}`, thumb: `https://i.ytimg.com/vi/${m[1]}/maxresdefault.jpg`, label: 'YouTube video' };
   m = url.match(/^https:\/\/(?:www\.)?vimeo\.com\/(\d{6,12})/);
   if (m) return { provider: 'vimeo', id: m[1], watch: `https://vimeo.com/${m[1]}`, thumb: null, label: 'Vimeo video' };
   m = url.match(/^https:\/\/(?:www\.)?loom\.com\/share\/([a-f0-9]{32})/i);
@@ -3620,15 +3641,18 @@ function viewLogin() {
   const denied = UI.route.name === 'denied';
   return `<div class="login">
     <h1 class="login__wordmark">CUPI</h1>
-    <p class="login__sub">Cornell University Physical Intelligence — Internal Wiki</p>
+    <p class="login__sub">Cornell Physical Intelligence &middot; Internal Wiki</p>
+    <p class="login__mission">We build robots that reason about the physical world. This wiki is the team's collective memory: CAD conventions, board bring-up rituals, flight test procedure, and everything we learn the hard way.</p>
+    <img class="login__crab" src="${CRAB_URI}" alt="The CUPI crab, resting on a beach" draggable="false">
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address — once you're on the list, signing in just works.</div>` : ''}
+      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address. Once you're on the list, signing in just works.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>`}
+      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster. If you've been added, signing in is all it takes.</p>`}
     </div>
-    <p class="login__foot">Preview build — sign-in is simulated and data stays in this browser.<br>CUPI is a student robotics organization at Cornell University.</p>
+    <p class="login__pillars">Mechanical &middot; Electrical &middot; Software &middot; Business</p>
+    <p class="login__foot">Preview build: sign-in is simulated and data stays in this browser.<br>CUPI is a student robotics organization at Cornell University.</p>
   </div>`;
 }
 
@@ -3795,7 +3819,7 @@ function viewPage(id) {
 function viewMissing(id) {
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Not found</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
-    ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist — it may have been moved to Trash.</p>
+    ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist. It may have been moved to Trash.</p>
     <button class="btn" data-action="new-page">${I.plus} New page</button>
   </div></div></div></div>`;
 }
@@ -3882,7 +3906,7 @@ async function mountCadViewer(host) {
   } else return;
   let verts = null;
   try { verts = /\.obj$/i.test(att.name) ? parseOBJ(new TextDecoder().decode(buffer)) : parseSTL(buffer); } catch (e) { verts = null; }
-  if (!verts) { host.querySelector('.cad-embed__stage').innerHTML = `<div class="empty" style="padding:24px"><b>Couldn't read this model</b><p>${MD.esc(att.name)} doesn't parse as ${/\.obj$/i.test(att.name) ? 'OBJ' : 'STL'} — re-export it and re-attach.</p></div>`; return; }
+  if (!verts) { host.querySelector('.cad-embed__stage').innerHTML = `<div class="empty" style="padding:24px"><b>Couldn't read this model</b><p>${MD.esc(att.name)} doesn't parse as ${/\.obj$/i.test(att.name) ? 'OBJ' : 'STL'}. Re-export it and re-attach.</p></div>`; return; }
 
   // Center + scale.
   let min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9];
@@ -4122,6 +4146,7 @@ function edUpdatePreview() {
   const { html } = MD.render(e.body, mdCtx({ readonly: true }));
   host.innerHTML = (e.title ? `<h1 class="preview-title">${MD.esc(e.title)}</h1>` : '') + html;
   $$('.cad-embed', host).forEach(mountCadViewer);
+  $$('.video-embed__face', host).forEach(mountVideoMeta);
 }
 
 // All programmatic edits go through execCommand('insertText') so the native
@@ -4521,12 +4546,12 @@ function welcomeEmailHtml(u) {
     </div>
     <div class="mailview__body">
       <div class="mailview__wordmark">CUPI</div>
-      <div class="mailview__eyebrow">Cornell University Physical Intelligence — Internal Wiki</div>
+      <div class="mailview__eyebrow">Cornell Physical Intelligence &middot; Internal Wiki</div>
       <img class="mailview__crab" src="${CRAB_URI}" alt="The CUPI crab, on a beach">
       <p>Hi,</p>
-      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the CUPI wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
+      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the CUPI wiki, the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
       <p><a class="mailview__btn" href="https://wiki.cornellphysicalintelligence.com">Open the wiki</a></p>
-      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — you're already on the list. If you weren't expecting this, ignore it.</p>
+      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account. You're already on the list. If you weren't expecting this, ignore it.</p>
     </div>
   </div>`;
 }
@@ -4684,6 +4709,98 @@ function viewModal() {
   return `<div class="modal-veil" data-action="modal-veil">${inner}</div>`;
 }
 
+/* ------------------------------- video hydration -------------------------- */
+
+// The markdown renderer is synchronous, so video facades come out with a
+// generic provider label; the real title arrives here from each provider's
+// oEmbed endpoint after render. Session caches, because renders happen
+// constantly and must never refetch: "provider:id" → { title, thumb } (either
+// may be null), null after a failed fetch, or a Promise while one is in
+// flight. Every failure path stays silent — the facade keeps its provider
+// label and dark ground, which is all the artifact preview's CSP ever shows.
+const videoMeta = new Map();
+// "provider:id" → the thumbnail URL that actually loaded, '' when every
+// candidate failed — re-renders neither re-probe dead URLs nor re-walk chains.
+const videoThumbSrc = new Map();
+
+// All three endpoints answer browser CORS: youtube.com/oembed echoes any
+// Origin (including the null of a file:// preview), vimeo.com and loom.com
+// send access-control-allow-origin: *.
+const VIDEO_OEMBED = {
+  youtube: (id) => `https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + id)}&format=json`,
+  vimeo: (id) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + id)}`,
+  loom: (id) => `https://www.loom.com/v1/oembed?url=${encodeURIComponent('https://www.loom.com/share/' + id)}`,
+};
+
+// Walk a facade thumbnail down its candidate list. onerror alone is not
+// enough: YouTube answers maxresdefault/sddefault requests for videos that
+// lack them with a gray 120×90 placeholder the browser loads as a success,
+// so the onload check steps past anything placeholder-sized. A dead end
+// removes the img and leaves the clean dark facade.
+function wireVideoThumb(img, key, chain, i) {
+  const next = () => {
+    if (i + 1 < chain.length) wireVideoThumb(img, key, chain, i + 1);
+    else { videoThumbSrc.set(key, ''); img.remove(); }
+  };
+  img.onload = () => { if (img.naturalWidth <= 120) next(); else videoThumbSrc.set(key, chain[i]); };
+  img.onerror = next;
+  if (img.getAttribute('src') !== chain[i]) img.src = chain[i];
+}
+
+function applyVideoMeta(face, meta) {
+  const tag = $('.video-embed__tag', face);
+  if (tag && meta.title && tag.textContent !== meta.title) {
+    tag.title = tag.textContent; // the provider label stays, one hover away
+    tag.textContent = meta.title; // textContent, so the title can't inject markup
+    face.setAttribute('aria-label', `Play ${meta.title} (${tag.title})`);
+  }
+  // Vimeo and Loom have no guessable thumbnail URL — backfill from oEmbed.
+  const key = `${face.dataset.provider}:${face.dataset.vid}`;
+  const known = videoThumbSrc.get(key);
+  if (!$('.video-embed__thumb', face) && known !== '' && /^https:\/\//.test(known || meta.thumb || '')) {
+    const img = document.createElement('img');
+    img.className = 'video-embed__thumb';
+    img.alt = '';
+    img.loading = 'lazy';
+    face.prepend(img);
+    wireVideoThumb(img, key, [known || meta.thumb], 0);
+  }
+}
+
+function mountVideoMeta(face) {
+  const provider = face.dataset.provider, id = face.dataset.vid || '';
+  const oembed = VIDEO_OEMBED[provider];
+  if (face._videoMounted || !oembed || !/^[\w-]{6,40}$/.test(id)) return;
+  face._videoMounted = true;
+  const key = `${provider}:${id}`;
+
+  const img = $('.video-embed__thumb', face);
+  if (img) {
+    const known = videoThumbSrc.get(key);
+    if (known !== undefined) {
+      if (known) wireVideoThumb(img, key, [known], 0); else img.remove();
+    } else if (provider === 'youtube') {
+      wireVideoThumb(img, key, ['maxresdefault', 'sddefault', 'hqdefault'].map((n) => `https://i.ytimg.com/vi/${id}/${n}.jpg`), 0);
+    }
+  }
+
+  const cached = videoMeta.get(key);
+  if (cached === undefined) {
+    videoMeta.set(key, fetch(oembed(id))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j && typeof j.title === 'string' ? { title: j.title, thumb: typeof j.thumbnail_url === 'string' ? j.thumbnail_url : null } : null))
+      .catch(() => null)
+      .then((meta) => {
+        videoMeta.set(key, meta);
+        // The render that queued this fetch may be gone — hydrate whatever
+        // facades for this video are on screen now; later renders read the cache.
+        if (meta) $$(`.video-embed__face[data-provider="${provider}"][data-vid="${id}"]`).forEach((f) => applyVideoMeta(f, meta));
+      }));
+  } else if (cached && !(cached instanceof Promise)) {
+    applyVideoMeta(face, cached);
+  }
+}
+
 /* ------------------------------- render ---------------------------------- */
 
 function render() {
@@ -4742,6 +4859,7 @@ function render() {
 
   // Mount hooks.
   $$('.cad-embed').forEach(mountCadViewer);
+  $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
     edUpdatePreview();
     const src = $('[data-ed="body"]');
@@ -5313,7 +5431,8 @@ document.addEventListener('click', async (ev) => {
       const src = provider === 'youtube' ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`
         : provider === 'vimeo' ? `https://player.vimeo.com/video/${id}?autoplay=1`
         : `https://www.loom.com/embed/${id}?autoplay=1`;
-      wrap.innerHTML = `<iframe src="${src}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      const meta = videoMeta.get(`${provider}:${id}`); // may still be a pending fetch — fall back
+      wrap.innerHTML = `<iframe src="${src}" title="${meta && typeof meta.title === 'string' && meta.title ? MD.esc(meta.title) : 'Video player'}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
       break;
     }
     case 'lightbox': stop(); openLightbox(ev.target.src, ev.target.alt); break;

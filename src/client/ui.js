@@ -171,15 +171,18 @@ function viewLogin() {
   const denied = UI.route.name === 'denied';
   return `<div class="login">
     <h1 class="login__wordmark">CUPI</h1>
-    <p class="login__sub">Cornell University Physical Intelligence — Internal Wiki</p>
+    <p class="login__sub">Cornell Physical Intelligence &middot; Internal Wiki</p>
+    <p class="login__mission">We build robots that reason about the physical world. This wiki is the team's collective memory: CAD conventions, board bring-up rituals, flight test procedure, and everything we learn the hard way.</p>
+    <img class="login__crab" src="${CRAB_URI}" alt="The CUPI crab, resting on a beach" draggable="false">
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address — once you're on the list, signing in just works.</div>` : ''}
+      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address. Once you're on the list, signing in just works.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>`}
+      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster. If you've been added, signing in is all it takes.</p>`}
     </div>
-    <p class="login__foot">Preview build — sign-in is simulated and data stays in this browser.<br>CUPI is a student robotics organization at Cornell University.</p>
+    <p class="login__pillars">Mechanical &middot; Electrical &middot; Software &middot; Business</p>
+    <p class="login__foot">Preview build: sign-in is simulated and data stays in this browser.<br>CUPI is a student robotics organization at Cornell University.</p>
   </div>`;
 }
 
@@ -346,7 +349,7 @@ function viewPage(id) {
 function viewMissing(id) {
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Not found</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
-    ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist — it may have been moved to Trash.</p>
+    ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist. It may have been moved to Trash.</p>
     <button class="btn" data-action="new-page">${I.plus} New page</button>
   </div></div></div></div>`;
 }
@@ -433,7 +436,7 @@ async function mountCadViewer(host) {
   } else return;
   let verts = null;
   try { verts = /\.obj$/i.test(att.name) ? parseOBJ(new TextDecoder().decode(buffer)) : parseSTL(buffer); } catch (e) { verts = null; }
-  if (!verts) { host.querySelector('.cad-embed__stage').innerHTML = `<div class="empty" style="padding:24px"><b>Couldn't read this model</b><p>${MD.esc(att.name)} doesn't parse as ${/\.obj$/i.test(att.name) ? 'OBJ' : 'STL'} — re-export it and re-attach.</p></div>`; return; }
+  if (!verts) { host.querySelector('.cad-embed__stage').innerHTML = `<div class="empty" style="padding:24px"><b>Couldn't read this model</b><p>${MD.esc(att.name)} doesn't parse as ${/\.obj$/i.test(att.name) ? 'OBJ' : 'STL'}. Re-export it and re-attach.</p></div>`; return; }
 
   // Center + scale.
   let min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9];

@@ -50,11 +50,14 @@ function highlight(code, lang) {
 
 // Video links on their own line become players. IDs are extracted by these
 // regexes and the embed URL is rebuilt from the ID alone — raw input never
-// reaches an iframe src.
+// reaches an iframe src. Rendering is synchronous, so the facade starts with
+// a generic provider label and the sharpest guessable thumbnail; at view time
+// mountVideoMeta (ui2.js) swaps in the real title via oEmbed and walks the
+// thumbnail down to a size the video actually has.
 function parseVideoUrl(url) {
   let m = url.match(/^https:\/\/(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)([\w-]{11})/i)
        || url.match(/^https:\/\/youtu\.be\/([\w-]{11})/i);
-  if (m) return { provider: 'youtube', id: m[1], watch: `https://www.youtube.com/watch?v=${m[1]}`, thumb: `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`, label: 'YouTube video' };
+  if (m) return { provider: 'youtube', id: m[1], watch: `https://www.youtube.com/watch?v=${m[1]}`, thumb: `https://i.ytimg.com/vi/${m[1]}/maxresdefault.jpg`, label: 'YouTube video' };
   m = url.match(/^https:\/\/(?:www\.)?vimeo\.com\/(\d{6,12})/);
   if (m) return { provider: 'vimeo', id: m[1], watch: `https://vimeo.com/${m[1]}`, thumb: null, label: 'Vimeo video' };
   m = url.match(/^https:\/\/(?:www\.)?loom\.com\/share\/([a-f0-9]{32})/i);

@@ -44,7 +44,7 @@ Store.boot = async function bootRemote() {
 
 Store.session = () => REMOTE.email;
 Store.logout = () => { location.href = '/api/auth/logout'; };
-Store.reset = () => toast('Reset is a preview-only tool — the live wiki keeps everything.');
+Store.reset = () => toast('Reset is a preview-only tool. The live wiki keeps everything.');
 
 /* ------------------------------- mutations -------------------------------- */
 
@@ -67,7 +67,7 @@ async function sendOp(op, args, after, onError) {
     after?.(out);
     render();
   } catch (e) {
-    toast(e.status === 400 || e.status === 503 ? e.message : 'Sync failed — check your connection and retry.');
+    toast(e.status === 400 || e.status === 503 ? e.message : 'Sync failed. Check your connection and retry.');
     onError?.(e);
     try { adoptServer(await api('/state')); render(); } catch (e2) { /* offline */ }
   } finally { REMOTE.pending--; }
@@ -122,7 +122,7 @@ for (const [name, toOp] of Object.entries(OP_MAP)) {
     const local = orig(emails, role);
     sendOp('addMembers', { emails, role }, (out) => {
       for (const e of out.emailed || []) {
-        if (!e.sent) toast(`${e.email}: invite created — share the code from Pending (email: ${e.reason})`);
+        if (!e.sent) toast(`${e.email}: added, but the welcome email failed (${e.reason})`);
       }
     });
     return local;
@@ -167,13 +167,16 @@ viewLogin = function viewLoginRemote() {
   const reason = params.get('reason');
   return `<div class="login">
     <h1 class="login__wordmark">CUPI</h1>
-    <p class="login__sub">Cornell University Physical Intelligence — Internal Wiki</p>
+    <p class="login__sub">Cornell Physical Intelligence &middot; Internal Wiki</p>
+    <p class="login__mission">We build robots that reason about the physical world. This wiki is the team's collective memory: CAD conventions, board bring-up rituals, flight test procedure, and everything we learn the hard way.</p>
+    <img class="login__crab" src="${CRAB_URI}" alt="The CUPI crab, resting on a beach" draggable="false">
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you — once you're added, just sign in again.</div>` : ''}
+      ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you. Once you're added, this same button will work.</div>` : ''}
       <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>
+      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster. If you've been added, signing in is all it takes.</p>
     </div>
+    <p class="login__pillars">Mechanical &middot; Electrical &middot; Software &middot; Business</p>
     <p class="login__foot">CUPI is a student robotics organization at Cornell University.<br>
     <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
   </div>`;

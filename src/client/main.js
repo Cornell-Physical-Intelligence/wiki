@@ -341,7 +341,8 @@ document.addEventListener('click', async (ev) => {
       const src = provider === 'youtube' ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`
         : provider === 'vimeo' ? `https://player.vimeo.com/video/${id}?autoplay=1`
         : `https://www.loom.com/embed/${id}?autoplay=1`;
-      wrap.innerHTML = `<iframe src="${src}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      const meta = videoMeta.get(`${provider}:${id}`); // may still be a pending fetch — fall back
+      wrap.innerHTML = `<iframe src="${src}" title="${meta && typeof meta.title === 'string' && meta.title ? MD.esc(meta.title) : 'Video player'}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
       break;
     }
     case 'lightbox': stop(); openLightbox(ev.target.src, ev.target.alt); break;

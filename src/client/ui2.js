@@ -116,6 +116,7 @@ function edUpdatePreview() {
   const { html } = MD.render(e.body, mdCtx({ readonly: true }));
   host.innerHTML = (e.title ? `<h1 class="preview-title">${MD.esc(e.title)}</h1>` : '') + html;
   $$('.cad-embed', host).forEach(mountCadViewer);
+  $$('.video-embed__face', host).forEach(mountVideoMeta);
 }
 
 // All programmatic edits go through execCommand('insertText') so the native
@@ -515,12 +516,12 @@ function welcomeEmailHtml(u) {
     </div>
     <div class="mailview__body">
       <div class="mailview__wordmark">CUPI</div>
-      <div class="mailview__eyebrow">Cornell University Physical Intelligence — Internal Wiki</div>
+      <div class="mailview__eyebrow">Cornell Physical Intelligence &middot; Internal Wiki</div>
       <img class="mailview__crab" src="${CRAB_URI}" alt="The CUPI crab, on a beach">
       <p>Hi,</p>
-      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the CUPI wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
+      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the CUPI wiki, the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
       <p><a class="mailview__btn" href="https://wiki.cornellphysicalintelligence.com">Open the wiki</a></p>
-      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — you're already on the list. If you weren't expecting this, ignore it.</p>
+      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account. You're already on the list. If you weren't expecting this, ignore it.</p>
     </div>
   </div>`;
 }
@@ -678,6 +679,98 @@ function viewModal() {
   return `<div class="modal-veil" data-action="modal-veil">${inner}</div>`;
 }
 
+/* ------------------------------- video hydration -------------------------- */
+
+// The markdown renderer is synchronous, so video facades come out with a
+// generic provider label; the real title arrives here from each provider's
+// oEmbed endpoint after render. Session caches, because renders happen
+// constantly and must never refetch: "provider:id" → { title, thumb } (either
+// may be null), null after a failed fetch, or a Promise while one is in
+// flight. Every failure path stays silent — the facade keeps its provider
+// label and dark ground, which is all the artifact preview's CSP ever shows.
+const videoMeta = new Map();
+// "provider:id" → the thumbnail URL that actually loaded, '' when every
+// candidate failed — re-renders neither re-probe dead URLs nor re-walk chains.
+const videoThumbSrc = new Map();
+
+// All three endpoints answer browser CORS: youtube.com/oembed echoes any
+// Origin (including the null of a file:// preview), vimeo.com and loom.com
+// send access-control-allow-origin: *.
+const VIDEO_OEMBED = {
+  youtube: (id) => `https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + id)}&format=json`,
+  vimeo: (id) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + id)}`,
+  loom: (id) => `https://www.loom.com/v1/oembed?url=${encodeURIComponent('https://www.loom.com/share/' + id)}`,
+};
+
+// Walk a facade thumbnail down its candidate list. onerror alone is not
+// enough: YouTube answers maxresdefault/sddefault requests for videos that
+// lack them with a gray 120×90 placeholder the browser loads as a success,
+// so the onload check steps past anything placeholder-sized. A dead end
+// removes the img and leaves the clean dark facade.
+function wireVideoThumb(img, key, chain, i) {
+  const next = () => {
+    if (i + 1 < chain.length) wireVideoThumb(img, key, chain, i + 1);
+    else { videoThumbSrc.set(key, ''); img.remove(); }
+  };
+  img.onload = () => { if (img.naturalWidth <= 120) next(); else videoThumbSrc.set(key, chain[i]); };
+  img.onerror = next;
+  if (img.getAttribute('src') !== chain[i]) img.src = chain[i];
+}
+
+function applyVideoMeta(face, meta) {
+  const tag = $('.video-embed__tag', face);
+  if (tag && meta.title && tag.textContent !== meta.title) {
+    tag.title = tag.textContent; // the provider label stays, one hover away
+    tag.textContent = meta.title; // textContent, so the title can't inject markup
+    face.setAttribute('aria-label', `Play ${meta.title} (${tag.title})`);
+  }
+  // Vimeo and Loom have no guessable thumbnail URL — backfill from oEmbed.
+  const key = `${face.dataset.provider}:${face.dataset.vid}`;
+  const known = videoThumbSrc.get(key);
+  if (!$('.video-embed__thumb', face) && known !== '' && /^https:\/\//.test(known || meta.thumb || '')) {
+    const img = document.createElement('img');
+    img.className = 'video-embed__thumb';
+    img.alt = '';
+    img.loading = 'lazy';
+    face.prepend(img);
+    wireVideoThumb(img, key, [known || meta.thumb], 0);
+  }
+}
+
+function mountVideoMeta(face) {
+  const provider = face.dataset.provider, id = face.dataset.vid || '';
+  const oembed = VIDEO_OEMBED[provider];
+  if (face._videoMounted || !oembed || !/^[\w-]{6,40}$/.test(id)) return;
+  face._videoMounted = true;
+  const key = `${provider}:${id}`;
+
+  const img = $('.video-embed__thumb', face);
+  if (img) {
+    const known = videoThumbSrc.get(key);
+    if (known !== undefined) {
+      if (known) wireVideoThumb(img, key, [known], 0); else img.remove();
+    } else if (provider === 'youtube') {
+      wireVideoThumb(img, key, ['maxresdefault', 'sddefault', 'hqdefault'].map((n) => `https://i.ytimg.com/vi/${id}/${n}.jpg`), 0);
+    }
+  }
+
+  const cached = videoMeta.get(key);
+  if (cached === undefined) {
+    videoMeta.set(key, fetch(oembed(id))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j && typeof j.title === 'string' ? { title: j.title, thumb: typeof j.thumbnail_url === 'string' ? j.thumbnail_url : null } : null))
+      .catch(() => null)
+      .then((meta) => {
+        videoMeta.set(key, meta);
+        // The render that queued this fetch may be gone — hydrate whatever
+        // facades for this video are on screen now; later renders read the cache.
+        if (meta) $$(`.video-embed__face[data-provider="${provider}"][data-vid="${id}"]`).forEach((f) => applyVideoMeta(f, meta));
+      }));
+  } else if (cached && !(cached instanceof Promise)) {
+    applyVideoMeta(face, cached);
+  }
+}
+
 /* ------------------------------- render ---------------------------------- */
 
 function render() {
@@ -736,6 +829,7 @@ function render() {
 
   // Mount hooks.
   $$('.cad-embed').forEach(mountCadViewer);
+  $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
     edUpdatePreview();
     const src = $('[data-ed="body"]');
