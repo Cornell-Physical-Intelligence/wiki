@@ -796,6 +796,8 @@ function render() {
 
   if (!me) {
     app.innerHTML = viewLogin();
+    const vt = $('.login .vt-title');
+    if (vt) mountHeroTitle(vt);
     return;
   }
   if (UI.editor) view = viewEditor();
@@ -830,6 +832,7 @@ function render() {
 
   // Mount hooks.
   $$('.cad-embed').forEach(mountCadViewer);
+  { const vt = $('.login .vt-title'); if (vt) mountHeroTitle(vt); }
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
     edUpdatePreview();

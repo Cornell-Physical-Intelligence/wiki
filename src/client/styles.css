@@ -1313,15 +1313,23 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 @media print { .video-embed { display: none; } }
 
 
-/* Landing: the team site's voice, condensed onto the signed-out page. */
-.login__mission {
-  max-width: 440px; text-align: center;
-  font-size: 14px; line-height: 1.65; color: var(--muted);
-  margin: 14px 0 0; text-wrap: pretty;
+/* Landing: the team site's homepage hero, verbatim. The Voronoi membrane web
+   is bounded by the CUPI letterforms; the caption is the site's Times caption. */
+.login__title { margin: 0; line-height: 0; display: flex; justify-content: center; user-select: none; width: 100%; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.vt-title {
+  display: block; width: min(90vw, 720px); opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.2, 0, 0, 1);
+  user-select: none; -webkit-user-select: none;
 }
-.login__crab { width: min(280px, 72vw); margin: 10px 0 0; user-select: none; }
-.login__pillars {
-  font-family: var(--font-label); font-size: 10.5px;
-  letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--faint); margin: 18px 0 0;
+.vt-title.is-ready { opacity: 1; }
+.vt-title__canvas { display: block; width: 100%; height: 100%; }
+@media (prefers-reduced-motion: reduce) { .vt-title { transition: none; } }
+.login__caption {
+  margin: clamp(-6px, 0.6vw, 14px) 0 0; color: var(--fg);
+  font-family: 'Times New Roman', Times, serif;
+  font-size: clamp(7px, 0.9vw, 12px); letter-spacing: 0.22em;
+  text-transform: uppercase; text-align: center; white-space: nowrap;
+  pointer-events: none;
 }
+.login__welcome { margin: 0; text-align: center; font-size: 14px; color: var(--fg); text-wrap: balance; }

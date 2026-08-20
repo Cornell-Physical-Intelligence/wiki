@@ -170,19 +170,17 @@ function route() {
 function viewLogin() {
   const denied = UI.route.name === 'denied';
   return `<div class="login">
-    <h1 class="login__wordmark">CUPI</h1>
-    <p class="login__sub">Cornell Physical Intelligence &middot; Internal Wiki</p>
-    <p class="login__mission">We build robots that reason about the physical world. This wiki is the team's collective memory: CAD conventions, board bring-up rituals, flight test procedure, and everything we learn the hard way.</p>
-    <img class="login__crab" src="${CRAB_URI}" alt="The CUPI crab, resting on a beach" draggable="false">
+    <h1 class="login__title"><span class="visually-hidden">Cornell Physical Intelligence (CUPI)</span><span class="vt-title" aria-hidden="true"><canvas class="vt-title__canvas"></canvas></span></h1>
+    <p class="login__caption">(Cornell University Physical Intelligence)</p>
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address. Once you're on the list, signing in just works.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
-      <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster. If you've been added, signing in is all it takes.</p>`}
+      <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
+      <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
     </div>
-    <p class="login__pillars">Mechanical &middot; Electrical &middot; Software &middot; Business</p>
-    <p class="login__foot">Preview build: sign-in is simulated and data stays in this browser.<br>CUPI is a student robotics organization at Cornell University.</p>
+    <p class="login__foot">Preview build: sign-in is simulated and data stays in this browser.<br>
+    <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
   </div>`;
 }
 

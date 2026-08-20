@@ -167,19 +167,15 @@ viewLogin = function viewLoginRemote() {
   const denied = params.get('denied');
   const reason = params.get('reason');
   return `<div class="login">
-    <h1 class="login__wordmark">CUPI</h1>
-    <p class="login__sub">Cornell Physical Intelligence &middot; Internal Wiki</p>
-    <p class="login__mission">We build robots that reason about the physical world. This wiki is the team's collective memory: CAD conventions, board bring-up rituals, flight test procedure, and everything we learn the hard way.</p>
-    <img class="login__crab" src="${CRAB_URI}" alt="The CUPI crab, resting on a beach" draggable="false">
+    <h1 class="login__title"><span class="visually-hidden">Cornell Physical Intelligence (CUPI)</span><span class="vt-title" aria-hidden="true"><canvas class="vt-title__canvas"></canvas></span></h1>
+    <p class="login__caption">(Cornell University Physical Intelligence)</p>
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you. Once you're added, this same button will work.</div>` : ''}
+      <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster. If you've been added, signing in is all it takes.</p>
     </div>
-    <p class="login__pillars">Mechanical &middot; Electrical &middot; Software &middot; Business</p>
-    <p class="login__foot">CUPI is a student robotics organization at Cornell University.<br>
-    <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
+    <p class="login__foot"><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
   </div>`;
 };
 

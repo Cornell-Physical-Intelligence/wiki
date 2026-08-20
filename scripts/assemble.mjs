@@ -69,6 +69,7 @@ const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
   return [
     assets,
     read('icons.js'),
+    read('voronoi.js'),
     read('data.js'),
     read('markdown.js'),
     read('store.js'),
