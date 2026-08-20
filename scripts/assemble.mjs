@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs';
 const read = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url), 'utf8');
 const b64 = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url)).toString('base64');
 
-// The site's own favicon — the same crab mark as cornellphysicalintelligence.com.
-export const FAVICON = `data:image/png;base64,${b64('cupi-logo-192.png')}`;
+// The site's own favicon — the same rounded-square tab mark as
+// cornellphysicalintelligence.com, so both CUPI tabs carry one silhouette.
+export const FAVICON = `data:image/png;base64,${b64('favicon-squircle-32.png')}`;
 
 export function styles() {
   return `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${b64('playfair.woff2')}) format('woff2');}
