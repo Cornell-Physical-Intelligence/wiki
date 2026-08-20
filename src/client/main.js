@@ -371,6 +371,17 @@ document.addEventListener('click', async (ev) => {
       break;
     }
 
+    case 'email-test': stop(); {
+      if (typeof REMOTE === 'undefined') { toast('Preview build: emails only send from the live wiki.'); break; }
+      el.disabled = true;
+      try {
+        const out = await api('/test-email', { method: 'POST', body: JSON.stringify({}) });
+        toast(out.sent ? `Test sent to ${Store.me().email}. Check your inbox (and spam).` : `Not sent: ${out.reason || 'unknown reason'}`);
+      } catch (e) { toast(`Not sent: ${e.message}`); }
+      el.disabled = false;
+      break;
+    }
+
     case 'help-menu': stop(); openMenu([
       { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
       { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },

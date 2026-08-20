@@ -458,7 +458,7 @@ function viewAdmin() {
     <p>Who can sign in. Sign-in is Google OAuth restricted to <b>cornell.edu</b>, and anyone on this list has access the moment they sign in, so the list below is the whole security model.</p></div>
     <div class="admin-grid">
       <section class="admin-block">
-        <div class="admin-block__head"><h2>Add members</h2></div>
+        <div class="admin-block__head"><h2>Add members</h2><button class="btn btn--sm" style="margin-left:auto" data-action="email-test" title="Sends the real welcome email to your own address, so you can check delivery">${I.mail} Email me a test</button></div>
         <p class="admin-block__sub">Paste one or more addresses, comma or space separated. Each gets a welcome email, no codes. Signing in still requires a <b>cornell.edu</b> Google account.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
