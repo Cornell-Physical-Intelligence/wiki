@@ -64,9 +64,13 @@ function viewHealth() {
       <section class="admin-block">
         <div class="admin-block__head"><h2>Broken links</h2><span class="count">${broken.length}</span></div>
         <p class="admin-block__sub">Wiki links whose target page doesn't exist yet. Click through and create the page, or fix the spelling.</p>
-        <div class="audit">${rows(broken, 'Every wiki link resolves. Nice.', (b) => `
-          <div class="audit__row"><span class="audit__what"><a href="#/page/${b.page.id}" style="color:var(--fg)"><b>${MD.esc(b.page.title)}</b></a> links to <b style="color:var(--accent)">[[${MD.esc(b.target)}]]</b></span>
-          <button class="btn btn--sm" style="margin-left:auto" data-action="new-page" data-title="${MD.esc(b.target)}" data-sec="${b.page.section}">Create</button></div>`)}
+        <div class="audit">${rows(broken, 'Every wiki link resolves. Nice.', (b) => {
+          const rx = new RegExp('\\[\\[(' + b.target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[|#\\]])', 'i');
+          const raw = (b.page.body.match(rx) || [])[1] || b.target;
+          return `
+          <div class="audit__row"><span class="audit__what"><a href="#/page/${b.page.id}" style="color:var(--fg)"><b>${MD.esc(b.page.title)}</b></a> links to <b style="color:var(--accent)">[[${MD.esc(raw)}]]</b></span>
+          <button class="btn btn--sm" style="margin-left:auto" data-action="new-page" data-title="${MD.esc(raw)}" data-sec="${b.page.section}">Create</button></div>`;
+        })}
         </div>
       </section>
       <section class="admin-block">

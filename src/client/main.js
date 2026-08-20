@@ -7,21 +7,28 @@
 'use strict';
 
 // Drafts survive reloads: mirrored to localStorage on every autosave tick.
-const DRAFT_KEY = 'cupi-wiki-drafts';
+// Keyed per account — a shared lab machine must never show one member's
+// unpublished text to the next member who signs in.
+const draftKey = () => 'cupi-wiki-drafts:' + (Store.session?.() || 'anon');
 const draftStash = new Map(); // pageId|'new' -> {title, body, section, tags, origBody}
-try {
-  for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'))) draftStash.set(k, v);
-} catch (e) { /* fresh start */ }
-
 const draftDeleted = new Set(); // keys this tab consumed — don't resurrect from disk
+
+function hydrateDrafts() {
+  draftStash.clear();
+  draftDeleted.clear();
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(draftKey()) || '{}'))) draftStash.set(k, v);
+  } catch (e) { /* fresh start */ }
+}
+
 
 function persistDrafts() {
   // Merge with what's on disk so a draft in another tab is never clobbered:
   // our keys win, keys we consumed are dropped, everything else is preserved.
   try {
-    const disk = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    const disk = JSON.parse(localStorage.getItem(draftKey()) || '{}');
     for (const k of draftDeleted) delete disk[k];
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...disk, ...Object.fromEntries(draftStash) }));
+    localStorage.setItem(draftKey(), JSON.stringify({ ...disk, ...Object.fromEntries(draftStash) }));
   } catch (e) {}
 }
 
@@ -51,8 +58,26 @@ function autosaveDraft() {
 function closeModal(after) {
   const veil = document.querySelector('.modal-veil');
   if (!veil) { UI.modal = null; after ? after() : render(); return; }
+  if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
-  setTimeout(() => { UI.modal = null; after ? after() : render(); }, 120);
+  setTimeout(() => {
+    UI.modal = null;
+    if (after) after();
+    // Keep-editing paths must not rebuild the textarea — a full render would
+    // wipe the native undo stack the editor is built around.
+    else if (UI.editor) { veil.remove(); $('[data-ed="body"]')?.focus(); }
+    else render();
+  }, 120);
+}
+
+// Opening a dialog over the editor appends it in place, same reason.
+function showModal(m) {
+  UI.modal = m;
+  if (UI.editor && $('#app .editor')) {
+    document.querySelector('.modal-veil')?.remove();
+    document.body.insertAdjacentHTML('beforeend', viewModal());
+    $('.modal [data-m], .modal .btn--primary')?.focus?.();
+  } else render();
 }
 
 function requestEditorClose() {
@@ -65,28 +90,22 @@ function requestEditorClose() {
     route(); render();
     return;
   }
-  UI.modal = { kind: 'close-editor' };
-  render();
+  showModal({ kind: 'close-editor' });
 }
 
 function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
   openEditor(pageId, isNew, draft);
-  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
+  // The stash entry survives until the draft is saved or explicitly discarded —
+  // resuming and immediately reloading must not be the one path that loses work.
+  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
   render();
 }
 
-function openMenu(items, anchor) {
-  window.__closeMenu?.();
-  const r = anchor.getBoundingClientRect();
-  UI.menu = { items };
-  const host = document.createElement('div');
-  host.className = 'menu';
-  host.setAttribute('role', 'menu');
-  host.innerHTML = items.map((it, i) => it === '-' ? '<hr>' :
-    `<button role="menuitem" data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
+function mountMenu(host, anchor) {
   document.body.appendChild(host);
+  const r = anchor.getBoundingClientRect();
   const mw = host.offsetWidth, mh = host.offsetHeight;
   host.style.left = Math.min(r.left, innerWidth - mw - 10) + 'px';
   host.style.top = (r.bottom + mh + 10 > innerHeight ? r.top - mh - 6 : r.bottom + 6) + 'px';
@@ -94,15 +113,60 @@ function openMenu(items, anchor) {
     host.remove(); UI.menu = null;
     document.removeEventListener('pointerdown', onAway, true);
     window.__closeMenu = null;
+    if (anchor.isConnected) anchor.focus?.();
   };
   window.__closeMenu = close; // render() and Esc both close through this
   const onAway = (ev) => { if (!host.contains(ev.target)) close(); };
   document.addEventListener('pointerdown', onAway, true);
+  // Menus are keyboard-first like everything else: focus lands inside,
+  // arrows move it, Escape (global) hands it back to the trigger.
+  host.addEventListener('keydown', (ev) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) return;
+    ev.preventDefault();
+    const btns = [...host.querySelectorAll('button')];
+    const cur = btns.indexOf(document.activeElement);
+    const next = ev.key === 'Home' ? 0 : ev.key === 'End' ? btns.length - 1 :
+      ((cur < 0 ? 0 : cur) + (ev.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length;
+    btns[next]?.focus();
+  });
+  host.querySelector('button')?.focus();
+  return close;
+}
+
+function openMenu(items, anchor) {
+  window.__closeMenu?.();
+  UI.menu = { items };
+  const host = document.createElement('div');
+  host.className = 'menu';
+  host.setAttribute('role', 'menu');
+  host.innerHTML = items.map((it, i) => it === '-' ? '<hr>' :
+    `<button role="menuitem" data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
+  const close = mountMenu(host, anchor);
   host.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-menu-i]');
     if (!b) return;
     close();
     items[+b.dataset.menuI].run();
+  });
+}
+
+function openEmojiPop(anchor, pageId) {
+  window.__closeMenu?.();
+  UI.menu = { emoji: true };
+  const mine = Store.page(pageId)?.reactions || {};
+  const me = Store.me().email;
+  const host = document.createElement('div');
+  host.className = 'menu emoji-pop';
+  host.setAttribute('role', 'menu');
+  host.innerHTML = REACTION_SET.map(([emoji, label]) =>
+    `<button role="menuitem" data-emoji="${MD.esc(emoji)}" title="${MD.esc(label)}" aria-label="${MD.esc(label)}" aria-pressed="${(mine[emoji] || []).includes(me)}">${MD.esc(emoji)}</button>`).join('');
+  const close = mountMenu(host, anchor);
+  host.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-emoji]');
+    if (!b) return;
+    close();
+    Store.toggleReaction(pageId, b.dataset.emoji);
+    render();
   });
 }
 
@@ -178,13 +242,13 @@ document.addEventListener('click', async (ev) => {
       const email = el.dataset.email;
       const res = Store.login(email);
       UI.chooser = false;
-      if (res.ok) { UI.loginError = null; nav('#/page/welcome'); route(); render(); toast(`Signed in as ${res.user.name}`); }
+      if (res.ok) { UI.loginError = null; hydrateDrafts(); nav('#/page/welcome'); route(); render(); toast(`Signed in as ${res.user.name}`); }
       else { nav('#/denied?email=' + encodeURIComponent(email)); }
       break;
     }
 
     /* ---- shell ---- */
-    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else UI.navHidden = !UI.navHidden; const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); } break;
+    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; Store.prefs().navHidden = UI.navHidden; Store.persist(); } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); } break;
     case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); break;
     case 'sec-toggle': {
       if (ev.target.closest('[data-action="new-page"]')) break;
@@ -209,7 +273,7 @@ document.addEventListener('click', async (ev) => {
         '-',
         { icon: I.history, label: 'Restore sample content', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Restore sample content?', text: 'Every page, member, and attachment returns to the sample content this preview ships with. Anything you changed in this browser is erased.', confirm: 'Restore', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/page/welcome'); route(); render(); toast('Sample content restored'); }; render(); } },
       ] : ['-']),
-      { icon: I.x, label: 'Sign out', run: () => { Store.logout(); UI.editor = null; nav('#/login'); route(); render(); } },
+      { icon: I.x, label: 'Sign out', run: () => { Store.logout(); UI.editor = null; hydrateDrafts(); nav('#/login'); route(); render(); } },
     ], el); break;
 
     /* ---- page ---- */
@@ -240,6 +304,7 @@ document.addEventListener('click', async (ev) => {
           host.dataset.value = o.value;
           host.querySelector('.dd__label').textContent = o.label;
           if (host.dataset.m === 'ed-section' && UI.editor) { UI.editor.section = o.value; markDirty(); autosaveDraft(); }
+          if (host.dataset.m === 'section' && UI.modal) UI.modal.sectionTouched = true;
         },
       })), host);
       break;
@@ -277,19 +342,9 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- reactions ---- */
     case 'react': stop(); Store.toggleReaction(el.dataset.id, el.dataset.emoji); render(); break;
-    case 'react-add': {
-      stop();
-      const id = el.dataset.id;
-      const mine = Store.page(id)?.reactions || {};
-      const me = Store.me().email;
-      openMenu(REACTION_SET.map(([emoji, label]) => ({
-        icon: `<span class="menu__emoji">${emoji}</span>`,
-        label: (mine[emoji] || []).includes(me) ? `${label} — remove` : label,
-        run: () => { Store.toggleReaction(id, emoji); render(); },
-      })), el);
-      break;
-    }
+    case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
+    case 'resume-new-draft': stop(); startEdit(null, true); break;
     case 'help-menu': stop(); openMenu([
       { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
       { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },
@@ -297,12 +352,29 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, title: el.dataset.title || '', tpl: 'blank' }; render(); break;
-    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; $$('.tpl').forEach((b) => b.classList.toggle('sel', b.dataset.tpl === el.dataset.tpl)); break;
+    case 'tpl-pick': stop(); {
+      UI.modal.tpl = el.dataset.tpl;
+      $$('.tpl').forEach((b) => b.classList.toggle('sel', b.dataset.tpl === el.dataset.tpl));
+      // A meeting belongs in Operations, a bring-up log in Electrical — follow
+      // the template's home section until the person picks one themselves.
+      const tpl = TEMPLATES.find((t) => t.id === el.dataset.tpl);
+      if (tpl?.section && !UI.modal.sectionTouched) {
+        UI.modal.section = tpl.section;
+        const host = $('.modal [data-m="section"]');
+        if (host) {
+          host.dataset.value = tpl.section;
+          host.querySelector('.dd__label').textContent = SECTIONS.find((s) => s.id === tpl.section)?.name || tpl.section;
+        }
+      }
+      break;
+    }
     case 'new-page-go': {
       stop();
       const title = ($('.modal [data-m="title"]')?.value || '').trim();
       const section = $('.modal [data-m="section"]')?.dataset.value || 'projects';
       
+      UI.modal.title = title;
+      UI.modal.section = section;
       if (!title) { UI.modal.error = 'Every page needs a title.'; render(); break; }
       if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they have to be unique.`; render(); break; }
       const tpl = TEMPLATES.find((t) => t.id === (UI.modal.tpl || 'blank'));
@@ -394,7 +466,7 @@ document.addEventListener('click', async (ev) => {
     /* ---- modal plumbing ---- */
     case 'modal-close': stop(); closeModal(); break;
     case 'modal-veil': if (ev.target === el) { stop(); closeModal(); } break;
-    case 'confirm-go': stop(); { const go = UI.modal?.onGo; closeModal(go ? () => go() : null); } break;
+    case 'confirm-go': stop(); { const go = UI.modal?.onGo; if (UI.modal) UI.modal.onGo = null; closeModal(go ? () => go() : null); } break;
 
     case 'toast-act': stop(); { const t = UI.toasts.find((x) => x.id === el.dataset.tid); if (t?.action) { const run = t.action.run; dismissToast(t); run(); } } break;
   }
@@ -416,7 +488,7 @@ document.addEventListener('submit', (ev) => {
     const bad = results.filter((r) => !r.ok);
     render();
     if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
-    else if (ok.length > 1) toast(`Added ${ok.length} members — each gets an email with a sign-in link`);
+    else if (ok.length > 1) toast(`Added ${ok.length} members — each gets a welcome email`);
     bad.forEach((b) => toast(`${b.email}: ${b.reason}`));
   }
 });
@@ -521,19 +593,20 @@ document.addEventListener('keydown', (ev) => {
   const mod = ev.metaKey || ev.ctrlKey;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;
 
-  // Palette navigation.
-  if (UI.palette) {
-    // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
+  // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
   if (ev.key === 'Tab' && UI.modal && $('.modal')) {
-    const focusables = $('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
+    const focusables = $$('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
     if (focusables.length) {
       const first = focusables[0], last = focusables[focusables.length - 1];
       if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
       else if (!ev.shiftKey && (document.activeElement === last || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); first.focus(); }
     }
+    return;
   }
 
-  if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
+  // Palette navigation.
+  if (UI.palette) {
+    if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
       const n = UI.palette.count || 0;
@@ -556,6 +629,7 @@ document.addEventListener('keydown', (ev) => {
 
   if (mod && ev.key.toLowerCase() === 'k') {
     ev.preventDefault();
+    if (UI.modal) return; // a modal owns the keyboard
     if (UI.editor && ev.target.matches('[data-ed="body"]')) { ED_TOOLS.mdlink(); return; } // editors mean "insert link" here
     UI.palette ? (UI.palette = null, render()) : openPalette();
     return;
@@ -691,6 +765,8 @@ function syncViewerTheme() {
 (async function boot() {
   Store.onError = (msg) => toast(msg);
   await Store.boot();
+  hydrateDrafts();
+  if (Store.me()) UI.navHidden = !!Store.prefs().navHidden;
   syncViewerTheme();
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { syncViewerTheme(); });
   new MutationObserver(() => { syncViewerTheme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

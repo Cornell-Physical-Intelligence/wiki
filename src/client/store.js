@@ -139,11 +139,17 @@ const Store = {
   },
 
   reset() {
-    try { localStorage.removeItem(LS_KEY); localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    const who = Store.session();
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
     [...Files.mem.keys()].forEach((id) => Files.remove(id));
     SEED_ATTACHMENTS.forEach((a) => Files.put(a));
     Store.seed();
     Store.reindex();
+    // Restoring content is not signing out — keep the session when the
+    // seeded roster still knows this person.
+    if (who && !Store.s.users.some((u) => u.email === who)) {
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    }
   },
 
   lastPersistOk: true,

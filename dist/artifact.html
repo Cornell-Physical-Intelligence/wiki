@@ -31,6 +31,8 @@
   --accent-soft: rgba(179, 27, 27, 0.09);
   --good: #1a7f37;
   --good-bg: rgba(26, 127, 55, 0.1);
+  --diff-add-hl: rgba(26, 127, 55, 0.26);
+  --diff-del-hl: rgba(207, 34, 46, 0.26);
   --bad: #cf222e;
   --bad-bg: rgba(207, 34, 46, 0.1);
   --img-outline: rgba(0, 0, 0, 0.1);
@@ -65,6 +67,8 @@
     --accent-soft: rgba(224, 67, 67, 0.14);
     --good: #3fb950;
     --good-bg: rgba(63, 185, 80, 0.14);
+    --diff-add-hl: rgba(63, 185, 80, 0.32);
+    --diff-del-hl: rgba(248, 81, 73, 0.32);
     --bad: #f85149;
     --bad-bg: rgba(248, 81, 73, 0.14);
     --img-outline: rgba(255, 255, 255, 0.1);
@@ -92,6 +96,8 @@
   --accent-soft: rgba(224, 67, 67, 0.14);
   --good: #3fb950;
   --good-bg: rgba(63, 185, 80, 0.14);
+  --diff-add-hl: rgba(63, 185, 80, 0.32);
+  --diff-del-hl: rgba(248, 81, 73, 0.32);
   --bad: #f85149;
   --bad-bg: rgba(248, 81, 73, 0.14);
   --img-outline: rgba(255, 255, 255, 0.1);
@@ -454,9 +460,10 @@ label > .dd { width: 100%; }
 .toc a.here { color: var(--fg); border-left-color: var(--fg); }
 .toc a.lvl3 { padding-left: 26px; }
 .toc-btn { display: none; }
-@media (max-width: 1180px) {
+@media (max-width: 1379px) {
   .toc { display: none; }
   .toc-btn { display: inline-flex; }
+  .page-wrap { grid-template-columns: minmax(0, 760px); }
 }
 
 .page-head { padding-bottom: 14px; border-bottom: 1px solid var(--hairline); margin-bottom: 26px; }
@@ -591,12 +598,19 @@ label > .dd { width: 100%; }
 
 .editor { display: flex; flex-direction: column; height: 100%; padding-top: 52px; }
 
-.editor__tools {
-  display: flex; align-items: center; gap: 1px; flex-wrap: nowrap;
-  overflow-x: auto; scrollbar-width: none;
+.editor__toolbar {
+  display: flex; align-items: center;
   padding: 6px clamp(16px, 4vw, 40px);
   border-bottom: 1px solid var(--hairline);
 }
+.editor__tools {
+  display: flex; align-items: center; gap: 1px; flex-wrap: nowrap;
+  flex: 1; min-width: 0;
+  overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+.editor__toolend { display: flex; align-items: center; gap: 10px; flex: none; padding-left: 10px; }
 .editor__tools .icon-btn { width: 28px; height: 28px; border-radius: 5px; }
 .editor__tools .icon-btn svg { width: 16px; height: 16px; }
 .editor__count {
@@ -855,6 +869,7 @@ a.feed__row:hover { background: var(--hover); }
 .modal__head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 0; }
 .modal__head h3 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
 .modal__body { padding: 14px 20px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.modal__body > * { flex: none; }
 .modal__foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--hairline); background: var(--pop); }
 .modal__body label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
 .modal__body label .sub { font-weight: 400; color: var(--muted); font-size: 12.5px; }
@@ -1168,6 +1183,10 @@ a.feed__row:hover { background: var(--hover); }
 body { transition: background-color 160ms ease, color 160ms ease; }
 .topbar, .modal, .palette, .menu, .toast { transition-property: background-color, border-color; transition-duration: 0.16s; }
 .modal__body { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+@supports (animation-timeline: scroll(self block)) {
+  .modal__body { animation: modal-unfade linear both; animation-timeline: scroll(self block); }
+  @keyframes modal-unfade { to { -webkit-mask-image: linear-gradient(#000, #000); mask-image: linear-gradient(#000, #000); } }
+}
 .tpl { transition-property: background-color, border-color, scale; transition-duration: 0.15s; }
 
 /* Reactions — Slack-style, on the page footer. */
@@ -1214,8 +1233,8 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 /* History diffs highlight on-palette, both themes. */
 .diff mark { background: rgba(var(--fg-rgb), 0.14); color: inherit; border-radius: 2px; padding: 0 1px; }
-.diff__line--add mark { background: var(--good-bg); }
-.diff__line--del mark { background: var(--bad-bg, var(--accent-soft)); }
+.diff__line--add mark { background: var(--diff-add-hl); }
+.diff__line--del mark { background: var(--diff-del-hl); }
 
 /* Welcome-email preview. */
 .mailview__crab { display: block; width: min(300px, 80%); margin: 4px 0 12px; }
@@ -1227,9 +1246,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 .editor__tools::-webkit-scrollbar { display: none; }
 
-@media (max-width: 1180px) {
-  .page-wrap { grid-template-columns: minmax(0, 760px); }
-}
 @media (max-width: 900px) {
   .editor.mode-split .editor__mode [data-mode="write"] { background: var(--selected); color: var(--fg); }
 }
@@ -1241,6 +1257,26 @@ body { transition: background-color 160ms ease, color 160ms ease; }
   }
   .shell.nav-open .shell__scrim { opacity: 1; pointer-events: auto; }
 }
+
+
+/* Round-2 verifier fixes. */
+.modal-veil.leaving { pointer-events: none; }
+.toast.leaving { pointer-events: none; }
+.modal--wide { width: min(760px, 100%); max-height: min(860px, 92dvh); }
+.modal--wide .tpl-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tpl__thumb { height: 92px; }
+@media (max-width: 900px) { .modal--wide .tpl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.emoji-pop { display: grid; grid-template-columns: repeat(4, 38px); gap: 2px; padding: 6px; }
+.emoji-pop button { width: 38px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 17px; line-height: 1; border-radius: 6px; padding: 0; }
+.emoji-pop button:hover { background: var(--hover); }
+.emoji-pop button[aria-pressed="true"] { background: var(--selected); box-shadow: inset 0 0 0 1px var(--fg); }
+.reaction--empty { width: auto; padding: 0 11px 0 9px; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.roster .actions--show { opacity: 1; }
+.tpl.sel .tpl__desc { color: var(--muted); }
+.roster th { color: var(--muted); }
+.diff__line--add .diff__gut, .diff__line--del .diff__gut { color: var(--fg); opacity: 0.8; }
+.mailview__wordmark { font-family: var(--font-display), Georgia, serif; font-size: 30px; font-weight: 700; margin: 2px 0 2px; }
+.mailview__eyebrow { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; }
 
 </style>
 <div id="app"></div>
@@ -1461,6 +1497,7 @@ Syntax and everything the editor can do: [[Formatting Guide]]. Questions about a
 
 page({
   id: 'onboarding', section: 'getting-started', title: 'Onboarding Checklist',
+  reactions: { '👍': ['ck694@cornell.edu'] },
   owner: 'nl482@cornell.edu', created: ago(160), updated: ago(2, 4), updatedBy: 'nl482@cornell.edu',
   tags: ['start-here'],
   body: `Work through this top to bottom. Most items unblock the ones after them. Your lead signs off at the bottom when you're done.
@@ -1498,6 +1535,7 @@ When a checklist item is wrong or stale, fix the page — don't route around it.
 
 page({
   id: 'lab-safety', section: 'getting-started', title: 'Lab Access and Safety',
+  reactions: { '✅': ['js2801@cornell.edu', 'oa229@cornell.edu'] },
   owner: 'oa229@cornell.edu', created: ago(150), updated: ago(9), updatedBy: 'oa229@cornell.edu',
   body: `The lab is a shared space and the fastest way to lose it is a safety incident. Read this before your first solo session.
 
@@ -1605,6 +1643,7 @@ Onshape, for all team CAD. The one reason that mattered most: **version control 
 
 page({
   id: 'formatting-guide', section: 'getting-started', title: 'Formatting Guide',
+  reactions: { '❤️': ['jc3391@cornell.edu'] },
   owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 1), updatedBy: 'ab3233@cornell.edu',
   tags: ['reference'],
   body: `Everything is Markdown, with a few team extras. This page is itself editable proof — hit Edit to see its source.
@@ -1903,6 +1942,7 @@ CUPI-<PROJ>-<SYS>-<NNN>[-rev]
 
 page({
   id: 'printing', section: 'mechanical', title: '3D Printing Guide',
+  reactions: { '🎉': ['oa229@cornell.edu'] },
   owner: 'oa229@cornell.edu', created: ago(145), updated: ago(6, 8), updatedBy: 'am3644@cornell.edu',
   body: `Three Bambu X1Cs live in the lab. Book on the paper sheet; the queue self-organizes if you write honest print times.
 
@@ -2026,6 +2066,7 @@ No board goes to fab without a recorded review pass against the [[PCB Design Che
 
 page({
   id: 'pcb-checklist', section: 'electrical', title: 'PCB Design Checklist',
+  reactions: { '👍': ['mr977@cornell.edu', 'js2801@cornell.edu'] },
   owner: 'mr977@cornell.edu', created: ago(147), updated: ago(8, 2), updatedBy: 'js2801@cornell.edu',
   tags: ['standard', 'checklist'],
   body: `Run this top to bottom before every fab order. Copy the checklist into the board's page, check items there, and link the two reviewers. History shows who checked what — that's the point.
@@ -2229,6 +2270,7 @@ Regression gate: CI replays the ${'`bench-loop`'} bag and fails if end-to-end ex
 
 page({
   id: 'flight-testing', section: 'software', title: 'Flight Testing Procedure',
+  reactions: { '🚀': ['nl733@cornell.edu', 'jl3105@cornell.edu'], '👀': ['ab3233@cornell.edu'] },
   owner: 'nl733@cornell.edu', created: ago(115), updated: ago(2, 1), updatedBy: 'nl733@cornell.edu',
   tags: ['checklist'],
   body: `Applies to every powered flight, indoor or field. The procedure exists because of specific incidents; each rule has a story. Ask about them.
@@ -2352,12 +2394,12 @@ const SEED_ACTIVITY = [
 
 const TEMPLATES = [
   { id: 'blank', name: 'Blank page', desc: 'Start from nothing', body: '' },
-  { id: 'meeting', name: 'Meeting notes', desc: 'Agenda, notes, decisions, actions', body: `**Attending:** · **Scribe:**\n\n## Agenda\n\n1. Topic — who's driving it\n\n## Notes\n\n- **Topic** (who): what was reported or changed, and the page it lands on — link it\n\n## Decisions\n\n- What we chose, one line each. Anything hard to reverse gets its own [[Decision Records|decision record]] instead.\n\n## Actions\n\n- [ ] Who — what *(by when)*\n\n::: tip Before you close the tab\nTitle this page \`General Meeting — YYYY-MM-DD\` and add a row to the table on [[Meeting Notes]] — otherwise nothing links here and it shows up as an orphan.\n\n:::\n` },
-  { id: 'design', name: 'Design doc', desc: 'Requirements, design, tests, BOM', body: `**Part:** CUPI-<PROJ>-<SYS>-<NNN> · **Rev:** A · **Owner:** · **Status:** In design\n\nWhat this is, which platform it serves, and the requirement it answers. If other pages or code read numbers off this page, say so — that's what makes it the source of truth.\n\n## Requirements\n\n- Constraint — the number, and where the number came from\n- Constraint — the number, and where the number came from\n\n## Design\n\nDrag the drawing, sketch or screenshot in here and caption it. Then paste the Onshape or Altium 365 link on its own line so it renders as a live card.\n\nWorst-case sizing math goes in a code block so a reviewer never has to re-derive it. Review: who signed off and when — boards need two reviewers against [[PCB Design Checklist]], one of them a lead.\n\n## Test results\n\n| Rev | Test | Result |\n| --- | --- | --- |\n| *A* | *static load to 2× body mass* | *failed — delaminated at 60%, layer orientation* |\n\n## BOM extract\n\n| Part | Number | Qty | On hand | Vendor | Unit cost |\n| --- | --- | ---: | ---: | --- | ---: |\n|  |  |  |  |  |  |\n\nAn italic table row is an example — replace it. Numbering and the full column set: [[Part Numbering and BOM]].\n\n## Open\n\n- [ ] What's unresolved — owner, and what would close it\n\n::: warn Known issue\nWhat bites you today, the workaround people actually use, and which rev fixes it. Delete this block if nothing does.\n\n:::\n` },
+  { id: 'meeting', name: 'Meeting notes', desc: 'Agenda, notes, decisions, actions', section: 'operations', body: `**Attending:** · **Scribe:**\n\n## Agenda\n\n1. Topic — who's driving it\n\n## Notes\n\n- **Topic** (who): what was reported or changed, and the page it lands on — link it\n\n## Decisions\n\n- What we chose, one line each. Anything hard to reverse gets its own [[Decision Records|decision record]] instead.\n\n## Actions\n\n- [ ] Who — what *(by when)*\n\n::: tip Before you close the tab\nTitle this page \`General Meeting — YYYY-MM-DD\` and add a row to the table on [[Meeting Notes]] — otherwise nothing links here and it shows up as an orphan.\n\n:::\n` },
+  { id: 'design', name: 'Design doc', desc: 'Requirements, design, tests, BOM', body: `**Part:** CUPI-<PROJ>-<SYS>-<NNN> · **Rev:** A · **Owner:** · **Status:** In design\n\nWhat this is, which platform it serves, and the requirement it answers. If other pages or code read numbers off this page, say so — that's what makes it the source of truth.\n\n## Requirements\n\n- Constraint — the number, and where the number came from\n- Constraint — the number, and where the number came from\n\n## Design\n\nDrag the drawing, sketch or screenshot in here and caption it. Then paste the Onshape or Altium 365 link on its own line so it renders as a live card.\n\nWorst-case sizing math goes in a code block so a reviewer never has to re-derive it. Review: who signed off and when — boards need two reviewers against [[PCB Design Checklist]], one of them a lead.\n\n## Test results\n\n| Rev | Test | Result |\n| --- | --- | --- |\n| *A* | *static load to 2× body mass* | *failed — delaminated at 60%, layer orientation* |\n\nAn italic row is an example — replace it.\n\n## BOM extract\n\n| Part | Number | Qty | On hand | Vendor | Unit cost |\n| --- | --- | ---: | ---: | --- | ---: |\n| *M3×8 SHCS* | *CUPI-STD-FAS-008* | *40* | *120* | *McMaster* | *$0.11* |\n\nNumbering and the full column set: [[Part Numbering and BOM]].\n\n## Open\n\n- [ ] What's unresolved — owner, and what would close it\n\n::: warn Known issue\nWhat bites you today, the workaround people actually use, and which rev fixes it. Delete this block if nothing does.\n\n:::\n` },
   { id: 'decision', name: 'Decision record', desc: 'Context, options, outcome', body: `**Status:** Proposed · **Deciders:** · **Date:** YYYY-MM-DD\n\n## Context\n\nWhat forced a decision now — the constraint, the failure, or the rule change. Whoever reads this in a year has none of your memory.\n\n## Options considered\n\n1. **Option A** — what it gets us, and the specific reason it won or lost\n2. **Option B** — what it gets us, and the specific reason it won or lost\n\n## Decision\n\nWhat we chose, and the one reason that mattered most.\n\n## Consequences\n\n- Easier:\n- Harder:\n- Revisit if:\n\n::: tip Make it findable\nFlip **Status** to Adopted once it's real, and add a row to the index on [[Decision Records]].\n\n:::\n` },
   { id: 'test', name: 'Test report', desc: 'Setup, data, verdict', body: `**Date:** YYYY-MM-DD · **Who:** · **Unit / rev:**\n\n## Setup\n\nWhich procedure you followed (link it — e.g. [[Flight Testing Procedure]], [[Board Bring-Up Log]]), on what rig, and **what changed since the last run**. One variable at a time or the numbers mean nothing. Drag in a photo of the setup — a bench nobody can picture can't be rebuilt.\n\n## Data\n\n| Metric | Expected | Measured |\n| --- | ---: | ---: |\n| *5 V rail ripple* | *< 40 mV pp* | *22 mV pp* |\n\nAn italic row is an example — replace it. Raw data: bag file, log path or repo, so someone else can re-derive this table.\n\n## Verdict\n\nPass or fail, and what changes because of it.\n\n## Follow-ups\n\n- [ ] Who — what *(by when)*\n` },
-  { id: 'bringup', name: 'Bring-up log', desc: 'Per-unit board checklist', body: `**Board:** CUPI-<PROJ>-<BOARD>-<NNN> · **Rev:** · **Ritual:** [[Board Bring-Up Log]]\n\nOne row per unit — a board without a completed log doesn't get integrated. Link this page from the board's design page so it isn't an orphan.\n\n| Unit | Date | By | Result |\n| --- | --- | --- | --- |\n| *#2* | *2026-08-14* | *MR* | *pass — 31 mA idle (exp 28), 5 V ripple 22 mV, hottest FET 61 °C* |\n\n## Unit #_\n\n- [ ] Visual under the microscope — bridges, tombstones, missing parts, solder balls under QFNs\n- [ ] Shorts: continuity every rail → GND, before any power\n- [ ] First power: bench supply, limit 50 mA over expected idle, no loads — idle measured:\n- [ ] Rails: regulation + ripple at every test point — worst ripple:\n- [ ] Comms: SWD first, then every bus per [[Wiring and Connectors]]\n- [ ] Load: rail-by-rail to 120% of rating — hottest part:\n- [ ] Firmware smoke test: blink, watchdog, telemetry heartbeat\n- [ ] Silk "bring-up by ___" box filled in — paint pen, initials, date\n\nWrite numbers, not "ok" — the next unit gets compared against yours. Anything surprising goes in a \`::: warn\` callout on this page, not in Slack. Copy the section above for each additional unit.\n` },
-  { id: 'procedure', name: 'Procedure', desc: 'Steps with pass criteria', body: `Who this applies to and when — one line. If there's a hard rule in here, say it in the first sentence.\n\n::: note Master copy\nDon't tick boxes on this page. Copy the list into the page you're actually working on (••• → Duplicate) and check them there, so the record lives with the thing you did.\n\n:::\n\n## Roles\n\nWho does what while this runs — and who can stop it. Name the role, not the person.\n\n## Before you start\n\n- [ ] Precondition — and how you check it, not just that you should\n- [ ] Precondition — and how you check it, not just that you should\n\n## Steps\n\n1. **Step** — what you do, and the number or state that tells you it worked\n2. **Step** — what you do, and the number or state that tells you it worked\n\n## After\n\n- [ ] Where the result gets written down, and by when\n- [ ] Link this page from wherever it applies, so people find it before they need it\n\n::: warn Why this rule exists\nThe incident behind the strictest step above. Rules without stories get skipped by whoever wasn't there.\n\n:::\n` },
+  { id: 'bringup', name: 'Bring-up log', desc: 'Per-unit board checklist', section: 'electrical', body: `**Board:** CUPI-<PROJ>-<BOARD>-<NNN> · **Rev:** · **Ritual:** [[Board Bring-Up Log]]\n\nOne row per unit — a board without a completed log doesn't get integrated. Link this page from the board's design page so it isn't an orphan.\n\n| Unit | Date | By | Result |\n| --- | --- | --- | --- |\n| *#2* | *2026-08-14* | *MR* | *pass — 31 mA idle (exp 28), 5 V ripple 22 mV, hottest FET 61 °C* |\n\n## Unit #_\n\n- [ ] Visual under the microscope — bridges, tombstones, missing parts, solder balls under QFNs\n- [ ] Shorts: continuity every rail → GND, before any power\n- [ ] First power: bench supply, limit 50 mA over expected idle, no loads — idle measured:\n- [ ] Rails: regulation + ripple at every test point — worst ripple:\n- [ ] Comms: SWD first, then every bus per [[Wiring and Connectors]]\n- [ ] Load: rail-by-rail to 120% of rating — hottest part:\n- [ ] Firmware smoke test: blink, watchdog, telemetry heartbeat\n- [ ] Silk "bring-up by ___" box filled in — paint pen, initials, date\n\nWrite numbers, not "ok" — the next unit gets compared against yours. Anything surprising goes in a \`::: warn\` callout on this page, not in Slack. Copy the section above for each additional unit.\n` },
+  { id: 'procedure', name: 'Procedure', desc: 'Checklist with pass criteria', body: `Who this applies to and when — one line. If there's a hard rule in here, say it in the first sentence.\n\n::: note Master copy\nDon't tick boxes on this page. Copy the list into the page you're actually working on (••• → Duplicate) and check them there, so the record lives with the thing you did.\n\n:::\n\n## Roles\n\nWho does what while this runs — and who can stop it. Name the role, not the person.\n\n## Before you start\n\n- [ ] The bench is clear and the E-stop is within reach\n- [ ] The right firmware is flashed — note the version here\n\n## Steps\n\n1. **Power up** — the 5 V rail settles under 40 mV pp\n2. **Home all axes** — every encoder reads 0 ± 2 counts\n\nReplace the examples, keep the shape: a bold verb, then the number or state that proves the step worked.\n\n## After\n\n- [ ] Where the result gets written down, and by when\n- [ ] Link this page from wherever it applies, so people find it before they need it\n\n::: warn Why this rule exists\nThe incident behind the strictest step above.\n\n:::\n` },
 ];
 
 const REACTION_SET = [
@@ -2931,11 +2973,17 @@ const Store = {
   },
 
   reset() {
-    try { localStorage.removeItem(LS_KEY); localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    const who = Store.session();
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
     [...Files.mem.keys()].forEach((id) => Files.remove(id));
     SEED_ATTACHMENTS.forEach((a) => Files.put(a));
     Store.seed();
     Store.reindex();
+    // Restoring content is not signing out — keep the session when the
+    // seeded roster still knows this person.
+    if (who && !Store.s.users.some((u) => u.email === who)) {
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    }
   },
 
   lastPersistOk: true,
@@ -3493,6 +3541,8 @@ function route() {
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
   // The formatting guide is a real (searchable, editable) page now; keep old links working.
   if (name === 'guide') { UI.route = { name: 'page', params: { id: 'formatting-guide' } }; return; }
+  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'login', 'denied'];
+  if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
 
@@ -3505,7 +3555,7 @@ function viewLogin() {
     <p class="login__sub">Cornell University Physical Intelligence — Internal Wiki</p>
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask any admin to add you — you'll get an invite code by email.</div>` : ''}
+      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address — once you're on the list, signing in just works.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
       <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>`}
@@ -3582,6 +3632,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
+      ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink" data-action="resume-new-draft" title="Resume your unsaved new page"><span class="tree-item__draftdot" style="margin:0 3px"></span> Unsaved new page</button>` : ''}
     </nav>
     <div class="sidebar__scroll">
       ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
@@ -3662,7 +3713,9 @@ function viewPage(id) {
           </div></div>` : ''}
           <div class="reactions">
             ${reactionChips(p)}
-            <button class="reaction reaction--add" data-action="react-add" data-id="${id}" aria-label="Add a reaction" title="Add a reaction">${I.smilePlus}</button>
+            ${Object.keys(p.reactions || {}).length
+              ? `<button class="reaction reaction--add" data-action="react-add" data-id="${id}" aria-label="Add a reaction" title="Add a reaction">${I.smilePlus}</button>`
+              : `<button class="reaction reaction--add reaction--empty" data-action="react-add" data-id="${id}">${I.smilePlus}<span>Add a reaction</span></button>`}
           </div>
         </footer>
       </article>
@@ -3872,9 +3925,14 @@ function openLightbox(src, alt) {
 
 function reactionChips(p) {
   const me = Store.me().email;
+  const labelFor = (emoji) => (REACTION_SET.find(([e]) => e === emoji) || [, 'this'])[1];
   return Object.entries(p.reactions || {}).map(([emoji, who]) => {
-    const names = who.map((e) => Store.userName(e)).join(', ');
-    return `<button class="reaction ${who.includes(me) ? 'mine' : ''}" data-action="react" data-id="${p.id}" data-emoji="${MD.esc(emoji)}" title="${MD.esc(names)}"><span class="reaction__emoji">${emoji}</span><span class="reaction__n">${who.length}</span></button>`;
+    const mine = who.includes(me);
+    const names = who.map((e) => (e === me ? 'You' : Store.userName(e)));
+    if (mine) names.sort((a, b) => (a === 'You' ? -1 : b === 'You' ? 1 : 0));
+    const listed = names.length > 4 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} others` : names.join(', ');
+    const title = `${listed} reacted with ${labelFor(emoji)}`;
+    return `<button class="reaction ${mine ? 'mine' : ''}" data-action="react" data-id="${p.id}" data-emoji="${MD.esc(emoji)}" title="${MD.esc(title)}" aria-label="${MD.esc(title)}" aria-pressed="${mine}"><span class="reaction__emoji">${MD.esc(emoji)}</span><span class="reaction__n">${who.length}</span></button>`;
   }).join('');
 }
 
@@ -3956,14 +4014,17 @@ function viewEditor() {
       <button class="btn btn--ghost" data-action="ed-cancel">Close</button>
       <button class="btn btn--primary" data-action="ed-save">Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
     )}
-    <div class="editor__tools" role="toolbar" aria-label="Formatting">
-      ${tools.map((t) => t === null ? '<span class="sep"></span>' :
-        `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
-      <span class="spacer"></span>
-      <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
-        ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
-      </label>
+    <div class="editor__toolbar">
+      <div class="editor__tools" role="toolbar" aria-label="Formatting">
+        ${tools.map((t) => t === null ? '<span class="sep"></span>' :
+          `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
+      </div>
+      <div class="editor__toolend">
+        <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
+          ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
+        </label>
+      </div>
     </div>
     ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft — the page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
     <div class="editor__panes">
@@ -4146,8 +4207,7 @@ function edSave() {
   if (!e.title.trim()) { toast('Every page needs a title.'); $('[data-ed="title"]')?.focus(); return; }
   const clash = Store.pageByTitle(e.title.trim());
   if (clash && clash.id !== e.pageId) { toast(`“${e.title.trim()}” already exists — titles are how pages link, so they have to be unique.`); return; }
-  UI.modal = { kind: 'save-summary' };
-  render();
+  showModal({ kind: 'save-summary' });
 }
 
 function edCommit(summary) {
@@ -4157,12 +4217,12 @@ function edCommit(summary) {
   if (!e.isNew && !e.staleOverride) {
     const cur = Store.page(e.pageId);
     if (cur && cur.body !== e.origBody) {
-      UI.modal = {
+      const m = {
         kind: 'conflict', pageId: e.pageId,
         text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours — their version stays in History.`,
       };
-      UI.modal.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
-      render();
+      m.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
+      showModal(m);
       return;
     }
   }
@@ -4180,6 +4240,7 @@ function edCommit(summary) {
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
   toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'Not saved — this browser is out of storage');
   draftStash.delete(e.pageId || 'new');
+  draftDeleted.add(e.pageId || 'new');
   persistDrafts();
   UI.editor = null;
   UI.modal = null;
@@ -4334,7 +4395,7 @@ function viewAdmin() {
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Add members</h2></div>
-        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets an email with a sign-in link — no codes, access is immediate.</p>
+        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets a welcome email — no codes, access is immediate.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
           ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
@@ -4345,11 +4406,11 @@ function viewAdmin() {
         <div class="admin-block__head"><h2>Added — awaiting first sign-in</h2><span class="count">${invited.length}</span></div>
         <p class="admin-block__sub">These people have access already — they just haven't signed in yet.</p>
         <div class="roster"><div class="roster__scroll"><table>
-          <thead><tr><th>Added</th><th>When</th><th></th></tr></thead><tbody>
+          <thead><tr><th>Person</th><th>Added</th><th></th></tr></thead><tbody>
           ${invited.map((u) => `<tr>
             <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(u.email)}</span><span><b>${MD.esc(u.email.split('@')[0])}</b><span class="mail">${u.email}</span></span></span></td>
             <td><span class="mono">${relTime(u.invitedAt)} · by ${MD.esc(Store.userName(u.invitedBy).split(' ')[0])}</span></td>
-            <td><span class="actions">
+            <td><span class="actions actions--show">
               <button class="btn btn--sm" data-action="invite-view" data-email="${u.email}">${I.mail} View email</button>
               <button class="btn btn--sm btn--danger" data-action="user-remove" data-email="${u.email}">Remove</button>
             </span></td>
@@ -4391,11 +4452,13 @@ function welcomeEmailHtml(u) {
       <div class="mailview__row"><span class="k">Subject</span><span><b>You're on the CUPI wiki</b></span></div>
     </div>
     <div class="mailview__body">
+      <div class="mailview__wordmark">CUPI</div>
+      <div class="mailview__eyebrow">Cornell University Physical Intelligence — Internal Wiki</div>
       <img class="mailview__crab" src="${CRAB_URI}" alt="The CUPI crab, on a beach">
       <p>Hi,</p>
-      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the Cornell University Physical Intelligence wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
+      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the CUPI wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
       <p><a class="mailview__btn" href="https://wiki.cornellphysicalintelligence.com">Open the wiki</a></p>
-      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — access is already set up. If you weren't expecting this, ignore it.</p>
+      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — you're already on the list. If you weren't expecting this, ignore it.</p>
     </div>
   </div>`;
 }
@@ -4485,7 +4548,7 @@ function viewModal() {
     const thumb = (t) => {
       if (!t.body) return `<div class="tpl__thumb tpl__thumb--blank"><span>Blank page</span></div>`;
       const { html } = MD.render(t.body, mdCtx({ readonly: true }));
-      return `<div class="tpl__thumb"><div class="prose">${html}</div></div>`;
+      return `<div class="tpl__thumb"><div class="prose">${html.replace(/<a /g, '<a tabindex="-1" ')}</div></div>`;
     };
     inner = `<div class="modal modal--wide" role="dialog" aria-label="New page">
       <div class="modal__head"><h3>New page</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
@@ -4540,7 +4603,7 @@ function viewModal() {
   if (m.kind === 'close-editor') {
     inner = `<div class="modal" role="dialog" aria-label="Unsaved changes">
       <div class="modal__head"><h3>You have unsaved changes</h3></div>
-      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">Keep the draft and it will be waiting the next time you open this page.</p></div>
+      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">Keep the draft and it will be waiting the next time you open this page. Discard throws away everything you wrote in this session.</p></div>
       <div class="modal__foot modal__foot--split">
         <button class="btn btn--ghost" data-action="modal-close">Keep editing</button>
         <span style="flex:1"></span>
@@ -4559,6 +4622,7 @@ function render() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
   window.__closeMenu?.();
+  document.querySelectorAll('body > .modal-veil').forEach((v) => v.remove());
   killPreview(); // a hover preview must not outlive the page it points into
   const app = $('#app');
   const me = Store.me();
@@ -4586,7 +4650,12 @@ function render() {
   else if (r.name === 'admin') view = viewAdmin();
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
-  else if (r.name === 'new') { openEditor(null, true, { title: r.params.title || '', section: r.params.section || 'projects' }); view = viewEditor(); }
+  else if (r.name === 'new') {
+    const draft = draftStash.get('new');
+    openEditor(null, true, draft || { title: r.params.title || '', section: r.params.section || 'projects' });
+    if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    view = viewEditor();
+  }
   else view = viewPage('welcome');
 
   app.innerHTML = `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
@@ -4707,9 +4776,13 @@ function viewHealth() {
       <section class="admin-block">
         <div class="admin-block__head"><h2>Broken links</h2><span class="count">${broken.length}</span></div>
         <p class="admin-block__sub">Wiki links whose target page doesn't exist yet. Click through and create the page, or fix the spelling.</p>
-        <div class="audit">${rows(broken, 'Every wiki link resolves. Nice.', (b) => `
-          <div class="audit__row"><span class="audit__what"><a href="#/page/${b.page.id}" style="color:var(--fg)"><b>${MD.esc(b.page.title)}</b></a> links to <b style="color:var(--accent)">[[${MD.esc(b.target)}]]</b></span>
-          <button class="btn btn--sm" style="margin-left:auto" data-action="new-page" data-title="${MD.esc(b.target)}" data-sec="${b.page.section}">Create</button></div>`)}
+        <div class="audit">${rows(broken, 'Every wiki link resolves. Nice.', (b) => {
+          const rx = new RegExp('\\[\\[(' + b.target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[|#\\]])', 'i');
+          const raw = (b.page.body.match(rx) || [])[1] || b.target;
+          return `
+          <div class="audit__row"><span class="audit__what"><a href="#/page/${b.page.id}" style="color:var(--fg)"><b>${MD.esc(b.page.title)}</b></a> links to <b style="color:var(--accent)">[[${MD.esc(raw)}]]</b></span>
+          <button class="btn btn--sm" style="margin-left:auto" data-action="new-page" data-title="${MD.esc(raw)}" data-sec="${b.page.section}">Create</button></div>`;
+        })}
         </div>
       </section>
       <section class="admin-block">
@@ -4838,21 +4911,28 @@ function viewExtraModal(m) {
 'use strict';
 
 // Drafts survive reloads: mirrored to localStorage on every autosave tick.
-const DRAFT_KEY = 'cupi-wiki-drafts';
+// Keyed per account — a shared lab machine must never show one member's
+// unpublished text to the next member who signs in.
+const draftKey = () => 'cupi-wiki-drafts:' + (Store.session?.() || 'anon');
 const draftStash = new Map(); // pageId|'new' -> {title, body, section, tags, origBody}
-try {
-  for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'))) draftStash.set(k, v);
-} catch (e) { /* fresh start */ }
-
 const draftDeleted = new Set(); // keys this tab consumed — don't resurrect from disk
+
+function hydrateDrafts() {
+  draftStash.clear();
+  draftDeleted.clear();
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(draftKey()) || '{}'))) draftStash.set(k, v);
+  } catch (e) { /* fresh start */ }
+}
+
 
 function persistDrafts() {
   // Merge with what's on disk so a draft in another tab is never clobbered:
   // our keys win, keys we consumed are dropped, everything else is preserved.
   try {
-    const disk = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    const disk = JSON.parse(localStorage.getItem(draftKey()) || '{}');
     for (const k of draftDeleted) delete disk[k];
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...disk, ...Object.fromEntries(draftStash) }));
+    localStorage.setItem(draftKey(), JSON.stringify({ ...disk, ...Object.fromEntries(draftStash) }));
   } catch (e) {}
 }
 
@@ -4882,8 +4962,26 @@ function autosaveDraft() {
 function closeModal(after) {
   const veil = document.querySelector('.modal-veil');
   if (!veil) { UI.modal = null; after ? after() : render(); return; }
+  if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
-  setTimeout(() => { UI.modal = null; after ? after() : render(); }, 120);
+  setTimeout(() => {
+    UI.modal = null;
+    if (after) after();
+    // Keep-editing paths must not rebuild the textarea — a full render would
+    // wipe the native undo stack the editor is built around.
+    else if (UI.editor) { veil.remove(); $('[data-ed="body"]')?.focus(); }
+    else render();
+  }, 120);
+}
+
+// Opening a dialog over the editor appends it in place, same reason.
+function showModal(m) {
+  UI.modal = m;
+  if (UI.editor && $('#app .editor')) {
+    document.querySelector('.modal-veil')?.remove();
+    document.body.insertAdjacentHTML('beforeend', viewModal());
+    $('.modal [data-m], .modal .btn--primary')?.focus?.();
+  } else render();
 }
 
 function requestEditorClose() {
@@ -4896,28 +4994,22 @@ function requestEditorClose() {
     route(); render();
     return;
   }
-  UI.modal = { kind: 'close-editor' };
-  render();
+  showModal({ kind: 'close-editor' });
 }
 
 function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
   openEditor(pageId, isNew, draft);
-  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; draftStash.delete(key); draftDeleted.add(key); persistDrafts(); }
+  // The stash entry survives until the draft is saved or explicitly discarded —
+  // resuming and immediately reloading must not be the one path that loses work.
+  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
   render();
 }
 
-function openMenu(items, anchor) {
-  window.__closeMenu?.();
-  const r = anchor.getBoundingClientRect();
-  UI.menu = { items };
-  const host = document.createElement('div');
-  host.className = 'menu';
-  host.setAttribute('role', 'menu');
-  host.innerHTML = items.map((it, i) => it === '-' ? '<hr>' :
-    `<button role="menuitem" data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
+function mountMenu(host, anchor) {
   document.body.appendChild(host);
+  const r = anchor.getBoundingClientRect();
   const mw = host.offsetWidth, mh = host.offsetHeight;
   host.style.left = Math.min(r.left, innerWidth - mw - 10) + 'px';
   host.style.top = (r.bottom + mh + 10 > innerHeight ? r.top - mh - 6 : r.bottom + 6) + 'px';
@@ -4925,15 +5017,60 @@ function openMenu(items, anchor) {
     host.remove(); UI.menu = null;
     document.removeEventListener('pointerdown', onAway, true);
     window.__closeMenu = null;
+    if (anchor.isConnected) anchor.focus?.();
   };
   window.__closeMenu = close; // render() and Esc both close through this
   const onAway = (ev) => { if (!host.contains(ev.target)) close(); };
   document.addEventListener('pointerdown', onAway, true);
+  // Menus are keyboard-first like everything else: focus lands inside,
+  // arrows move it, Escape (global) hands it back to the trigger.
+  host.addEventListener('keydown', (ev) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) return;
+    ev.preventDefault();
+    const btns = [...host.querySelectorAll('button')];
+    const cur = btns.indexOf(document.activeElement);
+    const next = ev.key === 'Home' ? 0 : ev.key === 'End' ? btns.length - 1 :
+      ((cur < 0 ? 0 : cur) + (ev.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length;
+    btns[next]?.focus();
+  });
+  host.querySelector('button')?.focus();
+  return close;
+}
+
+function openMenu(items, anchor) {
+  window.__closeMenu?.();
+  UI.menu = { items };
+  const host = document.createElement('div');
+  host.className = 'menu';
+  host.setAttribute('role', 'menu');
+  host.innerHTML = items.map((it, i) => it === '-' ? '<hr>' :
+    `<button role="menuitem" data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
+  const close = mountMenu(host, anchor);
   host.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-menu-i]');
     if (!b) return;
     close();
     items[+b.dataset.menuI].run();
+  });
+}
+
+function openEmojiPop(anchor, pageId) {
+  window.__closeMenu?.();
+  UI.menu = { emoji: true };
+  const mine = Store.page(pageId)?.reactions || {};
+  const me = Store.me().email;
+  const host = document.createElement('div');
+  host.className = 'menu emoji-pop';
+  host.setAttribute('role', 'menu');
+  host.innerHTML = REACTION_SET.map(([emoji, label]) =>
+    `<button role="menuitem" data-emoji="${MD.esc(emoji)}" title="${MD.esc(label)}" aria-label="${MD.esc(label)}" aria-pressed="${(mine[emoji] || []).includes(me)}">${MD.esc(emoji)}</button>`).join('');
+  const close = mountMenu(host, anchor);
+  host.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-emoji]');
+    if (!b) return;
+    close();
+    Store.toggleReaction(pageId, b.dataset.emoji);
+    render();
   });
 }
 
@@ -5009,13 +5146,13 @@ document.addEventListener('click', async (ev) => {
       const email = el.dataset.email;
       const res = Store.login(email);
       UI.chooser = false;
-      if (res.ok) { UI.loginError = null; nav('#/page/welcome'); route(); render(); toast(`Signed in as ${res.user.name}`); }
+      if (res.ok) { UI.loginError = null; hydrateDrafts(); nav('#/page/welcome'); route(); render(); toast(`Signed in as ${res.user.name}`); }
       else { nav('#/denied?email=' + encodeURIComponent(email)); }
       break;
     }
 
     /* ---- shell ---- */
-    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else UI.navHidden = !UI.navHidden; const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); } break;
+    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; Store.prefs().navHidden = UI.navHidden; Store.persist(); } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); } break;
     case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); break;
     case 'sec-toggle': {
       if (ev.target.closest('[data-action="new-page"]')) break;
@@ -5040,7 +5177,7 @@ document.addEventListener('click', async (ev) => {
         '-',
         { icon: I.history, label: 'Restore sample content', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Restore sample content?', text: 'Every page, member, and attachment returns to the sample content this preview ships with. Anything you changed in this browser is erased.', confirm: 'Restore', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/page/welcome'); route(); render(); toast('Sample content restored'); }; render(); } },
       ] : ['-']),
-      { icon: I.x, label: 'Sign out', run: () => { Store.logout(); UI.editor = null; nav('#/login'); route(); render(); } },
+      { icon: I.x, label: 'Sign out', run: () => { Store.logout(); UI.editor = null; hydrateDrafts(); nav('#/login'); route(); render(); } },
     ], el); break;
 
     /* ---- page ---- */
@@ -5071,6 +5208,7 @@ document.addEventListener('click', async (ev) => {
           host.dataset.value = o.value;
           host.querySelector('.dd__label').textContent = o.label;
           if (host.dataset.m === 'ed-section' && UI.editor) { UI.editor.section = o.value; markDirty(); autosaveDraft(); }
+          if (host.dataset.m === 'section' && UI.modal) UI.modal.sectionTouched = true;
         },
       })), host);
       break;
@@ -5108,19 +5246,9 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- reactions ---- */
     case 'react': stop(); Store.toggleReaction(el.dataset.id, el.dataset.emoji); render(); break;
-    case 'react-add': {
-      stop();
-      const id = el.dataset.id;
-      const mine = Store.page(id)?.reactions || {};
-      const me = Store.me().email;
-      openMenu(REACTION_SET.map(([emoji, label]) => ({
-        icon: `<span class="menu__emoji">${emoji}</span>`,
-        label: (mine[emoji] || []).includes(me) ? `${label} — remove` : label,
-        run: () => { Store.toggleReaction(id, emoji); render(); },
-      })), el);
-      break;
-    }
+    case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
+    case 'resume-new-draft': stop(); startEdit(null, true); break;
     case 'help-menu': stop(); openMenu([
       { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
       { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },
@@ -5128,12 +5256,29 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, title: el.dataset.title || '', tpl: 'blank' }; render(); break;
-    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; $$('.tpl').forEach((b) => b.classList.toggle('sel', b.dataset.tpl === el.dataset.tpl)); break;
+    case 'tpl-pick': stop(); {
+      UI.modal.tpl = el.dataset.tpl;
+      $$('.tpl').forEach((b) => b.classList.toggle('sel', b.dataset.tpl === el.dataset.tpl));
+      // A meeting belongs in Operations, a bring-up log in Electrical — follow
+      // the template's home section until the person picks one themselves.
+      const tpl = TEMPLATES.find((t) => t.id === el.dataset.tpl);
+      if (tpl?.section && !UI.modal.sectionTouched) {
+        UI.modal.section = tpl.section;
+        const host = $('.modal [data-m="section"]');
+        if (host) {
+          host.dataset.value = tpl.section;
+          host.querySelector('.dd__label').textContent = SECTIONS.find((s) => s.id === tpl.section)?.name || tpl.section;
+        }
+      }
+      break;
+    }
     case 'new-page-go': {
       stop();
       const title = ($('.modal [data-m="title"]')?.value || '').trim();
       const section = $('.modal [data-m="section"]')?.dataset.value || 'projects';
       
+      UI.modal.title = title;
+      UI.modal.section = section;
       if (!title) { UI.modal.error = 'Every page needs a title.'; render(); break; }
       if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they have to be unique.`; render(); break; }
       const tpl = TEMPLATES.find((t) => t.id === (UI.modal.tpl || 'blank'));
@@ -5225,7 +5370,7 @@ document.addEventListener('click', async (ev) => {
     /* ---- modal plumbing ---- */
     case 'modal-close': stop(); closeModal(); break;
     case 'modal-veil': if (ev.target === el) { stop(); closeModal(); } break;
-    case 'confirm-go': stop(); { const go = UI.modal?.onGo; closeModal(go ? () => go() : null); } break;
+    case 'confirm-go': stop(); { const go = UI.modal?.onGo; if (UI.modal) UI.modal.onGo = null; closeModal(go ? () => go() : null); } break;
 
     case 'toast-act': stop(); { const t = UI.toasts.find((x) => x.id === el.dataset.tid); if (t?.action) { const run = t.action.run; dismissToast(t); run(); } } break;
   }
@@ -5247,7 +5392,7 @@ document.addEventListener('submit', (ev) => {
     const bad = results.filter((r) => !r.ok);
     render();
     if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
-    else if (ok.length > 1) toast(`Added ${ok.length} members — each gets an email with a sign-in link`);
+    else if (ok.length > 1) toast(`Added ${ok.length} members — each gets a welcome email`);
     bad.forEach((b) => toast(`${b.email}: ${b.reason}`));
   }
 });
@@ -5352,19 +5497,20 @@ document.addEventListener('keydown', (ev) => {
   const mod = ev.metaKey || ev.ctrlKey;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;
 
-  // Palette navigation.
-  if (UI.palette) {
-    // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
+  // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
   if (ev.key === 'Tab' && UI.modal && $('.modal')) {
-    const focusables = $('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
+    const focusables = $$('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
     if (focusables.length) {
       const first = focusables[0], last = focusables[focusables.length - 1];
       if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
       else if (!ev.shiftKey && (document.activeElement === last || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); first.focus(); }
     }
+    return;
   }
 
-  if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
+  // Palette navigation.
+  if (UI.palette) {
+    if (ev.key === 'Escape') { ev.preventDefault(); UI.palette = null; render(); return; }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
       const n = UI.palette.count || 0;
@@ -5387,6 +5533,7 @@ document.addEventListener('keydown', (ev) => {
 
   if (mod && ev.key.toLowerCase() === 'k') {
     ev.preventDefault();
+    if (UI.modal) return; // a modal owns the keyboard
     if (UI.editor && ev.target.matches('[data-ed="body"]')) { ED_TOOLS.mdlink(); return; } // editors mean "insert link" here
     UI.palette ? (UI.palette = null, render()) : openPalette();
     return;
@@ -5522,6 +5669,8 @@ function syncViewerTheme() {
 (async function boot() {
   Store.onError = (msg) => toast(msg);
   await Store.boot();
+  hydrateDrafts();
+  if (Store.me()) UI.navHidden = !!Store.prefs().navHidden;
   syncViewerTheme();
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { syncViewerTheme(); });
   new MutationObserver(() => { syncViewerTheme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

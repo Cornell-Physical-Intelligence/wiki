@@ -160,6 +160,8 @@ function route() {
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
   // The formatting guide is a real (searchable, editable) page now; keep old links working.
   if (name === 'guide') { UI.route = { name: 'page', params: { id: 'formatting-guide' } }; return; }
+  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'login', 'denied'];
+  if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
 
@@ -172,7 +174,7 @@ function viewLogin() {
     <p class="login__sub">Cornell University Physical Intelligence — Internal Wiki</p>
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask any admin to add you — you'll get an invite code by email.</div>` : ''}
+      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address — once you're on the list, signing in just works.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
       <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>`}
@@ -249,6 +251,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
+      ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink" data-action="resume-new-draft" title="Resume your unsaved new page"><span class="tree-item__draftdot" style="margin:0 3px"></span> Unsaved new page</button>` : ''}
     </nav>
     <div class="sidebar__scroll">
       ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
@@ -329,7 +332,9 @@ function viewPage(id) {
           </div></div>` : ''}
           <div class="reactions">
             ${reactionChips(p)}
-            <button class="reaction reaction--add" data-action="react-add" data-id="${id}" aria-label="Add a reaction" title="Add a reaction">${I.smilePlus}</button>
+            ${Object.keys(p.reactions || {}).length
+              ? `<button class="reaction reaction--add" data-action="react-add" data-id="${id}" aria-label="Add a reaction" title="Add a reaction">${I.smilePlus}</button>`
+              : `<button class="reaction reaction--add reaction--empty" data-action="react-add" data-id="${id}">${I.smilePlus}<span>Add a reaction</span></button>`}
           </div>
         </footer>
       </article>
@@ -539,8 +544,13 @@ function openLightbox(src, alt) {
 
 function reactionChips(p) {
   const me = Store.me().email;
+  const labelFor = (emoji) => (REACTION_SET.find(([e]) => e === emoji) || [, 'this'])[1];
   return Object.entries(p.reactions || {}).map(([emoji, who]) => {
-    const names = who.map((e) => Store.userName(e)).join(', ');
-    return `<button class="reaction ${who.includes(me) ? 'mine' : ''}" data-action="react" data-id="${p.id}" data-emoji="${MD.esc(emoji)}" title="${MD.esc(names)}"><span class="reaction__emoji">${emoji}</span><span class="reaction__n">${who.length}</span></button>`;
+    const mine = who.includes(me);
+    const names = who.map((e) => (e === me ? 'You' : Store.userName(e)));
+    if (mine) names.sort((a, b) => (a === 'You' ? -1 : b === 'You' ? 1 : 0));
+    const listed = names.length > 4 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} others` : names.join(', ');
+    const title = `${listed} reacted with ${labelFor(emoji)}`;
+    return `<button class="reaction ${mine ? 'mine' : ''}" data-action="react" data-id="${p.id}" data-emoji="${MD.esc(emoji)}" title="${MD.esc(title)}" aria-label="${MD.esc(title)}" aria-pressed="${mine}"><span class="reaction__emoji">${MD.esc(emoji)}</span><span class="reaction__n">${who.length}</span></button>`;
   }).join('');
 }

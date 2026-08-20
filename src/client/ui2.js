@@ -76,14 +76,17 @@ function viewEditor() {
       <button class="btn btn--ghost" data-action="ed-cancel">Close</button>
       <button class="btn btn--primary" data-action="ed-save">Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
     )}
-    <div class="editor__tools" role="toolbar" aria-label="Formatting">
-      ${tools.map((t) => t === null ? '<span class="sep"></span>' :
-        `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
-      <span class="spacer"></span>
-      <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
-        ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
-      </label>
+    <div class="editor__toolbar">
+      <div class="editor__tools" role="toolbar" aria-label="Formatting">
+        ${tools.map((t) => t === null ? '<span class="sep"></span>' :
+          `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
+      </div>
+      <div class="editor__toolend">
+        <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
+          ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
+        </label>
+      </div>
     </div>
     ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft — the page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
     <div class="editor__panes">
@@ -266,8 +269,7 @@ function edSave() {
   if (!e.title.trim()) { toast('Every page needs a title.'); $('[data-ed="title"]')?.focus(); return; }
   const clash = Store.pageByTitle(e.title.trim());
   if (clash && clash.id !== e.pageId) { toast(`“${e.title.trim()}” already exists — titles are how pages link, so they have to be unique.`); return; }
-  UI.modal = { kind: 'save-summary' };
-  render();
+  showModal({ kind: 'save-summary' });
 }
 
 function edCommit(summary) {
@@ -277,12 +279,12 @@ function edCommit(summary) {
   if (!e.isNew && !e.staleOverride) {
     const cur = Store.page(e.pageId);
     if (cur && cur.body !== e.origBody) {
-      UI.modal = {
+      const m = {
         kind: 'conflict', pageId: e.pageId,
         text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours — their version stays in History.`,
       };
-      UI.modal.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
-      render();
+      m.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
+      showModal(m);
       return;
     }
   }
@@ -300,6 +302,7 @@ function edCommit(summary) {
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
   toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'Not saved — this browser is out of storage');
   draftStash.delete(e.pageId || 'new');
+  draftDeleted.add(e.pageId || 'new');
   persistDrafts();
   UI.editor = null;
   UI.modal = null;
@@ -454,7 +457,7 @@ function viewAdmin() {
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Add members</h2></div>
-        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets an email with a sign-in link — no codes, access is immediate.</p>
+        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets a welcome email — no codes, access is immediate.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
           ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
@@ -465,11 +468,11 @@ function viewAdmin() {
         <div class="admin-block__head"><h2>Added — awaiting first sign-in</h2><span class="count">${invited.length}</span></div>
         <p class="admin-block__sub">These people have access already — they just haven't signed in yet.</p>
         <div class="roster"><div class="roster__scroll"><table>
-          <thead><tr><th>Added</th><th>When</th><th></th></tr></thead><tbody>
+          <thead><tr><th>Person</th><th>Added</th><th></th></tr></thead><tbody>
           ${invited.map((u) => `<tr>
             <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(u.email)}</span><span><b>${MD.esc(u.email.split('@')[0])}</b><span class="mail">${u.email}</span></span></span></td>
             <td><span class="mono">${relTime(u.invitedAt)} · by ${MD.esc(Store.userName(u.invitedBy).split(' ')[0])}</span></td>
-            <td><span class="actions">
+            <td><span class="actions actions--show">
               <button class="btn btn--sm" data-action="invite-view" data-email="${u.email}">${I.mail} View email</button>
               <button class="btn btn--sm btn--danger" data-action="user-remove" data-email="${u.email}">Remove</button>
             </span></td>
@@ -511,11 +514,13 @@ function welcomeEmailHtml(u) {
       <div class="mailview__row"><span class="k">Subject</span><span><b>You're on the CUPI wiki</b></span></div>
     </div>
     <div class="mailview__body">
+      <div class="mailview__wordmark">CUPI</div>
+      <div class="mailview__eyebrow">Cornell University Physical Intelligence — Internal Wiki</div>
       <img class="mailview__crab" src="${CRAB_URI}" alt="The CUPI crab, on a beach">
       <p>Hi,</p>
-      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the Cornell University Physical Intelligence wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
+      <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the CUPI wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
       <p><a class="mailview__btn" href="https://wiki.cornellphysicalintelligence.com">Open the wiki</a></p>
-      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — access is already set up. If you weren't expecting this, ignore it.</p>
+      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — you're already on the list. If you weren't expecting this, ignore it.</p>
     </div>
   </div>`;
 }
@@ -605,7 +610,7 @@ function viewModal() {
     const thumb = (t) => {
       if (!t.body) return `<div class="tpl__thumb tpl__thumb--blank"><span>Blank page</span></div>`;
       const { html } = MD.render(t.body, mdCtx({ readonly: true }));
-      return `<div class="tpl__thumb"><div class="prose">${html}</div></div>`;
+      return `<div class="tpl__thumb"><div class="prose">${html.replace(/<a /g, '<a tabindex="-1" ')}</div></div>`;
     };
     inner = `<div class="modal modal--wide" role="dialog" aria-label="New page">
       <div class="modal__head"><h3>New page</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
@@ -660,7 +665,7 @@ function viewModal() {
   if (m.kind === 'close-editor') {
     inner = `<div class="modal" role="dialog" aria-label="Unsaved changes">
       <div class="modal__head"><h3>You have unsaved changes</h3></div>
-      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">Keep the draft and it will be waiting the next time you open this page.</p></div>
+      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">Keep the draft and it will be waiting the next time you open this page. Discard throws away everything you wrote in this session.</p></div>
       <div class="modal__foot modal__foot--split">
         <button class="btn btn--ghost" data-action="modal-close">Keep editing</button>
         <span style="flex:1"></span>
@@ -679,6 +684,7 @@ function render() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
   window.__closeMenu?.();
+  document.querySelectorAll('body > .modal-veil').forEach((v) => v.remove());
   killPreview(); // a hover preview must not outlive the page it points into
   const app = $('#app');
   const me = Store.me();
@@ -706,7 +712,12 @@ function render() {
   else if (r.name === 'admin') view = viewAdmin();
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
-  else if (r.name === 'new') { openEditor(null, true, { title: r.params.title || '', section: r.params.section || 'projects' }); view = viewEditor(); }
+  else if (r.name === 'new') {
+    const draft = draftStash.get('new');
+    openEditor(null, true, draft || { title: r.params.title || '', section: r.params.section || 'projects' });
+    if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    view = viewEditor();
+  }
   else view = viewPage('welcome');
 
   app.innerHTML = `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
