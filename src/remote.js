@@ -122,7 +122,7 @@ for (const [name, toOp] of Object.entries(OP_MAP)) {
     const local = orig(emails, role);
     sendOp('addMembers', { emails, role }, (out) => {
       for (const e of out.emailed || []) {
-        if (!e.sent) toast(`${e.email}: added, but the welcome email failed (${e.reason})`);
+        if (!e.sent) toast(`${e.email} is added and can sign in now. Welcome email not sent: ${e.reason}.`);
       }
     });
     return local;
