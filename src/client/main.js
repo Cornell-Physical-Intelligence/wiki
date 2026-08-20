@@ -345,17 +345,6 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); startEdit(null, true); break;
-    case 'email-test': stop(); {
-      if (typeof REMOTE === 'undefined') { toast('Preview build — emails only send from the live wiki'); break; }
-      el.disabled = true;
-      try {
-        const out = await api('/test-email', { method: 'POST', body: JSON.stringify({}) });
-        toast(out.sent ? `Test sent to ${Store.me().email} — check your inbox` : `Not sent — ${out.reason || 'unknown reason'}`);
-      } catch (e) { toast(`Not sent — ${e.message}`); }
-      el.disabled = false;
-      break;
-    }
-
     case 'help-menu': stop(); openMenu([
       { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
       { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },
