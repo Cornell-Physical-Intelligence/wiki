@@ -318,15 +318,15 @@ function viewPage(id) {
           <div class="page-head__byline">
             <span class="who"><span class="avatar" style="width:20px;height:20px;font-size:9px">${Store.initials(p.owner)}</span> ${MD.esc(Store.userName(p.owner))}</span>
             <button class="page-head__info ${infoOpen ? 'active' : ''}" data-action="page-info" data-id="${id}" aria-label="Page details" aria-expanded="${infoOpen}" title="Page details">${I.info}</button>
-            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft"><span class="dot dot--accent"></span>Unsaved draft · Resume</button>` : ''}
-          </div>
-          ${infoOpen ? `<div class="page-head__meta">
+            ${infoOpen ? `<span class="page-head__meta">
             <span>created ${relTime(p.created)}</span>
             <span>last edit ${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span>
             <span>${p.revs.length} revision${p.revs.length === 1 ? '' : 's'}</span>
             <span>${Math.max(1, Math.round(MD.mdToText(p.body).split(/\s+/).length / 220))} min read</span>
             ${(() => { const { total, done } = MD.countTasks(p.body); if (!total) return ''; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
-          </div>` : ''}
+          </span>` : ''}
+            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft"><span class="dot dot--accent"></span>Unsaved draft · Resume</button>` : ''}
+          </div>
         </header>
         <div class="prose" data-page="${id}">${html}</div>
         <footer class="page-foot">
