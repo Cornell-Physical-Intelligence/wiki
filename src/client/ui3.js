@@ -45,20 +45,13 @@ Object.assign(Store, {
     return Store.createPage({ title, section: p.section, parent: p.parent, body: p.body, tags: [...p.tags] });
   },
 
-  movePage(id, { section, parent }) {
+  movePage(id, { section }) {
     const p = Store.page(id);
     if (!p) return;
-    p.section = section;
-    p.parent = parent || null;
+    p.section = String(section || p.section);
+    p.parent = null;
     Store.persist();
     Store.reindex();
-  },
-
-  pagesByTag(tag) { return Store.s.pages.filter((p) => p.tags?.includes(tag)); },
-  allTags() {
-    const m = new Map();
-    for (const p of Store.s.pages) for (const t of p.tags || []) m.set(t, (m.get(t) || 0) + 1);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
   },
 
   health() {
@@ -150,21 +143,6 @@ function viewHealth() {
   </div></div></div>`;
 }
 
-/* --------------------------- tag view ------------------------------------- */
-
-function viewTag(tag) {
-  const pages = Store.pagesByTag(tag);
-  const all = Store.allTags();
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">#${MD.esc(tag)}</span>`) + `
-  <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><span class="eyebrow">Tag</span><h1>#${MD.esc(tag)}</h1>
-    <p>${all.map(([t, n]) => `<a href="#/tag/${encodeURIComponent(t)}" class="chip" style="text-decoration:none;margin-right:6px;${t === tag ? 'border-color:var(--fg);color:var(--fg)' : ''}">${MD.esc(t)} · ${n}</a>`).join('')}</p></div>
-    <div class="cardlist">
-      ${pages.map((p) => `<a class="pagecard" href="#/page/${p.id}"><b>${MD.esc(p.title)}</b><span class="snip">${MD.esc(MD.mdToText(p.body).slice(0, 130))}</span><span class="meta">${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span></a>`).join('')}
-    </div>
-  </div></div></div>`;
-}
-
 /* --------------------------- hover previews ------------------------------- */
 
 let previewPop = null, previewTmr = null;
@@ -244,15 +222,10 @@ function viewExtraModal(m) {
   }
   if (m.kind === 'move') {
     const p = Store.page(m.id);
-    // Any page can be a parent — except this page and its own descendants.
-    const isDescendant = (q) => { let x = q; while (x) { if (x.id === m.id) return true; x = x.parent ? Store.page(x.parent) : null; } return false; };
-    const parents = [...Store.s.pages].filter((q) => !isDescendant(q)).sort((a, b) => a.title.localeCompare(b.title));
     return `<div class="modal" role="dialog" aria-label="Move page">
       <div class="modal__head"><h3>Move “${MD.esc(p.title)}”</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
-        <label>Section<select class="select" data-m="section">${SECTIONS.map((s) => `<option value="${s.id}" ${s.id === p.section ? 'selected' : ''}>${s.name}</option>`).join('')}</select></label>
-        <label>Nest under <span class="sub">Optional — makes this a subpage.</span>
-        <select class="select" data-m="parent"><option value="">— top level —</option>${parents.map((q) => `<option value="${q.id}" ${q.id === p.parent ? 'selected' : ''}>${MD.esc(q.title)}</option>`).join('')}</select></label>
+        <label>Section${ddSections(p.section)}</label>
       </div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="move-go" data-id="${m.id}">Move</button></div>
     </div>`;

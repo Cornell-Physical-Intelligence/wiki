@@ -37,6 +37,7 @@ const I = {
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12z"/></svg>',
   image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17.5l5-4.5 4 3.5 3.5-3 3.5 3"/></svg>',
   paperclip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 11.5l-8.2 8.2a5.2 5.2 0 01-7.4-7.4l8.6-8.6a3.5 3.5 0 015 5l-8.3 8.2a1.8 1.8 0 01-2.5-2.5L14.5 7"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2.8l7.5 3v6c0 4.6-3 8.3-7.5 9.7-4.5-1.4-7.5-5.1-7.5-9.7v-6z"/><path d="M8.8 12l2.2 2.2 4.2-4.2"/></svg>',
 };
 
@@ -151,28 +152,16 @@ function viewChooser() {
 
 /* ------------------------------- shell ----------------------------------- */
 
-// True when `id` is `cur` or an ancestor of it — those branches stay open.
-function onPathTo(id, cur) {
-  let p = cur && Store.page(cur);
-  while (p) {
-    if (p.id === id) return true;
-    p = p.parent ? Store.page(p.parent) : null;
-  }
-  return false;
-}
-
-function treeItem(p, cur, prefs, depth) {
-  const kids = Store.childrenOf(p.id);
+// Flat by design: one row per page, grouped by section. Nesting was tried
+// and removed — it hid pages and confused navigation.
+function treeRow(p, cur, prefs) {
   // The Home navlink already marks Welcome; don't double-highlight it here.
   const active = p.id === cur && cur !== 'welcome';
-  const isCollapsed = kids.length && !onPathTo(p.id, cur) && !prefs['open-' + p.id];
-  return `<div class="tree-item ${isCollapsed ? 'collapsed' : ''}">
-    <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}" style="${depth ? `padding-left:${8 + depth * 18}px` : ''}">
-      ${kids.length ? `<button class="tree-item__toggle" data-action="node-toggle" data-id="${p.id}" aria-label="Toggle children"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>` : '<span class="tree-item__spacer"></span>'}
+  return `<div class="tree-item">
+    <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}">
       <span class="tree-item__label">${MD.esc(p.title)}</span>
       ${prefs.starred.includes(p.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
     </a>
-    ${kids.length ? `<div class="tree-item__kids">${kids.map((k) => treeItem(k, cur, prefs, depth + 1)).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -188,7 +177,7 @@ function sectionTree(sec) {
       <span class="tree-section__add" data-action="new-page" data-sec="${sec.id}" role="button" aria-label="New page in ${sec.name}" title="New page in ${sec.name}">${I.plus}</span>
     </button>
     <div class="tree-section__body">
-      ${pages.map((p) => treeItem(p, cur, prefs, 0)).join('')}
+      ${pages.map((p) => treeRow(p, cur, prefs)).join('')}
     </div>
   </div>`;
 }
@@ -200,7 +189,7 @@ function viewSidebar() {
   const r = UI.route;
   return `<aside class="sidebar">
     <div class="sidebar__head">
-      <a class="sidebar__brand" href="#/page/welcome">CUPI <span>Wiki</span></a>
+      <a class="sidebar__brand" href="#/page/welcome"><img class="sidebar__logo" src="${CUPI_LOGO}" alt="" draggable="false">CUPI <span>Wiki</span></a>
     </div>
     <button class="sidebar__search" data-action="palette">
       ${I.search} <span>Search…</span> <span class="kbd">⌘K</span>
@@ -214,7 +203,7 @@ function viewSidebar() {
     </nav>
     <div class="sidebar__scroll">
       ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body">
-        ${starred.map((p) => `<div class="tree-item"><a class="tree-item__row ${p.id === r.params.id ? 'active' : ''}" href="#/page/${p.id}"><span class="tree-item__spacer"></span><span class="tree-item__label">${MD.esc(p.title)}</span><span class="tree-item__star">${I.starFill}</span></a></div>`).join('')}
+        ${starred.map((p) => `<div class="tree-item"><a class="tree-item__row ${p.id === r.params.id ? 'active' : ''}" href="#/page/${p.id}"><span class="tree-item__label">${MD.esc(p.title)}</span><span class="tree-item__star">${I.starFill}</span></a></div>`).join('')}
       </div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
     </div>
@@ -241,10 +230,8 @@ function topbar(crumbHtml, right) {
 
 function crumbsFor(p) {
   const sec = SECTIONS.find((s) => s.id === p.section);
-  const parent = p.parent && Store.page(p.parent);
   return `<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span>` +
     (sec ? `<a href="#/section/${sec.id}">${sec.name}</a><span class="crumbs__sep">/</span>` : '') +
-    (parent ? `<a href="#/page/${parent.id}">${MD.esc(parent.title)}</a><span class="crumbs__sep">/</span>` : '') +
     `<span class="crumbs__here">${MD.esc(p.title)}</span>`;
 }
 
@@ -256,35 +243,34 @@ function viewPage(id) {
   const starred = Store.prefs().starred.includes(id);
   const backlinks = Store.backlinks(id);
   const comments = Store.comments(id);
-  const kids = Store.childrenOf(id);
   const me = Store.me();
+  const infoOpen = UI.pageInfo === id;
 
   const right = `
-    <span class="topbar__meta">updated ${relTime(p.updated)}</span>
     <button class="icon-btn ${starred ? 'active' : ''}" data-action="star" data-id="${id}" aria-label="${starred ? 'Unstar' : 'Star'} page" title="${starred ? 'Unstar' : 'Star'}">${starred ? I.starFill : I.star}</button>
     <a class="icon-btn" href="#/history/${id}" aria-label="Page history" title="History">${I.history}</a>
-    <button class="btn" data-action="edit" data-id="${id}">${I.edit} Edit <span class="kbd" style="border:none;color:inherit;opacity:.55;padding:0">E</span></button>
-    <button class="icon-btn" data-action="page-menu" data-id="${id}" aria-label="Page options">${I.dots}</button>`;
+    <button class="icon-btn" data-action="page-menu" data-id="${id}" aria-label="Page options" title="Page options">${I.dots}</button>`;
 
   return topbar(crumbsFor(p), right) + `
   <div class="content" data-toc-root>
     <div class="page-wrap">
       <article class="page-col">
         <header class="page-head">
-          <div class="page-head__eyebrow"><span class="eyebrow">${SECTIONS.find((s) => s.id === p.section)?.name || ''}</span>
-          ${p.tags.map((t) => `<a class="chip" href="#/tag/${encodeURIComponent(t)}" style="text-decoration:none">${MD.esc(t)}</a>`).join('')}</div>
-          <h1>${MD.esc(p.title)}</h1>
-          <div class="page-head__meta">
+          <div class="page-head__eyebrow"><span class="eyebrow">${SECTIONS.find((s) => s.id === p.section)?.name || ''}</span></div>
+          <div class="page-head__titlerow">
+            <h1>${MD.esc(p.title)}</h1>
+            <button class="icon-btn page-head__info ${infoOpen ? 'active' : ''}" data-action="page-info" data-id="${id}" aria-label="Page details" aria-expanded="${infoOpen}" title="Page details">${I.help}</button>
+          </div>
+          ${infoOpen ? `<div class="page-head__meta">
             <span class="who"><span class="avatar" style="width:18px;height:18px;font-size:8px">${Store.initials(p.owner)}</span> ${MD.esc(Store.userName(p.owner))}</span>
             <span>created ${relTime(p.created)}</span>
             <span>last edit ${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span>
             <span>${p.revs.length} revision${p.revs.length === 1 ? '' : 's'}</span>
             <span>${Math.max(1, Math.round(MD.mdToText(p.body).split(/\s+/).length / 220))} min read</span>
             ${(() => { const { total, done } = MD.countTasks(p.body); if (!total) return ''; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
-          </div>
+          </div>` : ''}
         </header>
         <div class="prose" data-page="${id}">${html}</div>
-        ${kids.length ? `<div class="page-foot" style="border-top:none;padding-top:0;margin-top:34px"><div class="backlinks"><span class="eyebrow">Subpages</span><div class="backlinks__list">${kids.map((k) => `<a class="backlink" href="#/page/${k.id}">${I.page} ${MD.esc(k.title)}</a>`).join('')}</div></div></div>` : ''}
         <footer class="page-foot">
           ${backlinks.length ? `<div class="backlinks"><span class="eyebrow">Linked from</span><div class="backlinks__list">
             ${backlinks.map((b) => `<a class="backlink" href="#/page/${b.id}">${I.link} ${MD.esc(b.title)}</a>`).join('')}

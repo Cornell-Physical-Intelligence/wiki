@@ -4,6 +4,20 @@
 
 'use strict';
 
+/* ------------------------------- custom dropdown -------------------------- */
+
+// Global rule: no native <select> anywhere — every dropdown uses this control,
+// which opens the app's own styled menu instead of the OS picker.
+function dd(mName, options, value, opts = {}) {
+  const cur = options.find((o) => o.value === value) || options[0];
+  return `<button type="button" class="dd ${opts.small ? 'dd--sm' : ''}" data-action="dd" data-m="${mName}"
+    data-value="${MD.esc(cur.value)}" data-opts="${MD.esc(JSON.stringify(options))}" ${opts.style ? `style="${opts.style}"` : ''}
+    aria-haspopup="menu"><span class="dd__label">${MD.esc(cur.label)}</span>
+    <svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg></button>`;
+}
+
+const ddSections = (value) => dd('section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), value);
+
 /* ------------------------------- editor ---------------------------------- */
 
 function openEditor(pageId, isNew, draft) {
@@ -14,7 +28,6 @@ function openEditor(pageId, isNew, draft) {
     body: draft?.body ?? p?.body ?? '',
     section: draft?.section ?? p?.section ?? 'projects',
     parent: p?.parent ?? draft?.parent ?? null,
-    tags: draft?.tags ?? (p?.tags ? [...p.tags] : []),
     mode: Store.prefs().editorMode || 'split',
     dirty: false,
     origTitle: p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
@@ -58,13 +71,8 @@ function viewEditor() {
       ${tools.map((t) => t === null ? '<span class="sep"></span>' :
         `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       <span class="spacer"></span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Tags
-        <input class="text-input" data-ed-tags style="height:26px;width:150px;font-size:12px" value="${MD.esc(e.tags.join(', '))}" placeholder="comma, separated" aria-label="Tags">
-      </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
-        <select class="select" data-action="ed-section" style="height:26px;width:auto;font-size:12px">
-          ${SECTIONS.map((s) => `<option value="${s.id}" ${s.id === e.section ? 'selected' : ''}>${s.name}</option>`).join('')}
-        </select>
+        ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
       </label>
     </div>
     <div class="editor__panes">
@@ -198,14 +206,14 @@ function edCommit(summary) {
   }
   let p;
   if (e.isNew) {
-    p = Store.createPage({ title: e.title.trim(), section: e.section, parent: e.parent, body: e.body, tags: e.tags, summary });
+    p = Store.createPage({ title: e.title.trim(), section: e.section, parent: e.parent, body: e.body, summary });
   } else if (!Store.page(e.pageId)) {
     // The page was trashed by someone else while this editor was open —
     // the work is saved as a fresh page instead of vanishing.
-    p = Store.createPage({ title: e.title.trim(), section: e.section, body: e.body, tags: e.tags, summary });
+    p = Store.createPage({ title: e.title.trim(), section: e.section, body: e.body, summary });
     toast('The original was deleted while you edited — saved as a new page');
   } else {
-    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, tags: e.tags, summary });
+    p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary });
   }
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
   toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'NOT saved — storage is full');
@@ -341,7 +349,7 @@ function viewAdmin() {
         <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets an invite email with their code.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
-          <select class="select" name="role" style="width:120px" aria-label="Role for new members"><option value="member">Member</option><option value="admin">Admin</option></select>
+          ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
           <button class="btn btn--primary" type="submit">${I.send} Send invites</button>
         </form>
       </section>
@@ -485,15 +493,20 @@ function viewModal() {
   if (!m) return '';
   let inner = '';
   if (m.kind === 'new-page') {
-    inner = `<div class="modal" role="dialog" aria-label="New page">
+    // Each template card shows a live-rendered snapshot of the template itself,
+    // so you see the structure you're choosing, not just its name.
+    const thumb = (t) => {
+      if (!t.body) return `<div class="tpl__thumb tpl__thumb--blank"><span>Empty page</span></div>`;
+      const { html } = MD.render(t.body, mdCtx({ readonly: true }));
+      return `<div class="tpl__thumb"><div class="prose">${html}</div></div>`;
+    };
+    inner = `<div class="modal modal--wide" role="dialog" aria-label="New page">
       <div class="modal__head"><h3>New page</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
         <label>Title<input class="text-input" data-m="title" placeholder="e.g. Landing Gear Study" value="${MD.esc(m.title || '')}" maxlength="90"></label>
-        <label>Section<select class="select" data-m="section">${SECTIONS.map((s) => `<option value="${s.id}" ${s.id === (m.section || 'projects') ? 'selected' : ''}>${s.name}</option>`).join('')}</select></label>
-        <label>Nest under <span class="sub">Optional — makes this a subpage.</span>
-        <select class="select" data-m="parent"><option value="">— top level —</option>${[...Store.s.pages].sort((a, b) => a.title.localeCompare(b.title)).map((q) => `<option value="${q.id}" ${q.id === m.parent ? 'selected' : ''}>${MD.esc(q.title)}</option>`).join('')}</select></label>
+        <label>Section${ddSections(m.section || 'projects')}</label>
         <label>Template<span class="sub">Start from a structure the team already uses.</span></label>
-        <div class="tpl-grid">${TEMPLATES.map((t) => `<button class="tpl ${(m.tpl || 'blank') === t.id ? 'sel' : ''}" data-action="tpl-pick" data-tpl="${t.id}"><b>${t.name}</b><span>${t.desc}</span></button>`).join('')}</div>
+        <div class="tpl-grid">${TEMPLATES.map((t) => `<button class="tpl ${(m.tpl || 'blank') === t.id ? 'sel' : ''}" data-action="tpl-pick" data-tpl="${t.id}" aria-label="${MD.esc(t.name)}">${thumb(t)}<b>${t.name}</b></button>`).join('')}</div>
         ${m.error ? `<span class="field-error">${MD.esc(m.error)}</span>` : ''}
       </div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="new-page-go">Create &amp; edit</button></div>
@@ -542,6 +555,8 @@ function render() {
 
   // Re-renders of the same route (checkbox ticks, comments, stars) must not
   // throw the reader back to the top of the page.
+  const prevSidebar = $('.sidebar__scroll');
+  const sidebarScroll = prevSidebar ? prevSidebar.scrollTop : 0;
   const prevContent = $('.content');
   const keepScroll = prevContent && UI._lastRouteKey === r.name + '/' + (r.params.id || '');
   const scrollTop = keepScroll ? prevContent.scrollTop : 0;
@@ -560,7 +575,6 @@ function render() {
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'inbox') view = viewInbox();
   else if (r.name === 'health') view = viewHealth();
-  else if (r.name === 'tag') view = viewTag(decodeURIComponent(r.params.id || ''));
   else if (r.name === 'new') { openEditor(null, true, { title: r.params.title || '', section: r.params.section || 'projects' }); view = viewEditor(); }
   else view = viewPage('welcome');
 
@@ -571,6 +585,7 @@ function render() {
   </div>${viewPalette()}${viewModal()}`;
 
   if (keepScroll) { const c = $('.content'); if (c) c.scrollTop = scrollTop; }
+  { const sb = $('.sidebar__scroll'); if (sb) sb.scrollTop = sidebarScroll; }
 
   // Mount hooks.
   $$('.cad-embed').forEach(mountCadViewer);

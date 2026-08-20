@@ -119,7 +119,6 @@ document.addEventListener('click', async (ev) => {
       if (i >= 0) c.splice(i, 1); else c.push(el.dataset.sec);
       Store.persist(); render(); break;
     }
-    case 'node-toggle': stop(); Store.prefs()['open-' + el.dataset.id] = !Store.prefs()['open-' + el.dataset.id]; Store.persist(); render(); break;
     case 'user-menu': stop(); openMenu([
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
@@ -135,6 +134,24 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- page ---- */
     case 'edit': stop(); startEdit(el.dataset.id, false); break;
+    case 'page-info': stop(); UI.pageInfo = UI.pageInfo === el.dataset.id ? null : el.dataset.id; render(); break;
+
+    // The global custom dropdown: opens the app's styled menu, never the OS picker.
+    case 'dd': {
+      stop();
+      const host = el;
+      const options = JSON.parse(host.dataset.opts);
+      openMenu(options.map((o) => ({
+        icon: o.value === host.dataset.value ? I.check : '<span style="width:14px;flex:none"></span>',
+        label: o.label,
+        run: () => {
+          host.dataset.value = o.value;
+          host.querySelector('.dd__label').textContent = o.label;
+          if (host.dataset.m === 'ed-section' && UI.editor) { UI.editor.section = o.value; markDirty(); autosaveDraft(); }
+        },
+      })), host);
+      break;
+    }
     case 'star': stop(); { const on = Store.toggleStar(el.dataset.id); toast(on ? 'Starred' : 'Unstarred'); render(); } break;
     case 'page-menu': {
       stop();
@@ -170,17 +187,17 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, tpl: 'blank' }; render(); break;
-    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; UI.modal.title = $('.modal [data-m="title"]')?.value || UI.modal.title; UI.modal.section = $('.modal [data-m="section"]')?.value || UI.modal.section; UI.modal.parent = $('.modal [data-m="parent"]')?.value || ''; render(); break;
+    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; UI.modal.title = $('.modal [data-m="title"]')?.value || UI.modal.title; UI.modal.section = $('.modal [data-m="section"]')?.dataset.value || UI.modal.section; render(); break;
     case 'new-page-go': {
       stop();
       const title = ($('.modal [data-m="title"]')?.value || '').trim();
-      const section = $('.modal [data-m="section"]')?.value || 'projects';
-      const parent = $('.modal [data-m="parent"]')?.value || null;
+      const section = $('.modal [data-m="section"]')?.dataset.value || 'projects';
+      
       if (!title) { UI.modal.error = 'Every page needs a title.'; render(); break; }
       if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they're unique.`; render(); break; }
       const tpl = TEMPLATES.find((t) => t.id === (UI.modal.tpl || 'blank'));
       UI.modal = null;
-      openEditor(null, true, { title, body: tpl.body, section, parent });
+      openEditor(null, true, { title, body: tpl.body, section });
       UI.editor.dirty = true;
       render();
       break;
@@ -237,7 +254,7 @@ document.addEventListener('click', async (ev) => {
 
     case 'move-go': {
       stop();
-      Store.movePage(el.dataset.id, { section: $('.modal [data-m="section"]').value, parent: $('.modal [data-m="parent"]').value || null });
+      Store.movePage(el.dataset.id, { section: $('.modal [data-m="section"]').dataset.value });
       UI.modal = null;
       render(); toast('Moved');
       break;
@@ -278,7 +295,7 @@ document.addEventListener('submit', (ev) => {
   if (act === 'invite-form') {
     const emails = form.emails.value.split(/[\s,;]+/).filter(Boolean);
     if (!emails.length) return;
-    const results = Store.addMembers(emails, form.role.value);
+    const results = Store.addMembers(emails, form.querySelector('[data-m="invite-role"]')?.dataset.value || 'member');
     const ok = results.filter((r) => r.ok);
     const bad = results.filter((r) => !r.ok);
     render();
@@ -318,11 +335,6 @@ document.addEventListener('input', (ev) => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(edUpdatePreview, 160);
   }
-  if (t.matches('[data-ed-tags]')) {
-    UI.editor.tags = t.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8);
-    markDirty();
-    autosaveDraft();
-  }
 });
 
 document.addEventListener('change', (ev) => {
@@ -331,10 +343,6 @@ document.addEventListener('change', (ev) => {
     const pageId = t.closest('[data-page]')?.dataset.page;
     if (pageId) { Store.toggleTask(pageId, +t.dataset.task); render(); }
     return;
-  }
-  if (t.matches('[data-action="ed-section"] , select[data-action="ed-section"]') || (UI.editor && t.closest('.editor__tools') && t.tagName === 'SELECT')) {
-    UI.editor.section = t.value;
-    markDirty();
   }
   if (t.matches('[data-ed-file]')) {
     edHandleFiles([...t.files]);

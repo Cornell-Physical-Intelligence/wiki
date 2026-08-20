@@ -189,7 +189,7 @@ const Store = {
   },
 
   childrenOf: (id) => Store.s.pages.filter((p) => p.parent === id).sort((a, b) => a.order - b.order),
-  inSection: (sec) => Store.s.pages.filter((p) => p.section === sec && !p.parent).sort((a, b) => a.order - b.order),
+  inSection: (sec) => Store.s.pages.filter((p) => p.section === sec).sort((a, b) => a.order - b.order),
 
   /* --------------------------- auth -------------------------------------- */
 
@@ -541,7 +541,6 @@ const Store = {
         if (title === t) hit += 120;
         else if (title.startsWith(t)) hit += 60;
         else if (title.includes(t)) hit += 40;
-        if (p.tags?.some((g) => g.includes(t))) hit += 20;
         const n = text.split(t).length - 1;
         if (n) hit += Math.min(24, 8 + n * 2);
         if (!hit) { allHit = false; break; }

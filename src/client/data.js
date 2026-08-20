@@ -148,6 +148,7 @@ function buildBracketStl() {
 }
 
 const SEED_ATTACHMENTS = [
+  { id: 'att-crab', name: 'crab-on-beach.webp', type: 'image/webp', dataUri: CRAB_URI, by: 'ab3233@cornell.edu', ts: ago(180) },
   { id: 'att-pdb-tree',  name: 'pdb-rev-d-power-tree.svg',   type: 'image/svg+xml', dataUri: PDB_SVG,    by: 'js2801@cornell.edu', ts: ago(6) },
   { id: 'att-leg-geom',  name: 'leg-3dof-geometry.svg',      type: 'image/svg+xml', dataUri: LEG_SVG,    by: 'am3644@cornell.edu', ts: ago(12) },
   { id: 'att-pinout',    name: 'sensor-bus-jst-gh-pinout.svg', type: 'image/svg+xml', dataUri: PINOUT_SVG, by: 'js2801@cornell.edu', ts: ago(20) },
@@ -170,6 +171,8 @@ page({
   owner: 'ab3233@cornell.edu', created: ago(180), updated: ago(0, 5), updatedBy: 'ab3233@cornell.edu',
   tags: ['start-here'],
   body: `This is CUPI's internal knowledge base. Everything we learn the hard way — CAD conventions, board bring-up rituals, flight test procedure, who to email about lab access — gets written down here so the next person doesn't have to relearn it.
+
+![Crab on the beach](att:att-crab "The apply-page crab. Physical intelligence, demonstrated.")
 
 ::: tip Write it down
 If you explain something in Slack twice, it belongs on a wiki page. Press **N** anywhere (or the + next to a section name) and pick a template.
@@ -318,7 +321,7 @@ Write the next one with **N → Decision record**. Keep the *Options considered*
 page({
   id: 'adr-onshape', section: 'getting-started', title: 'ADR: Onshape over SolidWorks',
   owner: 'am3644@cornell.edu', created: ago(175), updated: ago(175), updatedBy: 'am3644@cornell.edu',
-  parent: 'decisions', tags: ['decision'],
+  tags: ['decision'],
   body: `**Status:** Adopted · **Deciders:** Alan, Ollie, Andre · **Date:** 2026-02-11
 
 ## Context
@@ -668,7 +671,6 @@ Carbon-filled filament needs the hardened nozzle — it's the one marked with re
 page({
   id: 'leg-design', section: 'mechanical', title: 'Hexapod Leg Design',
   owner: 'am3644@cornell.edu', created: ago(100), updated: ago(2, 7), updatedBy: 'am3644@cornell.edu',
-  parent: 'hexapod',
   tags: ['design-doc'],
   body: `Design record for the 3-DOF leg: geometry, load cases, materials, and what broke. Kinematic constants here are the source of truth — the gait engine imports them by name.
 
@@ -799,7 +801,6 @@ Rev B of the sensor board shipped with UART TX→TX because the reviewer "knew i
 page({
   id: 'pdb', section: 'electrical', title: 'Power Distribution Board',
   owner: 'js2801@cornell.edu', created: ago(95), updated: ago(0, 8), updatedBy: 'js2801@cornell.edu',
-  parent: 'hexapod',
   tags: ['board'],
   body: `PDB rev D: the [[Hexapod]]'s power backbone — 6S in, three regulated rails out, per-rail fusing and INA226 telemetry on everything.
 
@@ -1018,7 +1019,6 @@ Older semesters get archived into a subpage per semester once the table gets lon
 page({
   id: 'meeting-2026-08-14', section: 'operations', title: 'General Meeting — 2026-08-14',
   owner: 'ab3233@cornell.edu', created: ago(5, 2), updated: ago(4, 22), updatedBy: 'ab3233@cornell.edu',
-  parent: 'meeting-notes',
   tags: ['meeting'],
   body: `**Attending:** Andre, Nicholas, Jonathan, Mic, Alan, Ollie, James, Nick L, Josh · **Notes:** Andre
 
