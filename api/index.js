@@ -4,7 +4,7 @@
 import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts } from '../lib/db.js';
 import { applyOp } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
-import { sendInvite } from '../lib/email.js';
+import { sendWelcome } from '../lib/email.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -47,13 +47,10 @@ const redirect = (res, to, cookies = []) => {
   res.end();
 };
 
-// What each member is allowed to see: invite codes are admin-only,
-// other people's prefs are nobody's business.
+// What each member is allowed to see: other people's prefs are nobody's business.
 function shapeState(state, me) {
-  const admin = me?.role === 'admin';
   return {
     ...state,
-    users: state.users.map((u) => admin ? u : { ...u, inviteCode: undefined }),
     prefs: me ? { [me.email]: state.prefs?.[me.email] || {} } : {},
   };
 }
@@ -78,7 +75,8 @@ export default async function handler(req, res) {
       const u = state.users.find((x) => x.email === id.email);
       if (!u) return redirect(res, '/?denied=' + encodeURIComponent(id.email));
       if (u.status === 'invited') {
-        // OAuth proves ownership of the invited address — activate directly.
+        // Being on the roster is the whole gate: OAuth proves the address,
+        // so the first sign-in activates the account.
         await updateState((s) => {
           const v = s.users.find((x) => x.email === id.email);
           if (v && v.status === 'invited') {
@@ -105,22 +103,6 @@ export default async function handler(req, res) {
       return json(res, 200, { email: me.email, name: me.name, role: me.role });
     }
 
-    if (path === '/redeem' && req.method === 'POST') {
-      const body = await readJson(req, 4096);
-      const code = String(body.code || '').trim().toUpperCase();
-      let activated = null;
-      await updateState((s) => {
-        const u = s.users.find((x) => x.status === 'invited' && x.inviteCode === code);
-        if (!u) return false;
-        u.status = 'active'; u.joined = Date.now(); delete u.inviteCode;
-        s.activity.unshift({ ts: Date.now(), by: u.email, kind: 'join' });
-        activated = u.email;
-        return s;
-      });
-      if (!activated) return json(res, 400, { error: 'That code doesn’t match any pending invite.' });
-      return json(res, 200, { ok: true }, { 'set-cookie': sessionCookie(makeSession(activated)) });
-    }
-
     // Everything below requires a signed-in, active member.
     if (!me) return json(res, 401, { error: 'Not signed in' });
 
@@ -145,17 +127,14 @@ export default async function handler(req, res) {
       });
       if (opError) return json(res, 400, { error: opError, version: out.version });
 
-      // Invites: send the emails after the state is durably written.
+      // Welcome emails go out after the state is durably written — access
+      // exists either way, the email is just the pointer.
       let emailed = [];
       if (op === 'addMembers' && Array.isArray(opResult)) {
         for (const r of opResult.filter((x) => x.ok)) {
-          const sent = await sendInvite({ to: r.email, code: r.code, invitedByName: me.name, host: req.headers.host });
+          const sent = await sendWelcome({ to: r.email, addedByName: me.name, host: req.headers.host });
           emailed.push({ email: r.email, ...sent });
         }
-      }
-      if (op === 'resendInvite' && opResult?.code) {
-        const sent = await sendInvite({ to: opResult.email, code: opResult.code, invitedByName: me.name, host: req.headers.host });
-        emailed.push({ email: opResult.email, ...sent });
       }
 
       // Purges orphan attachments: sweep anything no live or trashed body references.

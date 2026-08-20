@@ -37,6 +37,7 @@ function openEditor(pageId, isNew, draft) {
 
 function viewEditor() {
   const e = UI.editor;
+  if (innerWidth <= 900 && e.mode === 'split') e.mode = 'write';
   // Standard document-editor toolbar, drawn from Lucide — the same visual
   // vocabulary as Notion/Obsidian-class editors.
   const T = (tool, icon, label) => [tool, lucide(icon), label];
@@ -60,19 +61,20 @@ function viewEditor() {
     T('hr', 'hr', 'Divider'),
     null,
     T('wikilink', 'wikilink', 'Link a page — [['),
+    T('mdlink', 'link2', 'Link a URL — ⌘K'),
     T('image', 'image', 'Insert image'),
     T('attach', 'attach', 'Attach file (CAD, PDF, anything)'),
   ];
   return `<div class="editor mode-${e.mode}">
     ${topbar(
-      `<span class="crumbs__here">${e.isNew ? 'New page' : 'Editing'}</span>${e.dirty ? '<span class="crumbs__draft"><span class="dot dot--accent"></span>unsaved</span>' : ''}`,
+      `${e.isNew ? '<span class="crumbs__here">New page</span>' : (() => { const p = Store.page(e.pageId); return p ? crumbsFor(p) : '<span class="crumbs__here">Editing</span>'; })()}<span class="crumbs__mode">Editing</span>${e.dirty ? '<span class="crumbs__draft"><span class="dot dot--accent"></span>unsaved</span>' : ''}`,
       `<div class="editor__mode" role="tablist" aria-label="Editor mode">
         <button role="tab" data-action="ed-mode" data-mode="write" class="${e.mode === 'write' ? 'active' : ''}">Write</button>
         <button role="tab" data-action="ed-mode" data-mode="split" class="${e.mode === 'split' ? 'active' : ''}">Split</button>
         <button role="tab" data-action="ed-mode" data-mode="preview" class="${e.mode === 'preview' ? 'active' : ''}">Preview</button>
       </div>
-      <button class="btn btn--ghost" data-action="ed-cancel">Cancel</button>
-      <button class="btn btn--primary" data-action="ed-save">Save ${e.isNew ? 'page' : ''}<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
+      <button class="btn btn--ghost" data-action="ed-cancel">Close</button>
+      <button class="btn btn--primary" data-action="ed-save">Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
     )}
     <div class="editor__tools" role="toolbar" aria-label="Formatting">
       ${tools.map((t) => t === null ? '<span class="sep"></span>' :
@@ -86,6 +88,7 @@ function viewEditor() {
     ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft — the page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
+        <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
         <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90">
         <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="false">${MD.esc(e.body)}</textarea>
       </div>
@@ -260,9 +263,9 @@ function edAcceptAc(title) {
 
 function edSave() {
   const e = UI.editor;
-  if (!e.title.trim()) { toast('Give the page a title first.'); $('[data-ed="title"]')?.focus(); return; }
+  if (!e.title.trim()) { toast('Every page needs a title.'); $('[data-ed="title"]')?.focus(); return; }
   const clash = Store.pageByTitle(e.title.trim());
-  if (clash && clash.id !== e.pageId) { toast(`A page called “${e.title.trim()}” already exists.`); return; }
+  if (clash && clash.id !== e.pageId) { toast(`“${e.title.trim()}” already exists — titles are how pages link, so they have to be unique.`); return; }
   UI.modal = { kind: 'save-summary' };
   render();
 }
@@ -275,9 +278,8 @@ function edCommit(summary) {
     const cur = Store.page(e.pageId);
     if (cur && cur.body !== e.origBody) {
       UI.modal = {
-        kind: 'confirm', title: 'This page changed while you edited',
-        text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours (their version stays in History). Consider copying your changes out first.`,
-        confirm: 'Save mine anyway', danger: true,
+        kind: 'conflict', pageId: e.pageId,
+        text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours — their version stays in History.`,
       };
       UI.modal.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
       render();
@@ -296,7 +298,7 @@ function edCommit(summary) {
     p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary, baseUpdated: e.baseUpdated });
   }
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
-  toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'NOT saved — storage is full');
+  toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'Not saved — this browser is out of storage');
   draftStash.delete(e.pageId || 'new');
   persistDrafts();
   UI.editor = null;
@@ -393,15 +395,11 @@ function activityLine(a) {
   const map = {
     edit: `${who} edited ${pageRef}${a.summary ? ` — ${MD.esc(a.summary)}` : ''}`,
     create: `${who} created ${pageRef}`,
-    comment: `${who} commented on ${pageRef}`,
     delete: `${who} moved ${pageRef} to Trash`,
     restore: `${who} restored ${pageRef}`,
     move: `${who} moved ${pageRef} to another section`,
     purge: `${who} permanently deleted ${pageRef}`,
-    invite: `${who} invited <b>${MD.esc(a.who || '')}</b>`,
-    'invite-resend': `${who} re-sent the invite for <b>${MD.esc(a.who || '')}</b>`,
-    'invite-revoke': `${who} revoked the invite for <b>${MD.esc(a.who || '')}</b>`,
-    mention: `${who} mentioned <b>${MD.esc(Store.userName(a.who || ''))}</b> in a comment on ${pageRef}`,
+    invite: `${who} added <b>${MD.esc(a.who || '')}</b> to the roster`,
     join: `<b>${MD.esc(Store.userName(a.by))}</b> joined the wiki`,
     role: `${who} made <b>${MD.esc(a.who || '')}</b> ${a.role === 'admin' ? 'an admin' : 'a member'}`,
     remove: `${who} removed <b>${MD.esc(a.who || '')}</b> from the roster`,
@@ -440,7 +438,7 @@ function viewAdmin() {
   if (!Store.isAdmin()) {
     return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
     <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
-      ${I.users}<b>Members &amp; access is admin-only</b>
+      ${I.users}<b>Only admins can manage members</b>
       <p>Ask a team lead if you need someone added to the roster.</p>
       <a class="btn" href="#/page/welcome" style="text-decoration:none">Back to the wiki</a>
     </div></div></div></div>`;
@@ -448,33 +446,32 @@ function viewAdmin() {
   const users = Store.s.users;
   const active = users.filter((u) => u.status === 'active');
   const invited = users.filter((u) => u.status === 'invited');
-  const audit = Store.activity().filter((a) => ['invite', 'invite-resend', 'invite-revoke', 'join', 'role', 'remove'].includes(a.kind)).slice(0, 14);
+  const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove'].includes(a.kind)).slice(0, 14);
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
-  <div class="content"><div class="page-wrap"><div class="page-col" style="max-width:880px">
+  <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>
-    <p>Who can sign in. Adding an email sends an invite with a one-time code; sign-in itself is Google OAuth restricted to <b>cornell.edu</b>, so the list below is the whole security model.</p></div>
+    <p>Who can sign in. Sign-in is Google OAuth restricted to <b>cornell.edu</b>, and anyone on this list has access the moment they sign in — so the list below is the whole security model.</p></div>
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Add members</h2></div>
-        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets an invite email with their code.</p>
+        <p class="admin-block__sub">Paste one or more <b>@cornell.edu</b> addresses, comma or space separated. Each gets an email with a sign-in link — no codes, access is immediate.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
           ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
-          <button class="btn btn--primary" type="submit">${I.send} Send invites</button>
+          <button class="btn btn--primary" type="submit">${I.send} Add members</button>
         </form>
       </section>
       ${invited.length ? `<section class="admin-block">
-        <div class="admin-block__head"><h2>Pending invites</h2><span class="count">${invited.length}</span></div>
+        <div class="admin-block__head"><h2>Added — awaiting first sign-in</h2><span class="count">${invited.length}</span></div>
+        <p class="admin-block__sub">These people have access already — they just haven't signed in yet.</p>
         <div class="roster"><div class="roster__scroll"><table>
-          <thead><tr><th>Invited</th><th>Code</th><th>Sent</th><th></th></tr></thead><tbody>
+          <thead><tr><th>Added</th><th>When</th><th></th></tr></thead><tbody>
           ${invited.map((u) => `<tr>
             <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(u.email)}</span><span><b>${MD.esc(u.email.split('@')[0])}</b><span class="mail">${u.email}</span></span></span></td>
-            <td><span class="mono">${u.inviteCode}</span></td>
             <td><span class="mono">${relTime(u.invitedAt)} · by ${MD.esc(Store.userName(u.invitedBy).split(' ')[0])}</span></td>
             <td><span class="actions">
               <button class="btn btn--sm" data-action="invite-view" data-email="${u.email}">${I.mail} View email</button>
-              <button class="btn btn--sm" data-action="invite-resend" data-email="${u.email}">Resend</button>
-              <button class="btn btn--sm btn--danger" data-action="invite-revoke" data-email="${u.email}">Revoke</button>
+              <button class="btn btn--sm btn--danger" data-action="user-remove" data-email="${u.email}">Remove</button>
             </span></td>
           </tr>`).join('')}
           </tbody></table></div></div>
@@ -506,19 +503,19 @@ function viewAdmin() {
   </div></div></div>`;
 }
 
-function inviteEmailHtml(u) {
+function welcomeEmailHtml(u) {
   return `<div class="mailview">
     <div class="mailview__head">
       <div class="mailview__row"><span class="k">From</span><span>CUPI Wiki &lt;wiki@cornellphysicalintelligence.com&gt;</span></div>
       <div class="mailview__row"><span class="k">To</span><span>${u.email}</span></div>
-      <div class="mailview__row"><span class="k">Subject</span><span><b>You're invited to the CUPI wiki</b></span></div>
+      <div class="mailview__row"><span class="k">Subject</span><span><b>You're on the CUPI wiki</b></span></div>
     </div>
     <div class="mailview__body">
+      <img class="mailview__crab" src="${CRAB_URI}" alt="The CUPI crab, on a beach">
       <p>Hi,</p>
       <p><b>${MD.esc(Store.userName(u.invitedBy))}</b> added you to the Cornell University Physical Intelligence wiki — the team's internal knowledge base for CAD, electronics, software, and everything in between.</p>
-      <p>Sign in at <b>wiki.cornellphysicalintelligence.com</b> with this Google account, or enter your invite code:</p>
-      <span class="mailview__code">${u.inviteCode}</span>
-      <p style="color:var(--muted);font-size:13px">The code is one-time and tied to ${u.email}. If you weren't expecting this, ignore it.</p>
+      <p><a class="mailview__btn" href="https://wiki.cornellphysicalintelligence.com">Open the wiki</a></p>
+      <p style="color:var(--muted);font-size:13px">Sign in with your ${u.email} Google account — access is already set up. If you weren't expecting this, ignore it.</p>
     </div>
   </div>`;
 }
@@ -589,7 +586,7 @@ function viewPalette() {
   if (!UI.palette) return '';
   return `<div class="palette-veil" data-action="palette-close">
     <div class="palette" role="dialog" aria-label="Search">
-      <div class="palette__head">${I.search}<input placeholder="Search pages, or type to jump…" value="${MD.esc(UI.palette.q)}" aria-label="Search query"><span class="kbd">esc</span></div>
+      <div class="palette__head">${I.search}<input placeholder="Search every page by title or text…" value="${MD.esc(UI.palette.q)}" aria-label="Search query"><span class="kbd">esc</span></div>
       <div class="palette__list">${paletteListHtml()}</div>
       <div class="palette__foot"><span>↑↓ navigate</span><span>↵ open</span><span>esc close</span></div>
     </div>
@@ -606,7 +603,7 @@ function viewModal() {
     // Each template card shows a live-rendered snapshot of the template itself,
     // so you see the structure you're choosing, not just its name.
     const thumb = (t) => {
-      if (!t.body) return `<div class="tpl__thumb tpl__thumb--blank"><span>Empty page</span></div>`;
+      if (!t.body) return `<div class="tpl__thumb tpl__thumb--blank"><span>Blank page</span></div>`;
       const { html } = MD.render(t.body, mdCtx({ readonly: true }));
       return `<div class="tpl__thumb"><div class="prose">${html}</div></div>`;
     };
@@ -616,7 +613,7 @@ function viewModal() {
         <label>Title<input class="text-input" data-m="title" placeholder="e.g. Landing Gear Study" value="${MD.esc(m.title || '')}" maxlength="90"></label>
         <label>Section${ddSections(m.section || 'projects')}</label>
         <label>Template<span class="sub">Start from a structure the team already uses.</span></label>
-        <div class="tpl-grid">${TEMPLATES.map((t) => `<button class="tpl ${(m.tpl || 'blank') === t.id ? 'sel' : ''}" data-action="tpl-pick" data-tpl="${t.id}" aria-label="${MD.esc(t.name)}">${thumb(t)}<b>${t.name}</b></button>`).join('')}</div>
+        <div class="tpl-grid">${TEMPLATES.map((t) => `<button class="tpl ${(m.tpl || 'blank') === t.id ? 'sel' : ''}" data-action="tpl-pick" data-tpl="${t.id}" aria-label="${MD.esc(t.name)}">${thumb(t)}<b>${t.name}</b><span class="tpl__desc">${MD.esc(t.desc)}</span></button>`).join('')}</div>
         ${m.error ? `<span class="field-error">${MD.esc(m.error)}</span>` : ''}
       </div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="new-page-go">Create &amp; edit</button></div>
@@ -625,26 +622,51 @@ function viewModal() {
     inner = `<div class="modal" role="dialog" aria-label="Save">
       <div class="modal__head"><h3>${UI.editor?.isNew ? 'Create page' : 'Save changes'}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
-        <label>What changed? <span class="sub">One line for the history — future-you will thank you.</span>
+        <label>What changed? <span class="sub">Optional — one line for the history, so anyone can find this change later.</span>
         <input class="text-input" data-m="summary" placeholder="${UI.editor?.isNew ? 'Created page' : 'e.g. Added rev D bring-up results'}" maxlength="120"></label>
       </div>
-      <div class="modal__foot"><button class="btn" data-action="modal-close">Back</button><button class="btn btn--primary" data-action="save-commit">Save</button></div>
+      <div class="modal__foot"><button class="btn" data-action="modal-close">Keep editing</button><button class="btn btn--primary" data-action="save-commit">Save</button></div>
     </div>`;
   } else if (m.kind === 'invite-mail') {
     const u = Store.user(m.email);
-    inner = `<div class="modal modal--wide" role="dialog" aria-label="Invite email">
-      <div class="modal__head"><h3>Invite email — sent</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    inner = `<div class="modal modal--wide" role="dialog" aria-label="Welcome email">
+      <div class="modal__head"><h3>Welcome email — sent</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
-        ${u ? inviteEmailHtml(u) : ''}
-        <p class="admin-block__sub" style="margin:0">In this preview the email is simulated. Production sends it automatically the moment you add the address.</p>
+        ${u ? welcomeEmailHtml(u) : ''}
+        <p class="admin-block__sub" style="margin:0">In this preview the email is simulated. Production sends it automatically the moment you add the address — access works the moment they sign in, email or not.</p>
       </div>
-      <div class="modal__foot"><button class="btn" data-action="copy-code" data-code="${u?.inviteCode || ''}">${I.copy} Copy code</button><button class="btn btn--primary" data-action="modal-close">Done</button></div>
+      <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;
   } else if (m.kind === 'confirm') {
     inner = `<div class="modal" role="dialog" aria-label="Confirm">
       <div class="modal__head"><h3>${MD.esc(m.title)}</h3></div>
       <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">${m.text}</p></div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn ${m.danger ? 'btn--danger' : 'btn--primary'}" data-action="confirm-go">${MD.esc(m.confirm || 'Confirm')}</button></div>
+    </div>`;
+  }
+  if (m.kind === 'conflict') {
+    inner = `<div class="modal" role="dialog" aria-label="Edit conflict">
+      <div class="modal__head"><h3>This page changed while you edited</h3></div>
+      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">${m.text}</p></div>
+      <div class="modal__foot modal__foot--split">
+        <button class="btn" data-action="copy-mine">${I.copy} Copy my text</button>
+        <a class="btn" href="#/history/${m.pageId}" target="_blank" rel="noopener" style="text-decoration:none">See what changed</a>
+        <span style="flex:1"></span>
+        <button class="btn" data-action="modal-close">Cancel</button>
+        <button class="btn btn--danger" data-action="confirm-go">Save mine anyway</button>
+      </div>
+    </div>`;
+  }
+  if (m.kind === 'close-editor') {
+    inner = `<div class="modal" role="dialog" aria-label="Unsaved changes">
+      <div class="modal__head"><h3>You have unsaved changes</h3></div>
+      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">Keep the draft and it will be waiting the next time you open this page.</p></div>
+      <div class="modal__foot modal__foot--split">
+        <button class="btn btn--ghost" data-action="modal-close">Keep editing</button>
+        <span style="flex:1"></span>
+        <button class="btn btn--danger" data-action="editor-discard-close">Discard changes</button>
+        <button class="btn btn--primary" data-action="editor-keep-draft">Keep draft</button>
+      </div>
     </div>`;
   }
   if (!inner) inner = viewExtraModal(m);
@@ -683,7 +705,6 @@ function render() {
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();
   else if (r.name === 'trash') view = viewTrash();
-  else if (r.name === 'inbox') view = viewInbox();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'new') { openEditor(null, true, { title: r.params.title || '', section: r.params.section || 'projects' }); view = viewEditor(); }
   else view = viewPage('welcome');
@@ -693,6 +714,11 @@ function render() {
     <main class="main">${view}</main>
     <div class="shell__scrim" data-action="nav-close"></div>
   </div>${viewPalette()}${viewModal()}`;
+
+  const editorToggled = UI._hadEditor !== !!UI.editor;
+  UI._hadEditor = !!UI.editor;
+  if (UI.editor && editorToggled) $('.editor')?.classList.add('editor-in');
+  else if (!UI.editor && (!keepScroll || editorToggled)) $('.content')?.classList.add('route-in');
 
   if (keepScroll) { const c = $('.content'); if (c) c.scrollTop = scrollTop; }
   { const sb = $('.sidebar__scroll'); if (sb) sb.scrollTop = sidebarScroll; }

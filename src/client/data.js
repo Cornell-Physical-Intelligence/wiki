@@ -24,7 +24,7 @@ const SEED_USERS = [
   { email: 'jc3391@cornell.edu', name: 'James Cenawood',     role: 'member', status: 'active',  subteam: 'Software',    joined: ago(270) },
   { email: 'nl733@cornell.edu',  name: 'Nick Lennon',        role: 'member', status: 'active',  subteam: 'Software',    joined: ago(268) },
   { email: 'jl3105@cornell.edu', name: 'Josh Lennon',        role: 'member', status: 'active',  subteam: 'Software',    joined: ago(268) },
-  { email: 'ck694@cornell.edu',  name: 'Claire Kim',         role: 'member', status: 'invited', subteam: 'Electrical',  joined: null, invitedAt: ago(1, 3), inviteCode: 'CUPI-M3K7-QD2F', invitedBy: 'ab3233@cornell.edu' },
+  { email: 'ck694@cornell.edu',  name: 'Claire Kim',         role: 'member', status: 'invited', subteam: 'Electrical',  joined: null, invitedAt: ago(1, 3), invitedBy: 'ab3233@cornell.edu' },
 ];
 
 /* ----------------------------------------------------------------------------
@@ -170,6 +170,7 @@ page({
   id: 'welcome', section: 'getting-started', title: 'Welcome to the CUPI Wiki',
   owner: 'ab3233@cornell.edu', created: ago(180), updated: ago(0, 5), updatedBy: 'ab3233@cornell.edu',
   tags: ['start-here'],
+  reactions: { '🦀': ['nl482@cornell.edu', 'js2801@cornell.edu', 'am3644@cornell.edu', 'jl3105@cornell.edu'], '👍': ['mr977@cornell.edu'] },
   body: `This is CUPI's internal knowledge base. Everything we learn the hard way — CAD conventions, board bring-up rituals, flight test procedure, who to email about lab access — gets written down here so the next person doesn't have to relearn it.
 
 ![Crab on the beach](att:att-crab "The apply-page crab. Physical intelligence, demonstrated.")
@@ -183,7 +184,7 @@ If you explain something in Slack twice, it belongs on a wiki page. Press **N** 
 
 | Section | What goes there |
 | --- | --- |
-| [[Onboarding Checklist]] | Your first two weeks, accounts, lab access |
+| Getting Started | Your first two weeks: [[Onboarding Checklist]], accounts, lab access |
 | Projects | One page per platform: [[Hexapod]], [[Scout Quadcopter]], [[Modovolo Payload]], [[AI Grand Prix]] |
 | Mechanical | [[CAD Standards (Onshape)]], [[Part Numbering and BOM]], printing and machining |
 | Electrical | [[Altium Workflow and Libraries]], [[Power Distribution Board]], [[Wiring and Connectors]] |
@@ -224,14 +225,14 @@ Don't check boxes here — **duplicate it** (••• menu → Duplicate), rena
 
 ## Lab
 
-- [ ] Complete the Upson shop safety course (required before touching any machine)
+- [ ] Complete the Emerson student shop safety course in Upson (required before touching any machine)
 - [ ] Card access to the lab — submit your ID number via the form pinned in ${'`#general`'}
 - [ ] Read [[Lab Access and Safety]], especially the LiPo charging rules
 
 ## First build weekend
 
 - [ ] Shadow a flight test and read [[Flight Testing Procedure]] first
-- [ ] Print something on the Bambus — [[3D Printing Guide]] covers slicer profiles
+- [ ] Print something on the Bambu X1Cs — [[3D Printing Guide]] covers slicer profiles
 - [ ] Find your project page and add yourself to its roster table
 
 ::: note Leads
@@ -257,7 +258,7 @@ page({
 | --- | --- | --- |
 | Bambu X1C ×3 | None — read [[3D Printing Guide]] | Book on the sheet by the printers |
 | Soldering / rework | Electrical lead walkthrough | Fume extractor on, always |
-| Bandsaw, drill press | Upson shop course | Card access proves completion |
+| Bandsaw, drill press | Emerson shop course | Card access proves completion |
 | CNC router | Course + lead present | Aluminum only with mist coolant |
 
 ## After hours
@@ -274,6 +275,8 @@ page({
   id: 'how-to-wiki', section: 'getting-started', title: 'How to Use This Wiki',
   owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 2), updatedBy: 'ab3233@cornell.edu',
   body: `The wiki is plain Markdown with a few extras built for how a hardware team documents things. Full syntax lives in the **Formatting Guide** (link in the sidebar footer) — this page covers the parts people miss.
+
+**Edit any page** with the **Edit** button at the top right, or press **E** while reading it. Every save is a revision, so edit boldly.
 
 ## Link pages together
 
@@ -293,7 +296,7 @@ Paste an **Onshape** document URL or an **Altium 365** share URL on its own line
 
 ## Templates
 
-**N** opens the new-page dialog: meeting notes, design doc, decision record, BOM, test report, bring-up log. A decision that isn't in a [[Decision Records|decision record]] didn't happen.
+**N** opens the new-page dialog: meeting notes, design doc, decision record, test report, bring-up log, procedure. A decision that isn't in a [[Decision Records|decision record]] didn't happen.
 
 ## History is your safety net
 
@@ -303,7 +306,7 @@ Every save is a revision with a diff, and anything can be restored — edit bold
 page({
   id: 'decisions', section: 'getting-started', title: 'Decision Records',
   owner: 'nl482@cornell.edu', created: ago(120), updated: ago(15), updatedBy: 'jc3391@cornell.edu',
-  body: `One page per irreversible-ish decision, using the decision template. The point is that in a year, someone can find *why* — not relitigate it from vibes.
+  body: `One page per irreversible-ish decision, using the decision template. The point is that in a year, someone can find *why* — not relitigate it from memory.
 
 ## Index
 
@@ -404,7 +407,8 @@ Drag any file into the editor, or paste a screenshot:
 | N | New page |
 | E | Edit the page you're reading |
 | ⌘S / ⌘Enter | Save while editing |
-| ? | Shortcut overlay |
+| ⌘F | Find in the editor |
+| ? | Keyboard shortcuts |
 | Esc | Close anything (drafts are kept) |`,
 });
 
@@ -670,6 +674,7 @@ Carbon-filled filament needs the hardened nozzle — it's the one marked with re
 
 page({
   id: 'leg-design', section: 'mechanical', title: 'Hexapod Leg Design',
+  reactions: { '👍': ['nl733@cornell.edu', 'js2801@cornell.edu'] },
   owner: 'am3644@cornell.edu', created: ago(100), updated: ago(2, 7), updatedBy: 'am3644@cornell.edu',
   tags: ['design-doc'],
   body: `Design record for the 3-DOF leg: geometry, load cases, materials, and what broke. Kinematic constants here are the source of truth — the gait engine imports them by name.
@@ -800,6 +805,7 @@ Rev B of the sensor board shipped with UART TX→TX because the reviewer "knew i
 
 page({
   id: 'pdb', section: 'electrical', title: 'Power Distribution Board',
+  reactions: { '🚀': ['nl482@cornell.edu', 'ab3233@cornell.edu'], '👀': ['am3644@cornell.edu'] },
   owner: 'js2801@cornell.edu', created: ago(95), updated: ago(0, 8), updatedBy: 'js2801@cornell.edu',
   tags: ['board'],
   body: `PDB rev D: the [[Hexapod]]'s power backbone — 6S in, three regulated rails out, per-rail fusing and INA226 telemetry on everything.
@@ -877,7 +883,7 @@ page({
   id: 'bringup', section: 'electrical', title: 'Board Bring-Up Log',
   owner: 'mr977@cornell.edu', created: ago(90), updated: ago(4, 6), updatedBy: 'mr977@cornell.edu',
   tags: ['checklist'],
-  body: `Bring-up is a ritual, not a vibe. Copy this sequence into the board's page per unit; a board without a completed log doesn't get integrated.
+  body: `Bring-up is a ritual, not a judgment call. Copy this sequence into the board's page per unit; a board without a completed log doesn't get integrated.
 
 ## Sequence
 
@@ -1005,7 +1011,7 @@ Sim attempts for [[AI Grand Prix]] follow the same card discipline — the repla
 page({
   id: 'meeting-notes', section: 'operations', title: 'Meeting Notes',
   owner: 'ab3233@cornell.edu', created: ago(120), updated: ago(4, 20), updatedBy: 'ab3233@cornell.edu',
-  body: `General meetings are Thursdays 19:00, Upson 116. Notes are taken live on a subpage of this one — **N → Meeting notes**, nest it here, title it ${'`General Meeting — YYYY-MM-DD`'}.
+  body: `General meetings are Thursdays 19:00, Upson 116. Notes are taken live on a subpage of this one — **N → Meeting notes**, title it ${'`General Meeting — YYYY-MM-DD`'}, and add a row to the table below so it's findable.
 
 ## This semester
 
@@ -1018,6 +1024,7 @@ Older semesters get archived into a subpage per semester once the table gets lon
 
 page({
   id: 'meeting-2026-08-14', section: 'operations', title: 'General Meeting — 2026-08-14',
+  reactions: { '✅': ['nl482@cornell.edu'] },
   owner: 'ab3233@cornell.edu', created: ago(5, 2), updated: ago(4, 22), updatedBy: 'ab3233@cornell.edu',
   tags: ['meeting'],
   body: `**Attending:** Andre, Nicholas, Jonathan, Mic, Alan, Ollie, James, Nick L, Josh · **Notes:** Andre
@@ -1068,26 +1075,12 @@ Sponsor credits (Protolabs, JLC) route the same way — they're still budget, ju
 });
 
 /* ----------------------------------------------------------------------------
-   Comments
-   -------------------------------------------------------------------------- */
-
-const SEED_COMMENTS = [
-  { id: 'c1', pageId: 'pdb', by: 'mr977@cornell.edu', ts: ago(0, 6), text: 'Confirmed the 400 ms stagger on unit #2 as well — cold start clean at 2 °C in the walk-in fridge. Rev E can probably ship with just the bigger fuse.' },
-  { id: 'c2', pageId: 'pdb', by: 'nl482@cornell.edu', ts: ago(0, 4), text: 'Nice. Put the fridge test in the bring-up log table so it survives this comment thread.' },
-  { id: 'c3', pageId: 'leg-design', by: 'nl733@cornell.edu', ts: ago(2, 3), text: 'Gait engine now reads L1/L2/L3 from this page&#39;s constants block — if you rev the geometry, bump the version string too.' },
-  { id: 'c4', pageId: 'ai-grand-prix', by: 'jl3105@cornell.edu', ts: ago(0, 20), text: 'TAU_COMMIT sweep running — 0.35 looks promising on the S-bend. Full replay diff tomorrow.' },
-];
-
-/* ----------------------------------------------------------------------------
    Activity — derived from revisions plus a few reads/uploads for texture.
    -------------------------------------------------------------------------- */
 
 const SEED_ACTIVITY = [
-  { ts: ago(0, 4), by: 'nl482@cornell.edu', kind: 'comment', pageId: 'pdb' },
   { ts: ago(0, 5), by: 'ab3233@cornell.edu', kind: 'edit', pageId: 'welcome', summary: 'Linked the formatting guide' },
-  { ts: ago(0, 6), by: 'mr977@cornell.edu', kind: 'comment', pageId: 'pdb' },
   { ts: ago(0, 8), by: 'js2801@cornell.edu', kind: 'edit', pageId: 'pdb', summary: 'Bring-up results + inrush known issue' },
-  { ts: ago(0, 20), by: 'jl3105@cornell.edu', kind: 'comment', pageId: 'ai-grand-prix' },
   { ts: ago(0, 26), by: 'nl733@cornell.edu', kind: 'edit', pageId: 'ai-grand-prix', summary: 'VQ2: bearings + looming section' },
   { ts: ago(1, 2), by: 'ab3233@cornell.edu', kind: 'edit', pageId: 'how-to-wiki', summary: 'CAD link cards section' },
   { ts: ago(1, 3), by: 'ab3233@cornell.edu', kind: 'invite', who: 'ck694@cornell.edu' },
@@ -1104,12 +1097,17 @@ const SEED_ACTIVITY = [
 
 const TEMPLATES = [
   { id: 'blank', name: 'Blank page', desc: 'Start from nothing', body: '' },
-  { id: 'meeting', name: 'Meeting notes', desc: 'Agenda, notes, actions', body: `**Attending:** · **Notes:**\n\n## Agenda\n\n1. \n\n## Notes\n\n- \n\n## Actions\n\n- [ ] Who — what *(when)*\n` },
-  { id: 'design', name: 'Design doc', desc: 'Intent, CAD/EDA links, tests', body: `One paragraph: what this is and the requirement it answers.\n\n## Design\n\nGeometry / schematic intent. Paste the Onshape or Altium 365 link on its own line:\n\n\n## Test results\n\n| Rev | Test | Result |\n| --- | --- | --- |\n|  |  |  |\n\n## Open\n\n- [ ] \n` },
-  { id: 'decision', name: 'Decision record', desc: 'Context, options, outcome', body: `**Status:** Proposed · **Deciders:** · **Date:** \n\n## Context\n\nWhat forced a decision.\n\n## Options considered\n\n1. **Option A** — pros / cons\n2. **Option B** — pros / cons\n\n## Decision\n\nWhat we chose and the one reason that mattered most.\n\n## Consequences\n\nWhat gets easier, what gets harder.\n` },
-  { id: 'bom', name: 'BOM', desc: 'Parts table with vendors', body: `BOM for . Numbering per [[Part Numbering and BOM]].\n\n| Part | Number | Qty | Vendor | Part no. | Unit | Link |\n| --- | --- | --- | --- | --- | --- | --- |\n|  |  |  |  |  |  |  |\n` },
-  { id: 'test', name: 'Test report', desc: 'Setup, data, verdict', body: `**Date:** · **Who:** · **Unit:** \n\n## Setup\n\nWhat was tested and how. Photos or it didn't happen.\n\n## Data\n\n| Metric | Expected | Measured |\n| --- | --- | --- |\n|  |  |  |\n\n## Verdict\n\nPass / fail and what changes because of it.\n` },
-  { id: 'bringup', name: 'Bring-up log', desc: 'Per-unit board ritual', body: `Board: · follows [[Board Bring-Up Log]].\n\n~~~\nUnit #_ · date · initials\n1 visual:    2 shorts:    3 first power:\n4 rails:     5 comms:     6 load:    7 fw:\n~~~\n` },
+  { id: 'meeting', name: 'Meeting notes', desc: 'Agenda, notes, decisions, actions', body: `**Attending:** · **Scribe:**\n\n## Agenda\n\n1. Topic — who's driving it\n\n## Notes\n\n- **Topic** (who): what was reported or changed, and the page it lands on — link it\n\n## Decisions\n\n- What we chose, one line each. Anything hard to reverse gets its own [[Decision Records|decision record]] instead.\n\n## Actions\n\n- [ ] Who — what *(by when)*\n\n::: tip Before you close the tab\nTitle this page \`General Meeting — YYYY-MM-DD\` and add a row to the table on [[Meeting Notes]] — otherwise nothing links here and it shows up as an orphan.\n\n:::\n` },
+  { id: 'design', name: 'Design doc', desc: 'Requirements, design, tests, BOM', body: `**Part:** CUPI-<PROJ>-<SYS>-<NNN> · **Rev:** A · **Owner:** · **Status:** In design\n\nWhat this is, which platform it serves, and the requirement it answers. If other pages or code read numbers off this page, say so — that's what makes it the source of truth.\n\n## Requirements\n\n- Constraint — the number, and where the number came from\n- Constraint — the number, and where the number came from\n\n## Design\n\nDrag the drawing, sketch or screenshot in here and caption it. Then paste the Onshape or Altium 365 link on its own line so it renders as a live card.\n\nWorst-case sizing math goes in a code block so a reviewer never has to re-derive it. Review: who signed off and when — boards need two reviewers against [[PCB Design Checklist]], one of them a lead.\n\n## Test results\n\n| Rev | Test | Result |\n| --- | --- | --- |\n| *A* | *static load to 2× body mass* | *failed — delaminated at 60%, layer orientation* |\n\n## BOM extract\n\n| Part | Number | Qty | On hand | Vendor | Unit cost |\n| --- | --- | ---: | ---: | --- | ---: |\n|  |  |  |  |  |  |\n\nAn italic table row is an example — replace it. Numbering and the full column set: [[Part Numbering and BOM]].\n\n## Open\n\n- [ ] What's unresolved — owner, and what would close it\n\n::: warn Known issue\nWhat bites you today, the workaround people actually use, and which rev fixes it. Delete this block if nothing does.\n\n:::\n` },
+  { id: 'decision', name: 'Decision record', desc: 'Context, options, outcome', body: `**Status:** Proposed · **Deciders:** · **Date:** YYYY-MM-DD\n\n## Context\n\nWhat forced a decision now — the constraint, the failure, or the rule change. Whoever reads this in a year has none of your memory.\n\n## Options considered\n\n1. **Option A** — what it gets us, and the specific reason it won or lost\n2. **Option B** — what it gets us, and the specific reason it won or lost\n\n## Decision\n\nWhat we chose, and the one reason that mattered most.\n\n## Consequences\n\n- Easier:\n- Harder:\n- Revisit if:\n\n::: tip Make it findable\nFlip **Status** to Adopted once it's real, and add a row to the index on [[Decision Records]].\n\n:::\n` },
+  { id: 'test', name: 'Test report', desc: 'Setup, data, verdict', body: `**Date:** YYYY-MM-DD · **Who:** · **Unit / rev:**\n\n## Setup\n\nWhich procedure you followed (link it — e.g. [[Flight Testing Procedure]], [[Board Bring-Up Log]]), on what rig, and **what changed since the last run**. One variable at a time or the numbers mean nothing. Drag in a photo of the setup — a bench nobody can picture can't be rebuilt.\n\n## Data\n\n| Metric | Expected | Measured |\n| --- | ---: | ---: |\n| *5 V rail ripple* | *< 40 mV pp* | *22 mV pp* |\n\nAn italic row is an example — replace it. Raw data: bag file, log path or repo, so someone else can re-derive this table.\n\n## Verdict\n\nPass or fail, and what changes because of it.\n\n## Follow-ups\n\n- [ ] Who — what *(by when)*\n` },
+  { id: 'bringup', name: 'Bring-up log', desc: 'Per-unit board checklist', body: `**Board:** CUPI-<PROJ>-<BOARD>-<NNN> · **Rev:** · **Ritual:** [[Board Bring-Up Log]]\n\nOne row per unit — a board without a completed log doesn't get integrated. Link this page from the board's design page so it isn't an orphan.\n\n| Unit | Date | By | Result |\n| --- | --- | --- | --- |\n| *#2* | *2026-08-14* | *MR* | *pass — 31 mA idle (exp 28), 5 V ripple 22 mV, hottest FET 61 °C* |\n\n## Unit #_\n\n- [ ] Visual under the microscope — bridges, tombstones, missing parts, solder balls under QFNs\n- [ ] Shorts: continuity every rail → GND, before any power\n- [ ] First power: bench supply, limit 50 mA over expected idle, no loads — idle measured:\n- [ ] Rails: regulation + ripple at every test point — worst ripple:\n- [ ] Comms: SWD first, then every bus per [[Wiring and Connectors]]\n- [ ] Load: rail-by-rail to 120% of rating — hottest part:\n- [ ] Firmware smoke test: blink, watchdog, telemetry heartbeat\n- [ ] Silk "bring-up by ___" box filled in — paint pen, initials, date\n\nWrite numbers, not "ok" — the next unit gets compared against yours. Anything surprising goes in a \`::: warn\` callout on this page, not in Slack. Copy the section above for each additional unit.\n` },
+  { id: 'procedure', name: 'Procedure', desc: 'Steps with pass criteria', body: `Who this applies to and when — one line. If there's a hard rule in here, say it in the first sentence.\n\n::: note Master copy\nDon't tick boxes on this page. Copy the list into the page you're actually working on (••• → Duplicate) and check them there, so the record lives with the thing you did.\n\n:::\n\n## Roles\n\nWho does what while this runs — and who can stop it. Name the role, not the person.\n\n## Before you start\n\n- [ ] Precondition — and how you check it, not just that you should\n- [ ] Precondition — and how you check it, not just that you should\n\n## Steps\n\n1. **Step** — what you do, and the number or state that tells you it worked\n2. **Step** — what you do, and the number or state that tells you it worked\n\n## After\n\n- [ ] Where the result gets written down, and by when\n- [ ] Link this page from wherever it applies, so people find it before they need it\n\n::: warn Why this rule exists\nThe incident behind the strictest step above. Rules without stories get skipped by whoever wasn't there.\n\n:::\n` },
+];
+
+const REACTION_SET = [
+  ['👍', 'Thumbs up'], ['🎉', 'Celebrate'], ['❤️', 'Love'], ['🚀', 'Ship it'],
+  ['👀', 'Looking at this'], ['✅', 'Approved'], ['🦀', 'Crab'], ['😂', 'Funny'],
 ];
 
 const SECTIONS = [

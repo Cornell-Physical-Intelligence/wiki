@@ -36,7 +36,7 @@ Store.boot = async function bootRemote() {
     REMOTE.email = who.email; REMOTE.name = who.name; REMOTE.role = who.role;
   } catch (e) {
     REMOTE.email = null;
-    Store.s = { users: [], pages: [], comments: [], activity: [], trash: [], prefs: {} };
+    Store.s = { users: [], pages: [], activity: [], trash: [], prefs: {} };
     return;
   }
   adoptServer(await api('/state'));
@@ -84,9 +84,7 @@ const OP_MAP = {
   movePage: (a) => ({ op: 'movePage', args: { id: a[0], ...a[1] } }),
   // duplicatePage is NOT mapped: the client helper calls createPage internally,
   // and that wrapped call already sends the op — mapping both would duplicate twice.
-  deleteComment: (a) => ({ op: 'deleteComment', args: { id: a[0] } }),
-  resendInvite: (a) => ({ op: 'resendInvite', args: { email: a[0] } }),
-  revokeInvite: (a) => ({ op: 'revokeInvite', args: { email: a[0] } }),
+  toggleReaction: (a) => ({ op: 'toggleReaction', args: { id: a[0], emoji: a[1] } }),
   setRole: (a) => ({ op: 'setRole', args: { email: a[0], role: a[1] } }),
   removeUser: (a) => ({ op: 'removeUser', args: { email: a[0] } }),
 };
@@ -116,15 +114,6 @@ for (const [name, toOp] of Object.entries(OP_MAP)) {
   };
 }
 
-// Comments carry the client id so optimistic and canonical rows match.
-{
-  const orig = Store.addComment.bind(Store);
-  Store.addComment = (pageId, text) => {
-    const c = orig(pageId, text);
-    sendOp('addComment', { pageId, text, cid: c.id });
-    return c;
-  };
-}
 
 // Invites need the server's codes and email-send results.
 {
@@ -181,32 +170,14 @@ viewLogin = function viewLoginRemote() {
     <p class="login__sub">Cornell University Physical Intelligence — Internal Wiki</p>
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you — you'll get an invite email.</div>` : ''}
+      ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you — once you're added, just sign in again.</div>` : ''}
       <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster.</p>
-      <div class="login__rule">or</div>
-      <form class="login__invite" data-action="redeem-form">
-        <input class="text-input" name="code" placeholder="Invite code — CUPI-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Invite code">
-        <button class="btn" type="submit">Join</button>
-      </form>
-      <p class="login__hint">New members: the code is in your invite email.</p>
+      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>
     </div>
     <p class="login__foot">CUPI is a registered student organization of Cornell University.</p>
   </div>`;
 };
 
-// Redeem posts to the server, then reloads into the signed-in session.
-document.addEventListener('submit', (ev) => {
-  const form = ev.target.closest('[data-action="redeem-form"]');
-  if (!form || !location.pathname) return;
-  ev.preventDefault();
-  ev.stopImmediatePropagation();
-  const code = form.code.value.trim();
-  if (!code) return;
-  api('/redeem', { method: 'POST', body: JSON.stringify({ code }) })
-    .then(() => { location.href = '/'; })
-    .catch((e) => { UI.loginError = MD.esc(e.message); render(); });
-}, true);
 
 /* ------------------------------- live sync -------------------------------- */
 

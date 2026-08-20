@@ -48,6 +48,27 @@ function autosaveDraft() {
   }, 900);
 }
 
+function closeModal(after) {
+  const veil = document.querySelector('.modal-veil');
+  if (!veil) { UI.modal = null; after ? after() : render(); return; }
+  veil.classList.add('leaving');
+  setTimeout(() => { UI.modal = null; after ? after() : render(); }, 120);
+}
+
+function requestEditorClose() {
+  const e = UI.editor;
+  if (!e) return;
+  if (!e.dirty) {
+    const pid = e.pageId;
+    UI.editor = null;
+    nav(pid ? '#/page/' + pid : '#/page/welcome');
+    route(); render();
+    return;
+  }
+  UI.modal = { kind: 'close-editor' };
+  render();
+}
+
 function startEdit(pageId, isNew, draftOverride) {
   const key = pageId || 'new';
   const draft = draftOverride || draftStash.get(key);
@@ -158,32 +179,36 @@ document.addEventListener('click', async (ev) => {
       const res = Store.login(email);
       UI.chooser = false;
       if (res.ok) { UI.loginError = null; nav('#/page/welcome'); route(); render(); toast(`Signed in as ${res.user.name}`); }
-      else if (res.reason === 'invited') { UI.loginError = `<b>${email}</b> has a pending invite — enter the code from the invite email below.`; render(); }
       else { nav('#/denied?email=' + encodeURIComponent(email)); }
       break;
     }
 
     /* ---- shell ---- */
-    case 'nav-toggle': stop(); if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else UI.navHidden = !UI.navHidden; render(); break;
-    case 'nav-close': stop(); UI.navOpen = false; render(); break;
+    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else UI.navHidden = !UI.navHidden; const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); } break;
+    case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); break;
     case 'sec-toggle': {
       if (ev.target.closest('[data-action="new-page"]')) break;
       stop();
       const c = Store.prefs().collapsed;
       const i = c.indexOf(el.dataset.sec);
       if (i >= 0) c.splice(i, 1); else c.push(el.dataset.sec);
-      Store.persist(); render(); break;
+      Store.persist();
+      el.closest('.tree-section')?.classList.toggle('collapsed', i < 0);
+      el.setAttribute('aria-expanded', String(i >= 0));
+      break;
     }
     case 'user-menu': stop(); openMenu([
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
         const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
         try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
-        catch (e) { toast('Clipboard unavailable in this sandbox'); }
+        catch (e) { toast("Couldn't copy — your browser blocked clipboard access"); }
       } },
-      { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'This is the CUPI wiki preview. Everything works, but data lives in this browser only and sign-in is simulated. The production deployment adds Google OAuth (cornell.edu only), shared storage, real invite emails, and live Onshape/Altium embeds.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
-      '-',
-      { icon: I.history, label: 'Reset demo data', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Reset demo data?', text: 'Every page, member, and attachment goes back to the seeded state. Your edits in this browser are erased.', confirm: 'Reset', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/page/welcome'); route(); render(); toast('Demo data reset'); }; render(); } },
+      ...(typeof REMOTE === 'undefined' ? [
+        { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'This is the CUPI wiki preview. Everything works, but data lives in this browser only and sign-in is simulated. The production deployment adds Google OAuth (cornell.edu only), shared storage, real emails, and live Onshape/Altium embeds.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
+        '-',
+        { icon: I.history, label: 'Restore sample content', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Restore sample content?', text: 'Every page, member, and attachment returns to the sample content this preview ships with. Anything you changed in this browser is erased.', confirm: 'Restore', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/page/welcome'); route(); render(); toast('Sample content restored'); }; render(); } },
+      ] : ['-']),
       { icon: I.x, label: 'Sign out', run: () => { Store.logout(); UI.editor = null; nav('#/login'); route(); render(); } },
     ], el); break;
 
@@ -226,11 +251,10 @@ document.addEventListener('click', async (ev) => {
       openMenu([
         { icon: I.edit, label: 'Edit', hint: 'E', run: () => startEdit(id, false) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
-        { icon: I.mail, label: Store.isWatching(id) ? 'Stop watching' : 'Watch page', run: () => { const on = Store.toggleWatch(id); toast(on ? 'Watching — changes land in your Inbox' : 'Stopped watching'); render(); } },
         '-',
         { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated — edit away'); } },
         { icon: I.arrowL, label: 'Move…', run: () => { UI.modal = { kind: 'move', id }; render(); } },
-        { icon: I.copy, label: 'Copy as Markdown', run: async () => { try { await navigator.clipboard.writeText(Store.page(id).body); toast('Markdown copied'); } catch (e) { toast('Clipboard unavailable in this sandbox'); } } },
+        { icon: I.copy, label: 'Copy as Markdown', run: async () => { try { await navigator.clipboard.writeText(Store.page(id).body); toast('Markdown copied'); } catch (e) { toast("Couldn't copy — your browser blocked clipboard access"); } } },
         { icon: I.page, label: 'Print / PDF', run: () => window.print() },
         '-',
         { icon: I.trash, label: 'Move to Trash', danger: true, run: () => {
@@ -241,27 +265,46 @@ document.addEventListener('click', async (ev) => {
       ], el);
       break;
     }
-    case 'comment-del': stop(); Store.deleteComment(el.dataset.id); render(); break;
     case 'lightbox': stop(); openLightbox(ev.target.src, ev.target.alt); break;
     case 'att-open': {
       stop();
       const att = Store.att(el.dataset.id);
       if (att && /^image\//.test(att.type)) openLightbox(att.dataUri || att.url, att.name);
       else if (att && att.url) window.open(att.url, '_blank');
-      else toast('File downloads are sandboxed in the preview — production serves the original.');
+      else toast("Downloads aren't available in the preview — the live wiki serves the original file.");
       break;
     }
 
+    /* ---- reactions ---- */
+    case 'react': stop(); Store.toggleReaction(el.dataset.id, el.dataset.emoji); render(); break;
+    case 'react-add': {
+      stop();
+      const id = el.dataset.id;
+      const mine = Store.page(id)?.reactions || {};
+      const me = Store.me().email;
+      openMenu(REACTION_SET.map(([emoji, label]) => ({
+        icon: `<span class="menu__emoji">${emoji}</span>`,
+        label: (mine[emoji] || []).includes(me) ? `${label} — remove` : label,
+        run: () => { Store.toggleReaction(id, emoji); render(); },
+      })), el);
+      break;
+    }
+
+    case 'help-menu': stop(); openMenu([
+      { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
+      { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },
+    ], el); break;
+
     /* ---- new page ---- */
-    case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, tpl: 'blank' }; render(); break;
-    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; UI.modal.title = $('.modal [data-m="title"]')?.value || UI.modal.title; UI.modal.section = $('.modal [data-m="section"]')?.dataset.value || UI.modal.section; render(); break;
+    case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, title: el.dataset.title || '', tpl: 'blank' }; render(); break;
+    case 'tpl-pick': stop(); UI.modal.tpl = el.dataset.tpl; $$('.tpl').forEach((b) => b.classList.toggle('sel', b.dataset.tpl === el.dataset.tpl)); break;
     case 'new-page-go': {
       stop();
       const title = ($('.modal [data-m="title"]')?.value || '').trim();
       const section = $('.modal [data-m="section"]')?.dataset.value || 'projects';
       
       if (!title) { UI.modal.error = 'Every page needs a title.'; render(); break; }
-      if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they're unique.`; render(); break; }
+      if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they have to be unique.`; render(); break; }
       const tpl = TEMPLATES.find((t) => t.id === (UI.modal.tpl || 'blank'));
       UI.modal = null;
       openEditor(null, true, { title, body: tpl.body, section });
@@ -271,7 +314,16 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- editor ---- */
-    case 'ed-mode': stop(); UI.editor.mode = el.dataset.mode; Store.prefs().editorMode = el.dataset.mode; Store.persist(); render(); break;
+    case 'ed-mode': stop(); {
+      UI.editor.mode = el.dataset.mode;
+      Store.prefs().editorMode = el.dataset.mode;
+      Store.persist();
+      const ed = $('.editor');
+      if (ed) ed.className = ed.className.replace(/mode-\w+/, 'mode-' + el.dataset.mode);
+      $$('.editor__mode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === el.dataset.mode));
+      edUpdatePreview();
+      break;
+    }
     case 'ed-tool': stop(); ED_TOOLS[el.dataset.tool]?.(); break;
     case 'ed-discard-draft': {
       stop();
@@ -285,7 +337,10 @@ document.addEventListener('click', async (ev) => {
       toast('Draft discarded — editing the current version');
       break;
     }
-    case 'ed-cancel': stop(); { const pid = UI.editor.pageId; stashDraftIfDirty(); if (!UI.editor) { nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); } } break;
+    case 'ed-cancel': stop(); requestEditorClose(); break;
+    case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); toast('Draft kept — it will be waiting when you come back'); } break;
+    case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); } break;
+    case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy — your browser blocked clipboard access"); } } break;
     case 'ed-save': stop(); edSave(); break;
     case 'ed-ac': stop(); edAcceptAc(el.dataset.title); break;
     case 'save-commit': stop(); edCommit(($('.modal [data-m="summary"]')?.value || '').trim()); break;
@@ -301,8 +356,6 @@ document.addEventListener('click', async (ev) => {
 
     /* ---- admin ---- */
     case 'invite-view': stop(); UI.modal = { kind: 'invite-mail', email: el.dataset.email }; render(); break;
-    case 'invite-resend': stop(); Store.resendInvite(el.dataset.email); UI.modal = { kind: 'invite-mail', email: el.dataset.email }; render(); toast('Invite re-sent with a fresh code'); break;
-    case 'invite-revoke': stop(); Store.revokeInvite(el.dataset.email); render(); toast('Invite revoked'); break;
     case 'role-toggle': {
       stop();
       const u = Store.user(el.dataset.email);
@@ -318,7 +371,6 @@ document.addEventListener('click', async (ev) => {
       render();
       break;
     }
-    case 'copy-code': stop(); try { await navigator.clipboard.writeText(el.dataset.code); toast('Code copied'); } catch (e) { toast('Clipboard unavailable — select the code to copy it'); } break;
 
     /* ---- trash ---- */
     case 'trash-restore': stop(); { const p = Store.restorePage(el.dataset.id); render(); toast(`Restored “${p.title}”`); } break;
@@ -340,11 +392,11 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- modal plumbing ---- */
-    case 'modal-close': stop(); UI.modal = null; render(); break;
-    case 'modal-veil': if (ev.target === el) { UI.modal = null; render(); } break;
-    case 'confirm-go': stop(); { const go = UI.modal?.onGo; UI.modal = null; go ? go() : render(); } break;
+    case 'modal-close': stop(); closeModal(); break;
+    case 'modal-veil': if (ev.target === el) { stop(); closeModal(); } break;
+    case 'confirm-go': stop(); { const go = UI.modal?.onGo; closeModal(go ? () => go() : null); } break;
 
-    case 'toast-act': stop(); { const t = UI.toasts[+el.dataset.i]; if (t?.action) { UI.toasts = UI.toasts.filter((x) => x !== t); renderToasts(); t.action.run(); } } break;
+    case 'toast-act': stop(); { const t = UI.toasts.find((x) => x.id === el.dataset.tid); if (t?.action) { const run = t.action.run; dismissToast(t); run(); } } break;
   }
 });
 
@@ -356,21 +408,6 @@ document.addEventListener('submit', (ev) => {
   ev.preventDefault();
   const act = form.dataset.action;
 
-  if (act === 'redeem-form') {
-    const code = form.code.value.trim();
-    if (!code) return;
-    const res = Store.redeem(code);
-    if (res.ok) { UI.loginError = null; nav('#/page/welcome'); route(); render(); toast(`Welcome to CUPI, ${res.user.name}!`); }
-    else { UI.loginError = 'That code doesn’t match any pending invite. Codes look like CUPI-XXXX-XXXX and are one-time.'; render(); }
-  }
-
-  if (act === 'comment-form') {
-    const text = form.text.value.trim();
-    if (!text) return;
-    Store.addComment(form.dataset.id, text);
-    render();
-  }
-
   if (act === 'invite-form') {
     const emails = form.emails.value.split(/[\s,;]+/).filter(Boolean);
     if (!emails.length) return;
@@ -379,7 +416,7 @@ document.addEventListener('submit', (ev) => {
     const bad = results.filter((r) => !r.ok);
     render();
     if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
-    else if (ok.length > 1) toast(`${ok.length} invites sent`);
+    else if (ok.length > 1) toast(`Added ${ok.length} members — each gets an email with a sign-in link`);
     bad.forEach((b) => toast(`${b.email}: ${b.reason}`));
   }
 });
@@ -418,11 +455,30 @@ document.addEventListener('input', (ev) => {
   }
 });
 
+document.addEventListener('click', (ev) => {
+  const miss = ev.target instanceof Element && ev.target.closest('a.wikilink--missing');
+  if (!miss) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const q = (miss.getAttribute('href') || '').split('?')[1] || '';
+  const title = decodeURIComponent((q.match(/title=([^&]*)/) || [])[1] || '');
+  const sec = UI.route.name === 'page' ? Store.page(UI.route.params.id || 'welcome')?.section : null;
+  UI.modal = { kind: 'new-page', title, section: sec || 'projects', tpl: 'blank' };
+  render();
+}, true);
+
 document.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.matches('input[data-task]')) {
     const pageId = t.closest('[data-page]')?.dataset.page;
-    if (pageId) { Store.toggleTask(pageId, +t.dataset.task); render(); }
+    if (pageId) {
+      const n = +t.dataset.task;
+      const checked = t.checked;
+      Store.toggleTask(pageId, n);
+      const title = Store.page(pageId)?.title || 'this page';
+      toast(`${checked ? 'Checked' : 'Unchecked'} on “${title}” — saved for everyone`, { label: 'Undo', run: () => { Store.toggleTask(pageId, n); render(); } });
+      render();
+    }
     return;
   }
   if (t.matches('[data-ed-file]')) {
@@ -481,8 +537,12 @@ document.addEventListener('keydown', (ev) => {
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
       const n = UI.palette.count || 0;
-      if (n) UI.palette.sel = (UI.palette.sel + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
-      renderPaletteList();
+      if (n) {
+        UI.palette.sel = (UI.palette.sel + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+        const items = $$('.palette__item');
+        items.forEach((b, i) => b.classList.toggle('sel', i === UI.palette.sel));
+        items[UI.palette.sel]?.scrollIntoView({ block: 'nearest' });
+      }
       return;
     }
     if (ev.key === 'Enter') {
@@ -501,23 +561,15 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
-  // Post a comment with ⌘Enter from its textarea.
-  if (mod && ev.key === 'Enter' && ev.target.matches('.comment-form textarea')) {
-    ev.preventDefault();
-    ev.target.closest('form').querySelector('button[type="submit"]').click();
-    return;
-  }
-
   if (ev.key === 'Escape') {
     if (UI.menu) { ev.preventDefault(); window.__closeMenu?.(); return; }
-    if (UI.modal) { UI.modal = null; render(); return; }
-    if ($('.lightbox')) { $('.lightbox').remove(); return; }
+    if (UI.modal) { closeModal(); return; }
+    if ($('.lightbox')) { closeLightbox(); return; }
     const ac = $('.ed-autocomplete');
     if (ac && !ac.hidden) { ac.hidden = true; return; }
-    // Esc closes the editor from anywhere in it — including the textarea,
-    // which is where you always are. The draft is kept.
-    if (UI.editor) { const pid = UI.editor.pageId; stashDraftIfDirty(); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); return; }
-    if (UI.navOpen) { UI.navOpen = false; render(); return; }
+    // Esc asks before leaving a dirty editor; a clean one closes straight away.
+    if (UI.editor) { requestEditorClose(); return; }
+    if (UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); return; }
   }
 
   // Save-summary dialog: Enter saves (checked before the editor block, which
@@ -605,8 +657,6 @@ window.addEventListener('hashchange', () => {
     const el = document.getElementById(location.hash.slice(1));
     if (el) { el.scrollIntoView({ behavior: 'smooth' }); return; }
   }
-  // Leaving the inbox is the moment its items count as read.
-  if (UI.route.name === 'inbox') Store.markInboxRead();
   const wasEditing = !!UI.editor;
   if (wasEditing) stashDraftIfDirty();
   UI.navOpen = false;
@@ -642,7 +692,7 @@ function syncViewerTheme() {
   Store.onError = (msg) => toast(msg);
   await Store.boot();
   syncViewerTheme();
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { syncViewerTheme(); render(); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { syncViewerTheme(); });
   new MutationObserver(() => { syncViewerTheme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   route();
   render();

@@ -10,6 +10,7 @@
 /* ------------------------------- icons ----------------------------------- */
 
 const I = {
+  smilePlus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 11.5V12a10 10 0 1 1-9.5-9.99"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/><path d="M16 5h6M19 2v6"/></svg>',
   logo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.5A2.5 2.5 0 016.5 4H20v13.5a2.5 2.5 0 01-2.5 2.5H4z"/><path d="M4 17.5A2.5 2.5 0 016.5 15H20"/><path d="M8.5 8h7M8.5 11h4"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-5h-5v5H4z"/></svg>',
@@ -96,17 +97,41 @@ const mdCtx = (extra) => ({
   ...extra,
 });
 
+let toastSeq = 0;
+
 function toast(msg, action) {
-  const t = { id: Math.random(), msg, action };
+  const t = { id: 't' + (++toastSeq), msg, action };
   UI.toasts.push(t);
   renderToasts();
-  setTimeout(() => { UI.toasts = UI.toasts.filter((x) => x !== t); renderToasts(); }, action ? 6500 : 3200);
+  setTimeout(() => dismissToast(t), action ? 6500 : 3200);
+}
+
+function dismissToast(t) {
+  if (!UI.toasts.includes(t)) return;
+  UI.toasts = UI.toasts.filter((x) => x !== t);
+  const node = document.querySelector(`.toast[data-tid="${t.id}"]`);
+  if (!node) return;
+  // Play the exit in place, then drop the node — settled neighbours never
+  // re-render, so they don't replay their own entrance.
+  node.classList.add('leaving');
+  setTimeout(() => node.remove(), 160);
 }
 
 function renderToasts() {
   let host = $('.toasts');
   if (!host) { host = document.createElement('div'); host.className = 'toasts'; document.body.appendChild(host); }
-  host.innerHTML = UI.toasts.map((t, i) => `<div class="toast">${MD.esc(t.msg)}${t.action ? `<button data-action="toast-act" data-i="${i}">${MD.esc(t.action.label)}</button>` : ''}</div>`).join('');
+  const live = new Set(UI.toasts.map((t) => t.id));
+  for (const node of [...host.children]) {
+    if (!live.has(node.dataset.tid) && !node.classList.contains('leaving')) node.remove();
+  }
+  for (const t of UI.toasts) {
+    if (host.querySelector(`.toast[data-tid="${t.id}"]`)) continue;
+    const node = document.createElement('div');
+    node.className = 'toast';
+    node.dataset.tid = t.id;
+    node.innerHTML = `${MD.esc(t.msg)}${t.action ? `<button data-action="toast-act" data-tid="${t.id}">${MD.esc(t.action.label)}</button>` : ''}`;
+    host.appendChild(node);
+  }
 }
 
 /* ------------------------------- router ---------------------------------- */
@@ -150,15 +175,9 @@ function viewLogin() {
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask any admin to add you — you'll get an invite code by email.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>
-      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster.</p>
-      <div class="login__rule">or</div>
-      <form class="login__invite" data-action="redeem-form">
-        <input class="text-input" name="code" placeholder="CUPI-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Invite code">
-        <button class="btn" type="submit">Join</button>
-      </form>
-      <p class="login__hint">New members: the code is in your invite email.</p>`}
+      <p class="login__hint">Use your <b>@cornell.edu</b> account. Access is limited to the CUPI roster — if you've been added, signing in is all it takes.</p>`}
     </div>
-    <p class="login__foot">Preview build · sign-in is simulated — production uses Google OAuth restricted to cornell.edu<br>CUPI is a registered student organization of Cornell University.</p>
+    <p class="login__foot">Preview build — sign-in is simulated and data stays in this browser.<br>CUPI is a registered student organization of Cornell University.</p>
   </div>`;
 }
 
@@ -174,7 +193,7 @@ function viewChooser() {
     <button class="chooser__item" data-action="login-as" data-email="visitor@cornell.edu">
       <span class="avatar avatar--lg" style="background:var(--hover);color:var(--muted)">?</span>
       <span><span class="chooser__name">Someone not on the roster</span><br><span class="chooser__mail">visitor@cornell.edu</span></span>
-      <span class="chooser__note">denied path</span>
+      <span class="chooser__note">no access</span>
     </button>
     <button class="btn btn--ghost" data-action="login-back">Back</button>
   </div>`;
@@ -190,6 +209,7 @@ function treeRow(p, cur, prefs) {
   return `<div class="tree-item">
     <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}">
       <span class="tree-item__label">${MD.esc(p.title)}</span>
+      ${typeof draftStash !== 'undefined' && draftStash.has(p.id) ? '<span class="tree-item__draftdot" title="You have an unsaved draft here"></span>' : ''}
       ${prefs.starred.includes(p.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
     </a>
   </div>`;
@@ -206,9 +226,9 @@ function sectionTree(sec) {
       <span class="eyebrow">${sec.name}</span>
       <span class="tree-section__add" data-action="new-page" data-sec="${sec.id}" role="button" aria-label="New page in ${sec.name}" title="New page in ${sec.name}">${I.plus}</span>
     </button>
-    <div class="tree-section__body">
+    <div class="tree-section__body"><div class="tree-section__rows">
       ${pages.map((p) => treeRow(p, cur, prefs)).join('')}
-    </div>
+    </div></div>
   </div>`;
 }
 
@@ -226,15 +246,14 @@ function viewSidebar() {
     </button>
     <nav class="sidebar__nav">
       <a class="navlink ${r.name === 'page' && r.params.id === 'welcome' ? 'active' : ''}" href="#/page/welcome">${I.home} Home</a>
-      <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity">${I.clock} Activity</a>
-      <a class="navlink ${r.name === 'inbox' ? 'active' : ''}" href="#/inbox">${I.mail} Inbox ${Store.inboxUnread() ? `<span class="badge">${Store.inboxUnread()}</span>` : ''}</a>
-      <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health">${I.shield} Wiki health</a>
-      <button class="navlink" data-action="new-page">${I.plus} New page <span class="count">N</span></button>
+      <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
+      <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
+      <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
     </nav>
     <div class="sidebar__scroll">
-      ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body">
+      ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
         ${starred.map((p) => `<div class="tree-item"><a class="tree-item__row ${p.id === r.params.id ? 'active' : ''}" href="#/page/${p.id}"><span class="tree-item__label">${MD.esc(p.title)}</span><span class="tree-item__star">${I.starFill}</span></a></div>`).join('')}
-      </div></div>` : ''}
+      </div></div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
     </div>
     <div class="sidebar__foot">
@@ -243,7 +262,7 @@ function viewSidebar() {
         <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
       </button>
       ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-      <a class="icon-btn ${r.params.id === 'formatting-guide' ? 'active' : ''}" href="#/page/formatting-guide" aria-label="Formatting guide" title="Formatting guide">${I.help}</a>
+      <button class="icon-btn" data-action="help-menu" aria-label="Help" title="Help">${I.help}</button>
     </div>
   </aside>`;
 }
@@ -272,11 +291,11 @@ function viewPage(id) {
   const { html, toc } = MD.render(p.body, mdCtx({ pageId: id }));
   const starred = Store.prefs().starred.includes(id);
   const backlinks = Store.backlinks(id);
-  const comments = Store.comments(id);
   const me = Store.me();
   const infoOpen = UI.pageInfo === id;
 
   const right = `
+    <button class="btn btn--sm topbar__edit" data-action="edit" data-id="${id}">${I.edit} Edit <span class="kbd">E</span></button>
     ${toc.length > 1 ? `<button class="icon-btn toc-btn" data-action="toc-menu" data-id="${id}" aria-label="Contents" title="Contents">${lucide('ul', 1.8)}</button>` : ''}
     <button class="icon-btn ${starred ? 'active' : ''}" data-action="star" data-id="${id}" aria-label="${starred ? 'Unstar' : 'Star'} page" title="${starred ? 'Unstar' : 'Star'}">${starred ? I.starFill : I.star}</button>
     <a class="icon-btn" href="#/history/${id}" aria-label="Page history" title="History">${I.history}</a>
@@ -293,6 +312,7 @@ function viewPage(id) {
           <div class="page-head__byline">
             <span class="who"><span class="avatar" style="width:20px;height:20px;font-size:9px">${Store.initials(p.owner)}</span> ${MD.esc(Store.userName(p.owner))}</span>
             <button class="page-head__info ${infoOpen ? 'active' : ''}" data-action="page-info" data-id="${id}" aria-label="Page details" aria-expanded="${infoOpen}" title="Page details">${I.info}</button>
+            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft"><span class="dot dot--accent"></span>Unsaved draft · Resume</button>` : ''}
           </div>
           ${infoOpen ? `<div class="page-head__meta">
             <span>created ${relTime(p.created)}</span>
@@ -307,21 +327,9 @@ function viewPage(id) {
           ${backlinks.length ? `<div class="backlinks"><span class="eyebrow">Linked from</span><div class="backlinks__list">
             ${backlinks.map((b) => `<a class="backlink" href="#/page/${b.id}">${I.link} ${MD.esc(b.title)}</a>`).join('')}
           </div></div>` : ''}
-          <div class="comments">
-            <span class="eyebrow">Comments${comments.length ? ' · ' + comments.length : ''}</span>
-            ${comments.map((c) => `<div class="comment">
-              <span class="avatar">${Store.initials(c.by)}</span>
-              <div class="comment__body">
-                <div class="comment__head"><span class="comment__who">${MD.esc(Store.userName(c.by))}</span><span class="comment__when">${relTime(c.ts)}</span>
-                ${c.by === me.email || me.role === 'admin' ? `<button class="icon-btn comment__del" data-action="comment-del" data-id="${c.id}" aria-label="Delete comment" style="width:22px;height:22px">${I.x}</button>` : ''}</div>
-                <p class="comment__text">${MD.renderInline(c.text.replace(/&#39;/g, "'"), mdCtx()).replace(/@([a-z0-9.]+)/gi, '<span class="mention">@$1</span>')}</p>
-              </div>
-            </div>`).join('')}
-            <form class="comment-form" data-action="comment-form" data-id="${id}">
-              <span class="avatar">${Store.initials(me.email)}</span>
-              <textarea class="text-input" name="text" rows="1" placeholder="Leave a note for the next person…"></textarea>
-              <button class="btn" type="submit">Comment</button>
-            </form>
+          <div class="reactions">
+            ${reactionChips(p)}
+            <button class="reaction reaction--add" data-action="react-add" data-id="${id}" aria-label="Add a reaction" title="Add a reaction">${I.smilePlus}</button>
           </div>
         </footer>
       </article>
@@ -514,10 +522,25 @@ let cadCleanups = [];
 
 /* ------------------------------- lightbox -------------------------------- */
 
+function closeLightbox() {
+  const veil = document.querySelector('.lightbox');
+  if (!veil || veil.classList.contains('leaving')) return;
+  veil.classList.add('leaving');
+  setTimeout(() => veil.remove(), 130);
+}
+
 function openLightbox(src, alt) {
   const veil = document.createElement('div');
   veil.className = 'lightbox';
   veil.innerHTML = `<img src="${src}" alt="${MD.esc(alt || '')}"><button class="icon-btn lightbox__close" aria-label="Close">${I.x}</button>`;
-  veil.addEventListener('click', () => veil.remove());
+  veil.addEventListener('click', closeLightbox);
   document.body.appendChild(veil);
+}
+
+function reactionChips(p) {
+  const me = Store.me().email;
+  return Object.entries(p.reactions || {}).map(([emoji, who]) => {
+    const names = who.map((e) => Store.userName(e)).join(', ');
+    return `<button class="reaction ${who.includes(me) ? 'mine' : ''}" data-action="react" data-id="${p.id}" data-emoji="${MD.esc(emoji)}" title="${MD.esc(names)}"><span class="reaction__emoji">${emoji}</span><span class="reaction__n">${who.length}</span></button>`;
+  }).join('');
 }

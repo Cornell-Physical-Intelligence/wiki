@@ -1,5 +1,5 @@
 /* ============================================================================
-   UI part 3 — the maintenance and cross-subteam layer: watch + inbox,
+   UI part 3 — the maintenance and cross-subteam layer: reactions, health,
    wiki health, tag browsing, hover previews, sortable tables, shortcuts.
    ========================================================================== */
 
@@ -8,33 +8,6 @@
 /* --------------------------- store extensions ----------------------------- */
 
 Object.assign(Store, {
-  isWatching(id) { const p = Store.prefs(); return (p.watched || (p.watched = [])).includes(id); },
-  toggleWatch(id) {
-    const p = Store.prefs();
-    const w = p.watched || (p.watched = []);
-    const i = w.indexOf(id);
-    if (i >= 0) w.splice(i, 1);
-    else {
-      w.push(id);
-      // Watching starts now — the page's past shouldn't flood in as "unread".
-      if (!p.inboxReadAt) p.inboxReadAt = Date.now();
-    }
-    Store.persist();
-    return i < 0;
-  },
-  inbox() {
-    const p = Store.prefs();
-    const watched = new Set(p.watched || []);
-    const me = Store.me()?.email;
-    return Store.activity().filter((a) =>
-      a.by !== me && ((a.pageId && watched.has(a.pageId)) || (a.kind === 'mention' && a.who === me))
-    ).slice(0, 60);
-  },
-  inboxUnread() {
-    const readAt = Store.prefs().inboxReadAt || 0;
-    return Store.inbox().filter((a) => a.ts > readAt).length;
-  },
-  markInboxRead() { Store.prefs().inboxReadAt = Date.now(); Store.persist(); },
 
   duplicatePage(id) {
     const p = Store.page(id);
@@ -76,27 +49,6 @@ Object.assign(Store, {
   },
 });
 
-/* --------------------------- inbox view ----------------------------------- */
-
-function viewInbox() {
-  const items = Store.inbox();
-  const readAt = Store.prefs().inboxReadAt || 0;
-  const watched = (Store.prefs().watched || []).map((id) => Store.page(id)).filter(Boolean);
-  // Items count as read when you *leave* the inbox (see the hashchange handler).
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Inbox</span>`) + `
-  <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><span class="eyebrow">Changes on pages you watch</span><h1>Inbox</h1>
-    <p>Watch any page from its ••• menu — edits and comments by others land here${watched.length ? `. Watching: ${watched.map((w) => `<b>${MD.esc(w.title)}</b>`).join(', ')}.` : '.'}</p></div>
-    ${items.length ? `<div class="feed">${items.map((a) => `
-      <a class="feed__row ${a.ts > readAt ? 'feed__row--new' : ''}" href="#/page/${a.pageId}">
-        <span class="avatar">${Store.initials(a.by)}</span>
-        <span class="feed__what">${activityLine(a)}</span>
-        ${a.ts > readAt ? '<span class="dot dot--accent"></span>' : ''}
-        <span class="feed__when">${relTime(a.ts)}</span>
-      </a>`).join('')}</div>`
-    : `<div class="empty">${I.mail}<b>Nothing yet</b><p>Watch the pages your subteam depends on — like another team's pinout or BOM — and their changes show up here.</p></div>`}
-  </div></div></div>`;
-}
 
 /* --------------------------- health view ---------------------------------- */
 
@@ -114,7 +66,7 @@ function viewHealth() {
         <p class="admin-block__sub">Wiki links whose target page doesn't exist yet. Click through and create the page, or fix the spelling.</p>
         <div class="audit">${rows(broken, 'Every wiki link resolves. Nice.', (b) => `
           <div class="audit__row"><span class="audit__what"><a href="#/page/${b.page.id}" style="color:var(--fg)"><b>${MD.esc(b.page.title)}</b></a> links to <b style="color:var(--accent)">[[${MD.esc(b.target)}]]</b></span>
-          <a class="btn btn--sm" style="margin-left:auto;text-decoration:none" href="#/new?title=${encodeURIComponent(b.target)}">Create</a></div>`)}
+          <button class="btn btn--sm" style="margin-left:auto" data-action="new-page" data-title="${MD.esc(b.target)}" data-sec="${b.page.section}">Create</button></div>`)}
         </div>
       </section>
       <section class="admin-block">
@@ -210,9 +162,9 @@ document.addEventListener('click', (ev) => {
 function viewExtraModal(m) {
   if (m.kind === 'shortcuts') {
     const rows = [
-      ['⌘K', 'Search everything'], ['N', 'New page'], ['E', 'Edit current page'],
-      ['⌘S / ⌘↵', 'Save (in editor)'], ['⌘B · ⌘I', 'Bold · italic (in editor)'],
-      ['[[', 'Link a page (autocompletes)'], ['Esc', 'Close / stash draft'], ['?', 'This overlay'],
+      ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'], ['E', 'Edit the page you&#39;re reading'],
+      ['⌘S / ⌘↵', 'Save (in editor)'], ['⌘F', 'Find in the editor'], ['⌘B · ⌘I', 'Bold · italic (in editor)'],
+      ['[[', 'Link a page (autocompletes)'], ['Esc', 'Close — your draft is kept'], ['?', 'Keyboard shortcuts'],
     ];
     return `<div class="modal" role="dialog" aria-label="Keyboard shortcuts">
       <div class="modal__head"><h3>Keyboard shortcuts</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>

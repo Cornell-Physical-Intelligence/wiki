@@ -14,11 +14,6 @@ const IDB_NAME = 'cupi-wiki-files';
 
 const uid = (p) => p + '-' + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
 
-const inviteCode = () => {
-  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const four = () => Array.from({ length: 4 }, () => A[Math.floor(Math.random() * A.length)]).join('');
-  return `CUPI-${four()}-${four()}`;
-};
 
 /* ------------------------------- time ------------------------------------ */
 
@@ -136,7 +131,6 @@ const Store = {
         }
         return { ...p, revs };
       }),
-      comments: SEED_COMMENTS.map((c) => ({ ...c })),
       activity: SEED_ACTIVITY.map((a) => ({ ...a })),
       trash: [],
       prefs: {},
@@ -161,7 +155,7 @@ const Store = {
       Store.lastPersistOk = true;
     } catch (e) {
       Store.lastPersistOk = false;
-      Store.onError && Store.onError('Storage is full — this change is NOT saved. Trim the page or remove large content.');
+      Store.onError && Store.onError('This browser is out of storage, so the change was not saved. Shorten the page or remove large attachments.');
     }
     return Store.lastPersistOk;
   },
@@ -205,21 +199,15 @@ const Store = {
   login(email) {
     const u = Store.s.users.find((x) => x.email === email);
     if (!u) return { ok: false, reason: 'not-listed' };
-    if (u.status === 'invited') return { ok: false, reason: 'invited', user: u };
+    if (u.status === 'invited') {
+      // Parity with production: OAuth proves the address, so being on the
+      // roster is all it takes — the first sign-in activates the account.
+      u.status = 'active';
+      u.joined = Date.now();
+      Store.log({ kind: 'join', by: u.email });
+      Store.persist();
+    }
     try { localStorage.setItem(SESSION_KEY, email); } catch (e) {}
-    return { ok: true, user: u };
-  },
-
-  redeem(code) {
-    const c = String(code).trim().toUpperCase();
-    const u = Store.s.users.find((x) => x.status === 'invited' && x.inviteCode === c);
-    if (!u) return { ok: false };
-    u.status = 'active';
-    u.joined = Date.now();
-    delete u.inviteCode;
-    Store.log({ kind: 'join', by: u.email });
-    try { localStorage.setItem(SESSION_KEY, u.email); } catch (e) {}
-    Store.persist();
     return { ok: true, user: u };
   },
 
@@ -367,37 +355,22 @@ const Store = {
     Store.persist();
   },
 
-  /* --------------------------- comments ---------------------------------- */
+  /* --------------------------- reactions --------------------------------- */
 
-  // @first-name or @netid in a comment notifies that member's inbox.
-  mentionsIn(text) {
-    const out = new Set();
-    for (const m of String(text).matchAll(/@([a-z0-9.]+)/gi)) {
-      const tok = m[1].toLowerCase();
-      const u = Store.s.users.find((x) =>
-        x.email.split('@')[0] === tok || x.name.split(/\s+/)[0].toLowerCase() === tok);
-      if (u) out.add(u.email);
-    }
-    return [...out];
-  },
-
-  addComment(pageId, text) {
-    const me = Store.me();
-    const c = { id: uid('c'), pageId, by: me.email, ts: Date.now(), text };
-    Store.s.comments.push(c);
-    Store.log({ kind: 'comment', by: me.email, pageId });
-    for (const email of Store.mentionsIn(text)) {
-      if (email !== me.email) Store.log({ kind: 'mention', by: me.email, who: email, pageId });
-    }
+  // Slack-style: one emoji, many people. Stored on the page itself so a
+  // reaction travels with the page through moves, trash, and restore.
+  toggleReaction(pageId, emoji) {
+    const p = Store.page(pageId);
+    if (!p) return false;
+    if (!p.reactions) p.reactions = {};
+    const me = Store.me().email;
+    const list = p.reactions[emoji] || (p.reactions[emoji] = []);
+    const i = list.indexOf(me);
+    if (i >= 0) { list.splice(i, 1); if (!list.length) delete p.reactions[emoji]; }
+    else list.push(me);
     Store.persist();
-    return c;
+    return i < 0;
   },
-  deleteComment(id) {
-    const i = Store.s.comments.findIndex((c) => c.id === id);
-    if (i >= 0) Store.s.comments.splice(i, 1);
-    Store.persist();
-  },
-  comments: (pageId) => Store.s.comments.filter((c) => c.pageId === pageId).sort((a, b) => a.ts - b.ts),
 
   /* --------------------------- roster ------------------------------------ */
 
@@ -418,7 +391,7 @@ const Store = {
       if (Store.user(email)) { results.push({ email, ok: false, reason: 'Already on the roster' }); continue; }
       const u = {
         email, name: email.split('@')[0], role: role || 'member', status: 'invited',
-        subteam: '', joined: null, invitedAt: Date.now(), invitedBy: me.email, inviteCode: inviteCode(),
+        subteam: '', joined: null, invitedAt: Date.now(), invitedBy: me.email,
       };
       Store.s.users.push(u);
       Store.log({ kind: 'invite', by: me.email, who: email });
@@ -428,25 +401,7 @@ const Store = {
     return results;
   },
 
-  resendInvite(email) {
-    const u = Store.user(email);
-    if (u && u.status === 'invited') {
-      u.inviteCode = inviteCode();
-      u.invitedAt = Date.now();
-      Store.log({ kind: 'invite-resend', by: Store.me().email, who: email });
-      Store.persist();
-    }
-    return u;
-  },
 
-  revokeInvite(email) {
-    const i = Store.s.users.findIndex((u) => u.email === email && u.status === 'invited');
-    if (i >= 0) {
-      Store.s.users.splice(i, 1);
-      Store.log({ kind: 'invite-revoke', by: Store.me().email, who: email });
-      Store.persist();
-    }
-  },
 
   setRole(email, role) {
     const u = Store.user(email);
@@ -534,8 +489,7 @@ const Store = {
     const out = [];
     for (const p of Store.s.pages) {
       const title = p.title.toLowerCase();
-      const commentText = Store.s.comments.filter((c) => c.pageId === p.id).map((c) => c.text).join(' ');
-      const text = (MD.mdToText(p.body) + ' ' + commentText).toLowerCase();
+      const text = MD.mdToText(p.body).toLowerCase();
       // OR-scored with an all-terms bonus: "buck converter" still surfaces the
       // page that only says "buck" instead of returning nothing.
       let score = 0, hits = 0;
@@ -553,7 +507,7 @@ const Store = {
       if (hits === terms.length) score *= 2; // full matches rank first
       else score = Math.round(score * (hits / terms.length));
       // Snippet centered on the first body hit.
-      const raw = MD.mdToText(p.body);
+      const raw = MD.mdToText(p.body).replace(/^\s*\|?[\s:|-]+\|?\s*$/gm, ' ').replace(/\s*\|\s*/g, ' · ');
       const pos = raw.toLowerCase().indexOf(terms[0]);
       let snip = '';
       if (pos >= 0) {
