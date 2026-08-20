@@ -266,7 +266,7 @@ document.addEventListener('click', async (ev) => {
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
         const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
         try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
-        catch (e) { toast("Couldn't copy — your browser blocked clipboard access"); }
+        catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); }
       } },
       ...(typeof REMOTE === 'undefined' ? [
         { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'This is the CUPI wiki preview. Everything works, but data lives in this browser only and sign-in is simulated. The production deployment adds Google OAuth (cornell.edu only), shared storage, real emails, and live Onshape/Altium embeds.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
@@ -317,9 +317,9 @@ document.addEventListener('click', async (ev) => {
         { icon: I.edit, label: 'Edit', run: () => startEdit(id, false) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
         '-',
-        { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated — edit away'); } },
+        { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated. Edit away'); } },
         { icon: I.arrowL, label: 'Move…', run: () => { UI.modal = { kind: 'move', id }; render(); } },
-        { icon: I.copy, label: 'Copy as Markdown', run: async () => { try { await navigator.clipboard.writeText(Store.page(id).body); toast('Markdown copied'); } catch (e) { toast("Couldn't copy — your browser blocked clipboard access"); } } },
+        { icon: I.copy, label: 'Copy as Markdown', run: async () => { try { await navigator.clipboard.writeText(Store.page(id).body); toast('Markdown copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } },
         { icon: I.page, label: 'Print / PDF', run: () => window.print() },
         '-',
         { icon: I.trash, label: 'Move to Trash', danger: true, run: () => {
@@ -351,7 +351,7 @@ document.addEventListener('click', async (ev) => {
       const att = Store.att(el.dataset.id);
       if (att && /^image\//.test(att.type)) openLightbox(att.dataUri || att.url, att.name);
       else if (att && att.url) window.open(att.url, '_blank');
-      else toast("Downloads aren't available in the preview — the live wiki serves the original file.");
+      else toast("Downloads aren't available in the preview; the live wiki serves the original file.");
       break;
     }
 
@@ -391,7 +391,7 @@ document.addEventListener('click', async (ev) => {
       UI.modal.title = title;
       UI.modal.section = section;
       if (!title) { UI.modal.error = 'Every page needs a title.'; render(); break; }
-      if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists — titles are how pages link, so they have to be unique.`; render(); break; }
+      if (Store.pageByTitle(title)) { UI.modal.error = `“${title}” already exists. Titles are how pages link, so they have to be unique.`; render(); break; }
       const tpl = TEMPLATES.find((t) => t.id === (UI.modal.tpl || 'blank'));
       UI.modal = null;
       openEditor(null, true, { title, body: tpl.body, section });
@@ -421,13 +421,13 @@ document.addEventListener('click', async (ev) => {
       UI.editor = null;
       openEditor(pid, !pid);
       render();
-      toast('Draft discarded — editing the current version');
+      toast('Draft discarded. Editing the current version');
       break;
     }
     case 'ed-cancel': stop(); requestEditorClose(); break;
-    case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); toast('Draft kept — it will be waiting when you come back'); } break;
+    case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); toast('Draft kept. It will be waiting when you come back'); } break;
     case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); } break;
-    case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy — your browser blocked clipboard access"); } } break;
+    case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } break;
     case 'ed-save': stop(); edSave(); break;
     case 'ed-ac': stop(); edAcceptAc(el.dataset.title); break;
     case 'save-commit': stop(); edCommit(($('.modal [data-m="summary"]')?.value || '').trim()); break;
@@ -505,9 +505,9 @@ document.addEventListener('submit', (ev) => {
     if (typeof REMOTE === 'undefined') {
       // Preview only: show the simulated email so the flow can be judged.
       if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
-      else if (ok.length > 1) toast(`Added ${ok.length} members — each gets a welcome email`);
+      else if (ok.length > 1) toast(`Added ${ok.length} members; each gets a welcome email`);
     } else if (ok.length) {
-      toast(ok.length === 1 ? `Added ${ok[0].email} — welcome email sent` : `Added ${ok.length} members — welcome emails sent`);
+      toast(ok.length === 1 ? `Added ${ok[0].email}; welcome email sent` : `Added ${ok.length} members; welcome emails sent`);
     }
     bad.forEach((b) => toast(`${b.email}: ${b.reason}`));
   }
@@ -568,7 +568,7 @@ document.addEventListener('change', (ev) => {
       const checked = t.checked;
       Store.toggleTask(pageId, n);
       const title = Store.page(pageId)?.title || 'this page';
-      toast(`${checked ? 'Checked' : 'Unchecked'} on “${title}” — saved for everyone`, { label: 'Undo', run: () => { Store.toggleTask(pageId, n); render(); } });
+      toast(`${checked ? 'Checked' : 'Unchecked'} on “${title}”, saved for everyone`, { label: 'Undo', run: () => { Store.toggleTask(pageId, n); render(); } });
       render();
     }
     return;
@@ -767,7 +767,7 @@ window.addEventListener('storage', (ev) => {
       Store._adopting = true;
       try { render(); } finally { Store._adopting = false; }
     } else {
-      toast('This wiki changed in another tab — your editor still has your text.');
+      toast('This wiki changed in another tab. Your editor still has your text.');
     }
   } catch (e) { /* ignore malformed */ }
 });

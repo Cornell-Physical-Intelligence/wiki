@@ -176,7 +176,7 @@ function renderInline(src, ctx, opts = {}) {
       const hash = anchor ? '#' + slugify(anchor) : '';
       return `<a href="#/page/${page.id}${hash}" class="wikilink">${esc(text)}</a>`;
     }
-    return `<a href="#/new?title=${encodeURIComponent(t)}" class="wikilink wikilink--missing" title="Page doesn't exist yet — click to create">${esc(text)}</a>`;
+    return `<a href="#/new?title=${encodeURIComponent(t)}" class="wikilink wikilink--missing" title="Page doesn't exist yet. Click to create it">${esc(text)}</a>`;
   });
 
   // Autolinks

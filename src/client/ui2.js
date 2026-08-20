@@ -60,8 +60,8 @@ function viewEditor() {
     T('callout', 'callout', 'Callout'),
     T('hr', 'hr', 'Divider'),
     null,
-    T('wikilink', 'wikilink', 'Link a page — [['),
-    T('mdlink', 'link2', 'Link a URL — ⌘K'),
+    T('wikilink', 'wikilink', 'Link a page [['),
+    T('mdlink', 'link2', 'Link a URL ⌘K'),
     T('image', 'image', 'Insert image'),
     T('attach', 'attach', 'Attach file (CAD, PDF, anything)'),
   ];
@@ -88,7 +88,7 @@ function viewEditor() {
         </label>
       </div>
     </div>
-    ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft — the page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
+    ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft. The page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
@@ -269,7 +269,7 @@ function edSave() {
   const e = UI.editor;
   if (!e.title.trim()) { toast('Every page needs a title.'); $('[data-ed="title"]')?.focus(); return; }
   const clash = Store.pageByTitle(e.title.trim());
-  if (clash && clash.id !== e.pageId) { toast(`“${e.title.trim()}” already exists — titles are how pages link, so they have to be unique.`); return; }
+  if (clash && clash.id !== e.pageId) { toast(`“${e.title.trim()}” already exists. Titles are how pages link, so they have to be unique.`); return; }
   showModal({ kind: 'save-summary' });
 }
 
@@ -282,7 +282,7 @@ function edCommit(summary) {
     if (cur && cur.body !== e.origBody) {
       const m = {
         kind: 'conflict', pageId: e.pageId,
-        text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours — their version stays in History.`,
+        text: `<b>${MD.esc(Store.userName(cur.updatedBy))}</b> saved a newer version ${relTime(cur.updated)}. Saving now replaces their text with yours. Their version stays in History.`,
       };
       m.onGo = () => { UI.editor.staleOverride = true; edCommit(summary); };
       showModal(m);
@@ -296,12 +296,12 @@ function edCommit(summary) {
     // The page was trashed by someone else while this editor was open —
     // the work is saved as a fresh page instead of vanishing.
     p = Store.createPage({ title: e.title.trim(), section: e.section, body: e.body, summary });
-    toast('The original was deleted while you edited — saved as a new page');
+    toast('The original was deleted while you edited, so your text was saved as a new page');
   } else {
     p = Store.savePage(e.pageId, { title: e.title.trim(), body: e.body, section: e.section, summary, baseUpdated: e.baseUpdated });
   }
   if (!p) { UI.modal = null; render(); return; } // savePage refused (e.g. size cap) and already toasted
-  toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'Not saved — this browser is out of storage');
+  toast(Store.lastPersistOk ? (e.isNew ? 'Page created' : 'Saved') : 'Not saved: this browser is out of storage');
   draftStash.delete(e.pageId || 'new');
   draftDeleted.add(e.pageId || 'new');
   persistDrafts();
@@ -397,7 +397,7 @@ function activityLine(a) {
   const pg = a.pageId && (Store.page(a.pageId) || Store.s.trash.find((p) => p.id === a.pageId));
   const pageRef = pg ? `<b>${MD.esc(pg.title)}</b>` : a.title ? `<b>${MD.esc(a.title)}</b>` : 'a page';
   const map = {
-    edit: `${who} edited ${pageRef}${a.summary ? ` — ${MD.esc(a.summary)}` : ''}`,
+    edit: `${who} edited ${pageRef}${a.summary ? `: ${MD.esc(a.summary)}` : ''}`,
     create: `${who} created ${pageRef}`,
     delete: `${who} moved ${pageRef} to Trash`,
     restore: `${who} restored ${pageRef}`,
@@ -454,11 +454,11 @@ function viewAdmin() {
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>
-    <p>Who can sign in. Sign-in is Google OAuth restricted to <b>cornell.edu</b>, and anyone on this list has access the moment they sign in — so the list below is the whole security model.</p></div>
+    <p>Who can sign in. Sign-in is Google OAuth restricted to <b>cornell.edu</b>, and anyone on this list has access the moment they sign in, so the list below is the whole security model.</p></div>
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Add members</h2></div>
-        <p class="admin-block__sub">Paste one or more addresses, comma or space separated. Each gets a welcome email — no codes. Signing in still requires a <b>cornell.edu</b> Google account.</p>
+        <p class="admin-block__sub">Paste one or more addresses, comma or space separated. Each gets a welcome email, no codes. Signing in still requires a <b>cornell.edu</b> Google account.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
           ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
@@ -466,8 +466,8 @@ function viewAdmin() {
         </form>
       </section>
       ${invited.length ? `<section class="admin-block">
-        <div class="admin-block__head"><h2>Added — awaiting first sign-in</h2><span class="count">${invited.length}</span></div>
-        <p class="admin-block__sub">These people have access already — they just haven't signed in yet.</p>
+        <div class="admin-block__head"><h2>Added, awaiting first sign-in</h2><span class="count">${invited.length}</span></div>
+        <p class="admin-block__sub">These people have access already; they just haven't signed in yet.</p>
         <div class="roster"><div class="roster__scroll"><table>
           <thead><tr><th>Person</th><th>Added</th><th></th></tr></thead><tbody>
           ${invited.map((u) => `<tr>
@@ -628,7 +628,7 @@ function viewModal() {
     inner = `<div class="modal" role="dialog" aria-label="Save">
       <div class="modal__head"><h3>${UI.editor?.isNew ? 'Create page' : 'Save changes'}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
-        <label>What changed? <span class="sub">Optional — one line for the history, so anyone can find this change later.</span>
+        <label>What changed? <span class="sub">Optional: one line for the history, so anyone can find this change later.</span>
         <input class="text-input" data-m="summary" placeholder="${UI.editor?.isNew ? 'Created page' : 'e.g. Added rev D bring-up results'}" maxlength="120"></label>
       </div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Keep editing</button><button class="btn btn--primary" data-action="save-commit">Save</button></div>
@@ -636,10 +636,10 @@ function viewModal() {
   } else if (m.kind === 'invite-mail') {
     const u = Store.user(m.email);
     inner = `<div class="modal modal--wide" role="dialog" aria-label="Welcome email">
-      <div class="modal__head"><h3>Welcome email — sent</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__head"><h3>Welcome email sent</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
         ${u ? welcomeEmailHtml(u) : ''}
-        <p class="admin-block__sub" style="margin:0">In this preview the email is simulated. Production sends it automatically the moment you add the address — access works the moment they sign in, email or not.</p>
+        <p class="admin-block__sub" style="margin:0">In this preview the email is simulated. Production sends it automatically the moment you add the address. Access works the moment they sign in, email or not.</p>
       </div>
       <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;

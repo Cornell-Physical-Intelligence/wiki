@@ -259,7 +259,7 @@ const Store = {
     const p = Store.page(id);
     if (!p) return null;
     if (body !== undefined && body.length > 2 * 1024 * 1024) {
-      Store.onError && Store.onError('That page is over the 2 MB text limit — attach big content as files instead.');
+      Store.onError && Store.onError('That page is over the 2 MB text limit. Attach big content as files instead.');
       return null;
     }
     const me = Store.me();
@@ -470,7 +470,7 @@ const Store = {
       r.readAsDataURL(file);
     });
     const a = { id: uid('att'), name: file.name, type: file.type || 'application/octet-stream', size: file.size, dataUri, by: Store.me().email, ts: Date.now() };
-    Files.put(a, () => Store.onError && Store.onError(`${file.name} could not be stored durably — it will vanish on reload.`));
+    Files.put(a, () => Store.onError && Store.onError(`${file.name} could not be stored durably and will vanish on reload.`));
     return a;
   },
 

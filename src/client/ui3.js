@@ -75,8 +75,8 @@ function viewHealth() {
       </section>
       <section class="admin-block">
         <div class="admin-block__head"><h2>Orphan pages</h2><span class="count">${orphans.length}</span></div>
-        <p class="admin-block__sub">No other page links here. Orphans are where knowledge goes to be forgotten — link them from a hub page.</p>
-        <div class="audit">${rows(orphans, 'No orphans — everything is reachable.', (p) => `
+        <p class="admin-block__sub">No other page links here. Orphans are where knowledge goes to be forgotten. Link them from a hub page.</p>
+        <div class="audit">${rows(orphans, 'No orphans. Everything is reachable.', (p) => `
           <div class="audit__row"><span class="audit__what"><a href="#/page/${p.id}" style="color:var(--fg)"><b>${MD.esc(p.title)}</b></a> · ${SECTIONS.find((s) => s.id === p.section)?.name || ''}</span></div>`)}
         </div>
       </section>
@@ -168,7 +168,7 @@ function viewExtraModal(m) {
     const rows = [
       ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'],
       ['⌘S / ⌘↵', 'Save (in editor)'], ['⌘F', 'Find in the editor'], ['⌘B · ⌘I', 'Bold · italic (in editor)'],
-      ['[[', 'Link a page (autocompletes)'], ['Esc', 'Close — your draft is kept'], ['?', 'Keyboard shortcuts'],
+      ['[[', 'Link a page (autocompletes)'], ['Esc', 'Close (your draft is kept)'], ['?', 'Keyboard shortcuts'],
     ];
     return `<div class="modal" role="dialog" aria-label="Keyboard shortcuts">
       <div class="modal__head"><h3>Keyboard shortcuts</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
