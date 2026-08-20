@@ -177,6 +177,19 @@ function viewExtraModal(m) {
       </div></div>
     </div>`;
   }
+  if (m.kind === 'profile') {
+    const me = Store.me();
+    return `<div class="modal" role="dialog" aria-label="Edit profile">
+      <div class="modal__head"><h3>Your profile</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body">
+        <label>Name<input class="text-input" data-m="pname" value="${MD.esc(me.name)}" maxlength="60" autocomplete="name"></label>
+        <label>Subteam <span class="sub">Optional. Shows on the members roster.</span>
+        <input class="text-input" data-m="psub" value="${MD.esc(me.subteam || '')}" maxlength="40" placeholder="e.g. Electrical"></label>
+        <p class="admin-block__sub" style="margin:0">Signed in as ${me.email}. Your name starts as your Google account's name; set it to whatever the team actually calls you.</p>
+      </div>
+      <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="profile-save">Save</button></div>
+    </div>`;
+  }
   if (m.kind === 'move') {
     const p = Store.page(m.id);
     return `<div class="modal" role="dialog" aria-label="Move page">

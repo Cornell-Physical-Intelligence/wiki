@@ -85,6 +85,7 @@ const OP_MAP = {
   // duplicatePage is NOT mapped: the client helper calls createPage internally,
   // and that wrapped call already sends the op — mapping both would duplicate twice.
   toggleReaction: (a) => ({ op: 'toggleReaction', args: { id: a[0], emoji: a[1] } }),
+  setProfile: (a) => ({ op: 'setProfile', args: { name: a[0], subteam: a[1] } }),
   setRole: (a) => ({ op: 'setRole', args: { email: a[0], role: a[1] } }),
   removeUser: (a) => ({ op: 'removeUser', args: { email: a[0] } }),
 };

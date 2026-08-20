@@ -262,6 +262,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'user-menu': stop(); openMenu([
+      { icon: I.edit, label: 'Edit profile', run: () => { UI.modal = { kind: 'profile' }; render(); } },
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
         const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
@@ -360,6 +361,16 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'profile-save': stop(); {
+      const name = ($('.modal [data-m="pname"]')?.value || '').trim();
+      const subteam = ($('.modal [data-m="psub"]')?.value || '').trim();
+      if (!name) { toast("Your name can't be empty."); break; }
+      Store.setProfile(name, subteam);
+      closeModal();
+      toast('Profile updated');
+      break;
+    }
+
     case 'help-menu': stop(); openMenu([
       { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
       { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },

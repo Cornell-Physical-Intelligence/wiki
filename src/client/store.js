@@ -387,6 +387,18 @@ const Store = {
     return n.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   },
 
+  setProfile(name, subteam) {
+    const u = Store.me();
+    const n = String(name || '').trim();
+    if (!n) return false;
+    const before = u.name;
+    u.name = n.slice(0, 60);
+    u.subteam = String(subteam || '').trim().slice(0, 40);
+    if (before !== u.name) Store.log({ kind: 'rename', by: u.email, who: u.name });
+    Store.persist();
+    return true;
+  },
+
   addMembers(emails, role) {
     const me = Store.me();
     const results = [];

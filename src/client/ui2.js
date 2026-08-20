@@ -405,6 +405,7 @@ function activityLine(a) {
     purge: `${who} permanently deleted ${pageRef}`,
     invite: `${who} added <b>${MD.esc(a.who || '')}</b> to the roster`,
     join: `<b>${MD.esc(Store.userName(a.by))}</b> joined the wiki`,
+    rename: `${who} is now going by <b>${MD.esc(a.who || '')}</b>`,
     role: `${who} made <b>${MD.esc(a.who || '')}</b> ${a.role === 'admin' ? 'an admin' : 'a member'}`,
     remove: `${who} removed <b>${MD.esc(a.who || '')}</b> from the roster`,
   };
@@ -450,7 +451,7 @@ function viewAdmin() {
   const users = Store.s.users;
   const active = users.filter((u) => u.status === 'active');
   const invited = users.filter((u) => u.status === 'invited');
-  const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove'].includes(a.kind)).slice(0, 14);
+  const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove', 'rename'].includes(a.kind)).slice(0, 14);
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>

@@ -3310,6 +3310,18 @@ const Store = {
     return n.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   },
 
+  setProfile(name, subteam) {
+    const u = Store.me();
+    const n = String(name || '').trim();
+    if (!n) return false;
+    const before = u.name;
+    u.name = n.slice(0, 60);
+    u.subteam = String(subteam || '').trim().slice(0, 40);
+    if (before !== u.name) Store.log({ kind: 'rename', by: u.email, who: u.name });
+    Store.persist();
+    return true;
+  },
+
   addMembers(emails, role) {
     const me = Store.me();
     const results = [];
@@ -4435,6 +4447,7 @@ function activityLine(a) {
     purge: `${who} permanently deleted ${pageRef}`,
     invite: `${who} added <b>${MD.esc(a.who || '')}</b> to the roster`,
     join: `<b>${MD.esc(Store.userName(a.by))}</b> joined the wiki`,
+    rename: `${who} is now going by <b>${MD.esc(a.who || '')}</b>`,
     role: `${who} made <b>${MD.esc(a.who || '')}</b> ${a.role === 'admin' ? 'an admin' : 'a member'}`,
     remove: `${who} removed <b>${MD.esc(a.who || '')}</b> from the roster`,
   };
@@ -4480,7 +4493,7 @@ function viewAdmin() {
   const users = Store.s.users;
   const active = users.filter((u) => u.status === 'active');
   const invited = users.filter((u) => u.status === 'invited');
-  const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove'].includes(a.kind)).slice(0, 14);
+  const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove', 'rename'].includes(a.kind)).slice(0, 14);
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>
@@ -5075,6 +5088,19 @@ function viewExtraModal(m) {
       </div></div>
     </div>`;
   }
+  if (m.kind === 'profile') {
+    const me = Store.me();
+    return `<div class="modal" role="dialog" aria-label="Edit profile">
+      <div class="modal__head"><h3>Your profile</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body">
+        <label>Name<input class="text-input" data-m="pname" value="${MD.esc(me.name)}" maxlength="60" autocomplete="name"></label>
+        <label>Subteam <span class="sub">Optional. Shows on the members roster.</span>
+        <input class="text-input" data-m="psub" value="${MD.esc(me.subteam || '')}" maxlength="40" placeholder="e.g. Electrical"></label>
+        <p class="admin-block__sub" style="margin:0">Signed in as ${me.email}. Your name starts as your Google account's name; set it to whatever the team actually calls you.</p>
+      </div>
+      <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="profile-save">Save</button></div>
+    </div>`;
+  }
   if (m.kind === 'move') {
     const p = Store.page(m.id);
     return `<div class="modal" role="dialog" aria-label="Move page">
@@ -5352,6 +5378,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'user-menu': stop(); openMenu([
+      { icon: I.edit, label: 'Edit profile', run: () => { UI.modal = { kind: 'profile' }; render(); } },
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
         const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
@@ -5450,6 +5477,16 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'profile-save': stop(); {
+      const name = ($('.modal [data-m="pname"]')?.value || '').trim();
+      const subteam = ($('.modal [data-m="psub"]')?.value || '').trim();
+      if (!name) { toast("Your name can't be empty."); break; }
+      Store.setProfile(name, subteam);
+      closeModal();
+      toast('Profile updated');
+      break;
+    }
+
     case 'help-menu': stop(); openMenu([
       { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
       { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },
