@@ -76,6 +76,14 @@ assert(
   'the shell claims registered status, which is unsupported while Cornell registration is pending',
 );
 
+const UNIQUE = 'Cornell Physical Intelligence (CUPI) is a Cornell University student robotics organization';
+assert(page.includes('id="seo-public"'), 'production shell is missing the crawlable public landing');
+assert(page.includes(UNIQUE), 'production shell is missing unique public prose about CUPI');
+assert(
+  page.includes('This wiki is the team\'s internal knowledge base'),
+  'production shell is missing wiki-specific public prose',
+);
+
 /* ------------------------ preview builds stay private --------------------- */
 const preview = read('docs/index.html');
 assert(
@@ -86,6 +94,8 @@ assert(
   !preview.includes('registered student organization'),
   'the preview claims registered status, which is unsupported while Cornell registration is pending',
 );
+assert(preview.includes('id="seo-public"'), 'preview is missing the crawlable public landing');
+assert(preview.includes(UNIQUE), 'preview is missing unique public prose about CUPI');
 
 /* ------------------------------ crawl files ------------------------------- */
 const robots = read('public/robots.txt');

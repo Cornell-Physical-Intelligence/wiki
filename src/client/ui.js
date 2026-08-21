@@ -179,6 +179,7 @@ function viewLogin() {
       <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
     </div>
+    ${typeof PUBLIC_LANDING_ABOUT === 'string' ? PUBLIC_LANDING_ABOUT : ''}
     <p class="login__foot">Preview build: sign-in is simulated and data stays in this browser.<br>
     <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
   </div>`;
