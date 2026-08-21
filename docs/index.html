@@ -4028,8 +4028,17 @@ function mdRender(src, ctx) {
     if (m) {
       const lvl = Math.min(4, Math.max(2, m[1].length)); // h1 is the page title; deep levels clamp to h4
       const text = m[2].trim();
-      const id = headingId(text);
-      if (lvl <= 3) toc.push({ lvl, id, text: text.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/[*_`]/g, '') });
+      // Headings can carry inline markup (links, wikilinks, emphasis). The
+      // TOC and the anchor id want the plain words, not the syntax.
+      const plain = text
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+        .replace(/\[\[([^\]|]+)\]\]/g, '$1')
+        .replace(/[*_`~]/g, '')
+        .trim();
+      const id = headingId(plain);
+      if (lvl <= 3) toc.push({ lvl, id, text: plain });
       // Full-route href when the page is known, so copied links and reloads work.
       const hhref = ctx.pageId ? `#/page/${ctx.pageId}#${id}` : `#${id}`;
       html += `<h${lvl} id="${id}"><a class="hlink" href="${hhref}" aria-label="Link to section"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 14a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.7 1.7M14 10a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.7-1.7"/></svg></a>${renderInline(text, ctx)}</h${lvl}>`;
