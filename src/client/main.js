@@ -361,6 +361,14 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'resend-disconnect': stop(); {
+      if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
+      el.disabled = true;
+      try { adoptServer(await api('/resend/disconnect', { method: 'POST', body: JSON.stringify({}) })); toast('Resend disconnected'); }
+      catch (e) { toast(`Couldn't disconnect: ${e.message}`); }
+      render();
+      break;
+    }
     case 'profile-save': stop(); {
       const name = ($('.modal [data-m="pname"]')?.value || '').trim();
       const subteam = ($('.modal [data-m="psub"]')?.value || '').trim();
@@ -519,7 +527,7 @@ document.addEventListener('submit', (ev) => {
 
   if (act === 'email-settings-form') {
     const from = form.from.value.trim();
-    const key = form.key.value.trim();
+    const key = form.key ? form.key.value.trim() : '';
     const name = form.fromname.value.trim();
     const ok = Store.setEmailSettings({ key, from, name });
     if (ok !== false) { render(); toast('Email settings saved'); }
@@ -579,6 +587,8 @@ document.addEventListener('input', (ev) => {
 });
 
 document.addEventListener('click', (ev) => {
+  const pc = ev.target instanceof Element && ev.target.closest('[data-action-preview="resend-connect"]');
+  if (pc && typeof REMOTE === 'undefined') { ev.preventDefault(); ev.stopPropagation(); toast('Preview build: connect on the live wiki.'); return; }
   const miss = ev.target instanceof Element && ev.target.closest('a.wikilink--missing');
   if (!miss) return;
   ev.preventDefault();
@@ -819,6 +829,14 @@ function syncViewerTheme() {
   new MutationObserver(() => { syncViewerTheme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   route();
   render();
+  {
+    const flag = UI.route.params.resend;
+    if (flag) {
+      toast(flag === 'connected' ? 'Resend connected. Set the From address and send yourself a test.'
+        : flag === 'denied' ? 'Resend connection was declined.'
+        : 'Resend connection failed. Try again.');
+    }
+  }
   if (Store.me() && !sessionStorage.getItem('cupi-tip')) {
     sessionStorage.setItem('cupi-tip', '1');
     setTimeout(() => toast('Press ⌘K to search everything'), 1200);

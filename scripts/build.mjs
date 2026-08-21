@@ -18,6 +18,20 @@ copyFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url), out
 // The welcome email references this PNG — email clients can't be trusted with webp.
 copyFileSync(new URL('../src/client/welcome-crab.png', import.meta.url), out('welcome-crab.png'));
 
+// OAuth Client ID Metadata Document: the deployment's own domain is its Resend
+// client identity, so "Connect Resend" needs no registration anywhere.
+mkdirSync(new URL('../public/oauth', import.meta.url), { recursive: true });
+writeFileSync(out('oauth/client.json'), JSON.stringify({
+  client_id: `${WIKI_URL}/oauth/client.json`,
+  client_name: 'CUPI Wiki',
+  client_uri: WIKI_URL,
+  redirect_uris: [`${WIKI_URL}/api/resend/callback`],
+  grant_types: ['authorization_code', 'refresh_token'],
+  response_types: ['code'],
+  token_endpoint_auth_method: 'none',
+  scope: 'emails:send',
+}, null, 2) + '\n');
+
 writeFileSync(
   out('robots.txt'),
   `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${WIKI_URL}/sitemap.xml\n`,

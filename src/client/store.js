@@ -389,7 +389,7 @@ const Store = {
 
   emailSettings() {
     const e = (Store.s.settings && Store.s.settings.email) || {};
-    return { from: e.from || '', name: e.name || '', keySet: !!e.keySet, keyTail: e.keyTail || '', envKeySet: !!e.envKeySet, envFrom: e.envFrom || '' };
+    return { from: e.from || '', name: e.name || '', keySet: !!e.keySet, keyTail: e.keyTail || '', envKeySet: !!e.envKeySet, envFrom: e.envFrom || '', oauthConnected: !!e.oauthConnected };
   },
 
   setEmailSettings({ key, from, name }) {

@@ -502,18 +502,28 @@ function viewAdmin() {
         <div class="admin-block__head"><h2>Email</h2><button class="btn btn--sm" style="margin-left:auto" data-action="email-test" title="Sends the real welcome email to your own address, so you can check delivery">${I.mail} Email me a test</button></div>
         ${(() => {
           const es = Store.emailSettings();
-          const status = es.from
-            ? `Welcome emails send as <b>${MD.esc(es.name)} &lt;${MD.esc(es.from)}&gt;</b>.`
-            : es.envFrom
-              ? `Welcome emails send as <b>${MD.esc(es.envFrom)}</b>, set by the deployment environment. Saving a From address here overrides it.`
-              : (es.keySet || es.envKeySet)
-                ? `A Resend key is present but no From address is set, so emails only reach the Resend account owner. Verify a domain in Resend, then put an address on it here.`
-                : `Not configured. Create a free Resend account, verify a domain, and paste an API key and From address here. Members you add can sign in either way; the email is a courtesy.`;
+          const status = es.oauthConnected
+            ? (es.from
+              ? `Connected to Resend. Welcome emails send as <b>${MD.esc(es.name)} &lt;${MD.esc(es.from)}&gt;</b>.`
+              : `Connected to Resend. Set a From address on a domain that account has verified, and you're done.`)
+            : es.from
+              ? `Welcome emails send as <b>${MD.esc(es.name)} &lt;${MD.esc(es.from)}&gt;</b>.`
+              : es.envFrom
+                ? `Welcome emails send as <b>${MD.esc(es.envFrom)}</b>, set by the deployment environment. Saving a From address here overrides it.`
+                : (es.keySet || es.envKeySet)
+                  ? `A Resend key is present but no From address is set, so emails only reach the Resend account owner. Verify a domain in Resend, then put an address on it here.`
+                  : `Not connected. One click links this wiki to a Resend account; members you add can sign in either way, the email is a courtesy.`;
           return `<p class="admin-block__sub">${status}</p>
+        <div class="invite-add" style="margin-bottom:10px">
+          ${es.oauthConnected
+            ? `<button class="btn" data-action="resend-disconnect">Disconnect Resend</button>`
+            : `<a class="btn btn--primary" style="text-decoration:none" href="/api/resend/connect" data-action-preview="resend-connect">Connect Resend</a>`}
+        </div>
+        <p class="admin-block__sub" style="margin:0 0 6px">${es.oauthConnected ? 'Sender identity:' : 'Or configure manually with an API key:'}</p>
         <form class="invite-add" data-action="email-settings-form">
           <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
           <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
-          <input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">
+          ${es.oauthConnected ? '' : `<input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">`}
           <button class="btn btn--primary" type="submit">Save</button>
         </form>`;
         })()}

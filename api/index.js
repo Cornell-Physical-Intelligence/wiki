@@ -5,6 +5,13 @@ import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart
 import { applyOp } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome } from '../lib/email.js';
+import { createHash, randomBytes } from 'node:crypto';
+
+// The deployment's canonical origin is its OAuth client identity.
+const WIKI_URL = (process.env.WIKI_URL || 'https://wiki.cornellphysicalintelligence.com').replace(/\/$/, '');
+const WIKI_HOST = new URL(WIKI_URL).host;
+const OAUTH_CLIENT_ID = `${WIKI_URL}/oauth/client.json`;
+const b64url = (buf) => Buffer.from(buf).toString('base64url');
 
 export const config = { api: { bodyParser: false } };
 
@@ -59,6 +66,7 @@ function shapeState(state, me) {
         from: email?.from || '',
         name: email?.name || '',
         keySet: Boolean(email?.key),
+        oauthConnected: Boolean(email?.oauth?.refresh),
         keyTail: email?.key ? email.key.slice(-4) : '',
         envKeySet: Boolean(process.env.RESEND_API_KEY),
         envFrom: process.env.RESEND_FROM || '',
@@ -129,8 +137,88 @@ export default async function handler(req, res) {
     // email, sent only to their own signed-in address.
     if (path === '/test-email' && req.method === 'POST') {
       if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
-      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host, settings: state.settings?.email });
+      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host, settings: state.settings?.email, clientId: OAUTH_CLIENT_ID, saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }) });
       return json(res, 200, out);
+    }
+
+    /* --------------------------- Resend connect ---------------------------- */
+
+    if (path === '/resend/connect') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
+      if ((req.headers.host || '') !== WIKI_HOST) {
+        return json(res, 400, { error: `Connect from ${WIKI_URL} so the OAuth identity matches this deployment's domain.` });
+      }
+      const verifier = b64url(randomBytes(64));
+      const challenge = b64url(createHash('sha256').update(verifier).digest());
+      const ostate = b64url(randomBytes(24));
+      const u = new URL('https://api.resend.com/oauth/authorize');
+      u.searchParams.set('client_id', OAUTH_CLIENT_ID);
+      u.searchParams.set('response_type', 'code');
+      u.searchParams.set('redirect_uri', `${WIKI_URL}/api/resend/callback`);
+      u.searchParams.set('scope', 'emails:send');
+      u.searchParams.set('state', ostate);
+      u.searchParams.set('code_challenge', challenge);
+      u.searchParams.set('code_challenge_method', 'S256');
+      return redirect(res, u.toString(), [`cupi_resend=${ostate}.${verifier}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax`]);
+    }
+
+    if (path === '/resend/callback') {
+      const clear = 'cupi_resend=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax';
+      if (me.role !== 'admin') return redirect(res, '/#/admin', [clear]);
+      const cookie = /(?:^|;\s*)cupi_resend=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
+      const dot = cookie.indexOf('.');
+      const oastate = dot > 0 ? cookie.slice(0, dot) : '';
+      const verifier = dot > 0 ? cookie.slice(dot + 1) : '';
+      if (q.error) return redirect(res, '/#/admin?resend=denied', [clear]);
+      if (!q.code || !oastate || q.state !== oastate || !verifier) return redirect(res, '/#/admin?resend=state', [clear]);
+      const tr = await fetch('https://api.resend.com/oauth/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: OAUTH_CLIENT_ID,
+          code: q.code,
+          redirect_uri: `${WIKI_URL}/api/resend/callback`,
+          code_verifier: verifier,
+        }),
+      });
+      if (!tr.ok) return redirect(res, '/#/admin?resend=exchange', [clear]);
+      const t = await tr.json();
+      await updateState((s) => {
+        if (!s.settings) s.settings = {};
+        const cur = s.settings.email || {};
+        s.settings.email = {
+          ...cur,
+          name: cur.name || 'CUPI Wiki',
+          from: cur.from || '',
+          oauth: {
+            refresh: t.refresh_token,
+            access: t.access_token,
+            accessExp: Date.now() + (Number(t.expires_in) || 900) * 1000,
+          },
+        };
+        return s;
+      });
+      return redirect(res, '/#/admin?resend=connected', [clear]);
+    }
+
+    if (path === '/resend/disconnect' && req.method === 'POST') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
+      const cur = state.settings?.email?.oauth;
+      if (cur?.refresh) {
+        try {
+          await fetch('https://api.resend.com/oauth/revoke', {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ client_id: OAUTH_CLIENT_ID, token: cur.refresh }),
+          });
+        } catch (e) { /* best effort */ }
+      }
+      const out = await updateState((s) => {
+        if (s.settings?.email) delete s.settings.email.oauth;
+        return s;
+      });
+      return json(res, 200, { version: out.version, state: shapeState(out.state, me) });
     }
 
     /* ------------------------------ mutations ------------------------------ */
@@ -152,7 +240,7 @@ export default async function handler(req, res) {
       let emailed = [];
       if (op === 'addMembers' && Array.isArray(opResult)) {
         for (const r of opResult.filter((x) => x.ok)) {
-          const sent = await sendWelcome({ to: r.email, addedByName: me.name, host: req.headers.host, settings: out.state.settings?.email });
+          const sent = await sendWelcome({ to: r.email, addedByName: me.name, host: req.headers.host, settings: out.state.settings?.email, clientId: OAUTH_CLIENT_ID, saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }) });
           emailed.push({ email: r.email, ...sent });
         }
       }
