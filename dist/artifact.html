@@ -1350,6 +1350,29 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .email-adv summary:hover { color: var(--fg); }
 .email-adv > form { margin-top: 10px; }
 
+
+/* Integration card: logo tile, name + status, sender line, actions. */
+.integration { display: flex; align-items: center; gap: 12px; }
+.integration__tile {
+  width: 40px; height: 40px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--hairline); border-radius: 9px;
+  color: var(--fg); background: var(--page);
+}
+.integration__tile svg { width: 30px; height: 30px; }
+.integration__tile--off { color: var(--faint); }
+.integration__meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.integration__name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.integration__status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.integration__status--off { color: var(--faint); font-weight: 400; }
+.dot--good { background: var(--good); }
+.integration__sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.integration__actions { display: flex; gap: 8px; flex: none; }
+.integration__editor { margin-top: 12px; }
+.linklike { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; padding: 0; }
+.linklike:hover { color: var(--fg); }
+.email-adv { margin-top: 12px; }
+
 </style>
 <div id="app"></div>
 <script>
@@ -5682,11 +5705,11 @@ function viewAdmin() {
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>
-    <p>Who can sign in. Sign-in is Google OAuth restricted to <b>cornell.edu</b>, and anyone on this list has access the moment they sign in, so the list below is the whole security model.</p></div>
+    <p>Everyone below can sign in with their <b>cornell.edu</b> Google account. Nobody else can.</p></div>
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Add members</h2></div>
-        <p class="admin-block__sub">Paste one or more addresses, comma or space separated. Each gets a welcome email, no codes. Signing in still requires a <b>cornell.edu</b> Google account.</p>
+        <p class="admin-block__sub">Comma or space separated. New members get a welcome email and can sign in right away.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
           ${dd('invite-role', [{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }], 'member', { style: 'width:120px' })}
@@ -5695,7 +5718,6 @@ function viewAdmin() {
       </section>
       ${invited.length ? `<section class="admin-block">
         <div class="admin-block__head"><h2>Added, awaiting first sign-in</h2><span class="count">${invited.length}</span></div>
-        <p class="admin-block__sub">These people have access already; they just haven't signed in yet.</p>
         <div class="roster"><div class="roster__scroll"><table>
           <thead><tr><th>Person</th><th>Added</th><th></th></tr></thead><tbody>
           ${invited.map((u) => `<tr>
@@ -5726,55 +5748,59 @@ function viewAdmin() {
           </tbody></table></div></div>
       </section>
       <section class="admin-block">
-        <div class="admin-block__head"><h2>Email</h2><button class="btn btn--sm" style="margin-left:auto" data-action="email-test" title="Sends the real welcome email to your own address, so you can check delivery">${I.mail} Email me a test</button></div>
+        <div class="admin-block__head"><h2>Email</h2></div>
         ${(() => {
           const es = Store.emailSettings();
-          const status = es.oauthConnected
-            ? (es.from
-              ? `Connected to Resend. Welcome emails send as <b>${MD.esc(es.name)} &lt;${MD.esc(es.from)}&gt;</b>.`
-              : `Connected to Resend. Set a From address on a domain that account has verified, and you're done.`)
-            : es.from
-              ? `Welcome emails send as <b>${MD.esc(es.name)} &lt;${MD.esc(es.from)}&gt;</b>.`
-              : es.envFrom
-                ? `Welcome emails send as <b>${MD.esc(es.envFrom)}</b>, set by the deployment environment. Saving a From address here overrides it.`
-                : (es.keySet || es.envKeySet)
-                  ? `A Resend key is present but no From address is set, so emails only reach the Resend account owner. Verify a domain in Resend, then put an address on it here.`
-                  : `Not connected. One click links this wiki to a Resend account; members you add can sign in either way, the email is a courtesy.`;
-          const setupOpen = es.oauthConnected && !es.from;
-          return `<p class="admin-block__sub">${status}</p>
-        <div class="invite-add" style="margin-bottom:10px">
-          ${es.oauthConnected
-            ? `<button class="btn" data-action="resend-disconnect">Disconnect Resend</button>`
-            : `<a class="btn btn--primary" style="text-decoration:none" href="/api/resend/connect" data-action-preview="resend-connect">Connect Resend</a>`}
-        </div>
-        <details class="email-adv"${setupOpen ? ' open' : ''}>
-          <summary>${es.oauthConnected ? 'Sender identity' : 'Configure manually instead'}</summary>
-          ${(() => {
-            const doms = typeof REMOTE === 'undefined'
-              ? [{ name: 'mail.cornellphysicalintelligence.com', status: 'verified' }]
-              : (Array.isArray(UI.resendDomains) ? UI.resendDomains : null);
-            const verified = (doms || []).filter((d) => d.status === 'verified');
-            const useDd = verified.length > 0 && !UI.emailFromCustom;
-            if (!useDd) return `<form class="invite-add" data-action="email-settings-form">
+          const connected = es.oauthConnected;
+          const manual = !connected && (es.from || es.envFrom);
+          const sender = es.from ? `${es.name} · ${es.from}` : es.envFrom ? es.envFrom : '';
+          const editOpen = UI.emailEdit || (connected && !es.from);
+          const doms = typeof REMOTE === 'undefined'
+            ? [{ name: 'mail.cornellphysicalintelligence.com', status: 'verified' }]
+            : (Array.isArray(UI.resendDomains) ? UI.resendDomains : null);
+          const verified = (doms || []).filter((d) => d.status === 'verified');
+          const useDd = verified.length > 0 && !UI.emailFromCustom;
+          const opts = verified.map((d) => ({ value: `wiki@${d.name}`, label: `wiki@${d.name}` }));
+          if (es.from && !opts.some((o) => o.value === es.from)) opts.unshift({ value: es.from, label: `${es.from} (unverified domain)` });
+          opts.push({ value: '__custom', label: 'Custom address…' });
+          const current = es.from || (opts[0] && opts[0].value !== '__custom' ? opts[0].value : '');
+          const editor = `<form class="invite-add integration__editor" data-action="email-settings-form">
+              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+              ${useDd
+                ? `${dd('email-from', opts, current, {})}<input type="hidden" name="from" value="${MD.esc(current)}">`
+                : `<input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">`}
+              <button class="btn" type="submit">Save</button>
+            </form>`;
+          return `<div class="integration">
+            <span class="integration__tile${connected ? '' : ' integration__tile--off'}">${RESEND_MARK}</span>
+            <span class="integration__meta">
+              <span class="integration__name">Resend
+                ${connected ? '<span class="integration__status"><span class="dot dot--good"></span>Connected</span>'
+                  : manual ? '<span class="integration__status">Manual</span>'
+                  : '<span class="integration__status integration__status--off">Not connected</span>'}
+              </span>
+              <span class="integration__sub">${sender
+                ? `Sends as ${MD.esc(sender)} <button class="linklike" data-action="email-edit">change</button>`
+                : connected ? 'Pick a sender address to finish.'
+                : 'Welcome emails for new members.'}</span>
+            </span>
+            <span class="integration__actions">
+              ${(connected || manual || es.keySet || es.envKeySet) ? `<button class="btn btn--sm" data-action="email-test">Send test</button>` : ''}
+              ${connected
+                ? `<button class="btn btn--sm" data-action="resend-disconnect">Disconnect</button>`
+                : `<a class="btn btn--sm btn--primary" style="text-decoration:none" href="/api/resend/connect" data-action-preview="resend-connect">Connect</a>`}
+            </span>
+          </div>
+          ${editOpen ? editor : ''}
+          ${connected ? '' : `<details class="email-adv"${UI.emailFromCustom ? ' open' : ''}>
+            <summary>Use an API key instead</summary>
+            <form class="invite-add" data-action="email-settings-form">
               <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
               <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
-              ${es.oauthConnected ? '' : `<input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">`}
-              <button class="btn btn--primary" type="submit">Save</button>
-            </form>`;
-            const opts = verified.map((d) => ({ value: `wiki@${d.name}`, label: `wiki@${d.name}` }));
-            if (es.from && !opts.some((o) => o.value === es.from)) {
-              opts.unshift({ value: es.from, label: `${es.from} (not on a verified domain)` });
-            }
-            opts.push({ value: '__custom', label: 'Custom address…' });
-            const current = es.from || opts[0].value;
-            return `<form class="invite-add" data-action="email-settings-form">
-              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
-              ${dd('email-from', opts, current, {})}
-              <input type="hidden" name="from" value="${MD.esc(current)}">
-              <button class="btn btn--primary" type="submit">Save</button>
-            </form>`;
-          })()}
-        </details>`;
+              <input class="text-input" name="key" type="password" placeholder="${es.keySet ? `Key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">
+              <button class="btn" type="submit">Save</button>
+            </form>
+          </details>`}`;
         })()}
       </section>
       <section class="admin-block">
@@ -5878,6 +5904,8 @@ function viewPalette() {
     </div>
   </div>`;
 }
+
+const RESEND_MARK = '<svg viewBox="0 0 1800 1800" fill="currentColor" aria-hidden="true"><path d="M1000.46 450C1174.77 450 1278.43 553.669 1278.43 691.282C1278.43 828.896 1174.77 932.563 1000.46 932.563H912.382L1350 1350H1040.82L707.794 1033.48C683.944 1011.47 672.936 985.781 672.935 963.765C672.935 932.572 694.959 905.049 737.161 893.122L908.712 847.244C973.85 829.812 1018.81 779.353 1018.81 713.298C1018.8 632.567 952.745 585.78 871.095 585.78H450V450H1000.46Z"/></svg>';
 
 /* ------------------------------- modals ---------------------------------- */
 
@@ -6734,6 +6762,7 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'email-edit': stop(); UI.emailEdit = !UI.emailEdit; render(); break;
     case 'resend-disconnect': stop(); {
       if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
       el.disabled = true;
@@ -6900,6 +6929,7 @@ document.addEventListener('submit', (ev) => {
 
   if (act === 'email-settings-form') {
     UI.emailFromCustom = false;
+    UI.emailEdit = false;
     const from = form.from.value.trim();
     const key = form.key ? form.key.value.trim() : '';
     const name = form.fromname.value.trim();

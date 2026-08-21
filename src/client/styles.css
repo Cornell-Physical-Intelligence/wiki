@@ -1346,3 +1346,26 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .email-adv[open] summary::before { transform: rotate(90deg); }
 .email-adv summary:hover { color: var(--fg); }
 .email-adv > form { margin-top: 10px; }
+
+
+/* Integration card: logo tile, name + status, sender line, actions. */
+.integration { display: flex; align-items: center; gap: 12px; }
+.integration__tile {
+  width: 40px; height: 40px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--hairline); border-radius: 9px;
+  color: var(--fg); background: var(--page);
+}
+.integration__tile svg { width: 30px; height: 30px; }
+.integration__tile--off { color: var(--faint); }
+.integration__meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.integration__name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.integration__status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.integration__status--off { color: var(--faint); font-weight: 400; }
+.dot--good { background: var(--good); }
+.integration__sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.integration__actions { display: flex; gap: 8px; flex: none; }
+.integration__editor { margin-top: 12px; }
+.linklike { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; padding: 0; }
+.linklike:hover { color: var(--fg); }
+.email-adv { margin-top: 12px; }

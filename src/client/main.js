@@ -371,6 +371,7 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'email-edit': stop(); UI.emailEdit = !UI.emailEdit; render(); break;
     case 'resend-disconnect': stop(); {
       if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
       el.disabled = true;
@@ -537,6 +538,7 @@ document.addEventListener('submit', (ev) => {
 
   if (act === 'email-settings-form') {
     UI.emailFromCustom = false;
+    UI.emailEdit = false;
     const from = form.from.value.trim();
     const key = form.key ? form.key.value.trim() : '';
     const name = form.fromname.value.trim();
