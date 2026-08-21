@@ -401,10 +401,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
 
-    case 'help-menu': stop(); openMenu([
-      { icon: I.help, label: 'Keyboard shortcuts', hint: '?', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
-      { icon: I.page, label: 'Formatting guide', run: () => nav('#/page/formatting-guide') },
-    ], el); break;
+    case 'help-menu': stop(); UI.modal = { kind: 'shortcuts' }; render(); break;
 
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, title: el.dataset.title || '', tpl: 'blank' }; render(); break;

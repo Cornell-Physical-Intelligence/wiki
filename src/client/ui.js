@@ -158,8 +158,6 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  // The formatting guide is a real (searchable, editable) page now; keep old links working.
-  if (name === 'guide') { UI.route = { name: 'page', params: { id: 'formatting-guide' } }; return; }
   const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
@@ -309,7 +307,7 @@ function viewSidebar() {
         <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
       </button>
       ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-      <button class="icon-btn" data-action="help-menu" aria-label="Help" title="Help">${I.help}</button>
+      <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
     </div>
   </aside>`;
 }
