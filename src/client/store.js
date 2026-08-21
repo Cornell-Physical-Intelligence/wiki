@@ -387,6 +387,25 @@ const Store = {
     return n.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   },
 
+  emailSettings() {
+    const e = (Store.s.settings && Store.s.settings.email) || {};
+    return { from: e.from || '', name: e.name || '', keySet: !!e.keySet, keyTail: e.keyTail || '', envKeySet: !!e.envKeySet, envFrom: e.envFrom || '' };
+  },
+
+  setEmailSettings({ key, from, name }) {
+    // Preview build: nothing sends anyway, so only the sanitized shape is kept.
+    if (!Store.s.settings) Store.s.settings = {};
+    const cur = Store.s.settings.email || {};
+    Store.s.settings.email = {
+      from: String(from || '').trim().toLowerCase(),
+      name: String(name || '').trim().slice(0, 60) || 'CUPI Wiki',
+      keySet: !!(key || cur.keySet),
+      keyTail: key ? String(key).slice(-4) : cur.keyTail || '',
+    };
+    Store.persist();
+    return true;
+  },
+
   setProfile(name, subteam) {
     const u = Store.me();
     const n = String(name || '').trim();

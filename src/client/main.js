@@ -517,6 +517,15 @@ document.addEventListener('submit', (ev) => {
   ev.preventDefault();
   const act = form.dataset.action;
 
+  if (act === 'email-settings-form') {
+    const from = form.from.value.trim();
+    const key = form.key.value.trim();
+    const name = form.fromname.value.trim();
+    const ok = Store.setEmailSettings({ key, from, name });
+    if (ok !== false) { render(); toast('Email settings saved'); }
+    return;
+  }
+
   if (act === 'invite-form') {
     const emails = form.emails.value.split(/[\s,;]+/).filter(Boolean);
     if (!emails.length) return;

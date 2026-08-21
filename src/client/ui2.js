@@ -458,7 +458,7 @@ function viewAdmin() {
     <p>Who can sign in. Sign-in is Google OAuth restricted to <b>cornell.edu</b>, and anyone on this list has access the moment they sign in, so the list below is the whole security model.</p></div>
     <div class="admin-grid">
       <section class="admin-block">
-        <div class="admin-block__head"><h2>Add members</h2><button class="btn btn--sm" style="margin-left:auto" data-action="email-test" title="Sends the real welcome email to your own address, so you can check delivery">${I.mail} Email me a test</button></div>
+        <div class="admin-block__head"><h2>Add members</h2></div>
         <p class="admin-block__sub">Paste one or more addresses, comma or space separated. Each gets a welcome email, no codes. Signing in still requires a <b>cornell.edu</b> Google account.</p>
         <form class="invite-add" data-action="invite-form">
           <input class="text-input" name="emails" placeholder="netid@cornell.edu, netid@cornell.edu…" autocomplete="off" spellcheck="false" aria-label="Email addresses to invite">
@@ -497,6 +497,26 @@ function viewAdmin() {
             </span></td>
           </tr>`).join('')}
           </tbody></table></div></div>
+      </section>
+      <section class="admin-block">
+        <div class="admin-block__head"><h2>Email</h2><button class="btn btn--sm" style="margin-left:auto" data-action="email-test" title="Sends the real welcome email to your own address, so you can check delivery">${I.mail} Email me a test</button></div>
+        ${(() => {
+          const es = Store.emailSettings();
+          const status = es.from
+            ? `Welcome emails send as <b>${MD.esc(es.name)} &lt;${MD.esc(es.from)}&gt;</b>.`
+            : es.envFrom
+              ? `Welcome emails send as <b>${MD.esc(es.envFrom)}</b>, set by the deployment environment. Saving a From address here overrides it.`
+              : (es.keySet || es.envKeySet)
+                ? `A Resend key is present but no From address is set, so emails only reach the Resend account owner. Verify a domain in Resend, then put an address on it here.`
+                : `Not configured. Create a free Resend account, verify a domain, and paste an API key and From address here. Members you add can sign in either way; the email is a courtesy.`;
+          return `<p class="admin-block__sub">${status}</p>
+        <form class="invite-add" data-action="email-settings-form">
+          <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+          <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
+          <input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">
+          <button class="btn btn--primary" type="submit">Save</button>
+        </form>`;
+        })()}
       </section>
       <section class="admin-block">
         <div class="admin-block__head"><h2>Access log</h2></div>

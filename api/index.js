@@ -47,11 +47,23 @@ const redirect = (res, to, cookies = []) => {
   res.end();
 };
 
-// What each member is allowed to see: other people's prefs are nobody's business.
+// What each member is allowed to see: other people's prefs are nobody's
+// business, and the Resend key never leaves the server in any form.
 function shapeState(state, me) {
+  const email = state.settings?.email;
   return {
     ...state,
     prefs: me ? { [me.email]: state.prefs?.[me.email] || {} } : {},
+    settings: {
+      email: {
+        from: email?.from || '',
+        name: email?.name || '',
+        keySet: Boolean(email?.key),
+        keyTail: email?.key ? email.key.slice(-4) : '',
+        envKeySet: Boolean(process.env.RESEND_API_KEY),
+        envFrom: process.env.RESEND_FROM || '',
+      },
+    },
   };
 }
 
@@ -117,7 +129,7 @@ export default async function handler(req, res) {
     // email, sent only to their own signed-in address.
     if (path === '/test-email' && req.method === 'POST') {
       if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
-      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host });
+      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host, settings: state.settings?.email });
       return json(res, 200, out);
     }
 
@@ -140,7 +152,7 @@ export default async function handler(req, res) {
       let emailed = [];
       if (op === 'addMembers' && Array.isArray(opResult)) {
         for (const r of opResult.filter((x) => x.ok)) {
-          const sent = await sendWelcome({ to: r.email, addedByName: me.name, host: req.headers.host });
+          const sent = await sendWelcome({ to: r.email, addedByName: me.name, host: req.headers.host, settings: out.state.settings?.email });
           emailed.push({ email: r.email, ...sent });
         }
       }
