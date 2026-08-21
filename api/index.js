@@ -187,21 +187,27 @@ export default async function handler(req, res) {
       // With the grant in hand, pick a sender automatically: wiki@ on the
       // account's first verified domain. Nothing to type when all is well.
       let autoFrom = '';
+      let verifiedNames = null;
       try {
         const dr = await fetch('https://api.resend.com/domains', { headers: { authorization: `Bearer ${t.access_token}` } });
         if (dr.ok) {
           const dj = await dr.json();
-          const verified = (dj.data || []).find((x) => x.status === 'verified');
-          if (verified) autoFrom = `wiki@${verified.name}`;
+          const verified = (dj.data || []).filter((x) => x.status === 'verified');
+          verifiedNames = verified.map((x) => x.name.toLowerCase());
+          if (verified[0]) autoFrom = `wiki@${verified[0].name}`;
         }
       } catch (e) { /* the dropdown covers it later */ }
       await updateState((s) => {
         if (!s.settings) s.settings = {};
         const cur = s.settings.email || {};
+        // A saved From that is not on any verified domain can never send.
+        // Connecting is the moment we know the truth, so heal it here.
+        const curDomain = (cur.from || '').split('@')[1] || '';
+        const curFromOk = cur.from && (verifiedNames === null || verifiedNames.includes(curDomain.toLowerCase()));
         s.settings.email = {
           ...cur,
           name: cur.name || 'CUPI Wiki',
-          from: cur.from || autoFrom,
+          from: curFromOk ? cur.from : autoFrom,
           oauth: {
             refresh: t.refresh_token,
             access: t.access_token,
