@@ -7111,8 +7111,14 @@ document.addEventListener('submit', (ev) => {
   }
 
   if (act === 'invite-form') {
-    const emails = form.emails.value.split(/[\s,;]+/).filter(Boolean);
-    if (!emails.length) return;
+    // Take whatever was pasted: bare addresses, "Name <addr>" To: lines,
+    // spreadsheet columns, mailto: links. Every email-shaped token counts,
+    // everything else is ignored, duplicates collapse.
+    const seen = new Set();
+    const emails = (form.emails.value.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || [])
+      .map((e) => e.toLowerCase())
+      .filter((e) => !seen.has(e) && seen.add(e));
+    if (!emails.length) { if (form.emails.value.trim()) toast('No email addresses found in that'); return; }
     const results = Store.addMembers(emails, form.querySelector('[data-m="invite-role"]')?.dataset.value || 'member');
     const ok = results.filter((r) => r.ok);
     const bad = results.filter((r) => !r.ok);
