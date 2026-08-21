@@ -18,6 +18,9 @@ const MAIN_SITE = 'https://cornellphysicalintelligence.com';
 const WIKI_TITLE = 'CUPI Wiki | Cornell Physical Intelligence';
 const WIKI_DESCRIPTION =
   'The team wiki of Cornell Physical Intelligence (CUPI), a Cornell University student robotics organization: subteam documentation, project pages, and team processes. Sign in with a cornell.edu Google account.';
+const ABOUT_TITLE = 'About the CUPI Wiki | Cornell Physical Intelligence';
+const ABOUT_DESCRIPTION =
+  'What the CUPI Wiki is: the team knowledge base of Cornell Physical Intelligence, holding Mechanical, Electrical, Software, and Business & Marketing documentation, project pages, and team processes — plus where to find the club itself.';
 
 // The Organization node reuses the main site's @id so Google merges the wiki
 // into the same CUPI entity graph; sameAs mirrors src/seo.js on the main site.
@@ -70,8 +73,78 @@ export const PUBLIC_LANDING = `<section id="seo-public" class="seo-public">
 <h1>CUPI Wiki</h1>
 <p class="seo-public__kicker">Cornell University Physical Intelligence</p>
 ${PUBLIC_LANDING_ABOUT}
-<p class="seo-public__links"><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
+<p class="seo-public__links"><a href="/about">About this wiki</a> &middot; <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
 </section>`;
+
+// The /about page is pure static HTML: the same design system, but none of the
+// SPA bundle, so a crawler or human can never be bounced toward sign-in.
+const ABOUT_PROSE = `<p>The CUPI Wiki is the team knowledge base of Cornell Physical Intelligence (CUPI), a Cornell University student robotics organization based in Ithaca, New York. It is where the team keeps the written record of what it builds and how it works.</p>
+<p>This site holds the club&rsquo;s working documentation. Each subteam &mdash; Mechanical, Electrical, Software, and Business &amp; Marketing &mdash; keeps its own section, alongside project pages covering the robots the team builds and the team processes that hold the organization together. Together these pages capture how CUPI designs, builds, and operates its robots, and how it runs itself from one project cycle to the next.</p>
+<p>The wiki is written by members, for members. Reading its pages requires signing in with a cornell.edu Google account, so nearly everything stays private to the CUPI roster. The only public pages here are <a href="/">the landing page</a> and this one.</p>
+<p>If you came looking for the club itself rather than its internal documentation, visit <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a>. It introduces the team, publishes its technical reports &mdash; including the deterministic VQ1 policy developed for the Anduril AI Grand Prix and Racing Without a Map &mdash; and carries application information. CUPI also keeps a <a href="https://cornell.campusgroups.com/cupi/home/">Campus Groups listing</a>. For anything else, write to <a href="mailto:cuphysint@cornell.edu">cuphysint@cornell.edu</a>.</p>`;
+
+const ABOUT_STRUCTURED_DATA = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${WIKI_URL}/about#webpage`,
+      url: `${WIKI_URL}/about`,
+      name: ABOUT_TITLE,
+      description: ABOUT_DESCRIPTION,
+      inLanguage: 'en-US',
+      isPartOf: { '@id': `${WIKI_URL}/#website` },
+      publisher: { '@id': `${MAIN_SITE}/#organization` },
+      breadcrumb: { '@id': `${WIKI_URL}/about#breadcrumb` },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${WIKI_URL}/about#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${WIKI_URL}/` },
+        { '@type': 'ListItem', position: 2, name: 'About' },
+      ],
+    },
+  ],
+});
+
+export function aboutPage() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="index, follow">
+<title>${ABOUT_TITLE}</title>
+<meta name="description" content="${ABOUT_DESCRIPTION}">
+<link rel="canonical" href="${WIKI_URL}/about">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CUPI Wiki">
+<meta property="og:title" content="${ABOUT_TITLE}">
+<meta property="og:description" content="${ABOUT_DESCRIPTION}">
+<meta property="og:url" content="${WIKI_URL}/about">
+<meta property="og:image" content="${WIKI_URL}/favicon-cupi.png">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-cupi.png">
+<link rel="icon" type="image/png" sizes="32x32" href="${FAVICON}">
+<link rel="apple-touch-icon" href="/favicon-cupi.png">
+<script type="application/ld+json">${ABOUT_STRUCTURED_DATA}</script>
+<style>
+${styles()}
+</style>
+</head>
+<body>
+<main id="seo-about" class="seo-public">
+<h1>About the CUPI Wiki</h1>
+<p class="seo-public__kicker">Cornell University Physical Intelligence</p>
+<div class="login__about">
+${ABOUT_PROSE}
+</div>
+<p class="seo-public__links"><a href="/">&larr; Wiki home</a> &middot; <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a></p>
+</main>
+</body>
+</html>`;
+}
 
 export function styles() {
   return `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${b64('playfair.woff2')}) format('woff2');}

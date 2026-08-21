@@ -201,6 +201,7 @@ function loginFooter(previewLine) {
       <div class="site-footer__copy">
         ${previewLine ? `<p>${previewLine}</p>` : ''}
         <p><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a></p>
+        <p><a href="/about">About this wiki</a></p>
         <p>CUPI is a student robotics organization at Cornell University.</p>
         <p>Equal Education and Employment: <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" target="_blank" rel="noreferrer">https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment</a></p>
       </div>
