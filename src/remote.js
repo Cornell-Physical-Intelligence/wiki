@@ -176,7 +176,7 @@ viewLogin = function viewLoginRemote() {
       <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
     </div>
-    <p class="login__foot"><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
+    ${loginFooter('')}
   </div>`;
 };
 

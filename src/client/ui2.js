@@ -854,6 +854,7 @@ function render() {
     app.innerHTML = viewLogin();
     const vt = $('.login .vt-title');
     if (vt) mountHeroTitle(vt);
+    mountLoginCard($('.login__card'));
     return;
   }
   if (UI.editor) view = viewEditor();
