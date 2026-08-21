@@ -4,6 +4,12 @@
   "outputDirectory": "public",
   "redirects": [
     {
+      "source": "/",
+      "has": [{ "type": "host", "value": "cupi-wiki.vercel.app" }],
+      "destination": "https://wiki.cornellphysicalintelligence.com/",
+      "statusCode": 301
+    },
+    {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "cupi-wiki.vercel.app" }],
       "destination": "https://wiki.cornellphysicalintelligence.com/:path*",
