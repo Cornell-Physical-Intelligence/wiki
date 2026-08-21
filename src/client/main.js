@@ -643,7 +643,7 @@ function markDirty() {
   if (!UI.editor || UI.editor.dirty) return;
   UI.editor.dirty = true;
   const crumb = $('.crumbs');
-  if (crumb && !$('.crumbs__draft')) crumb.insertAdjacentHTML('beforeend', '<span class="crumbs__draft"><span class="dot dot--accent"></span>unsaved</span>');
+  if (crumb && !$('.crumbs__draft')) crumb.insertAdjacentHTML('beforeend', '<span class="crumbs__draft">unsaved</span>');
 }
 
 /* ------------------------------- drag/drop + paste ----------------------- */

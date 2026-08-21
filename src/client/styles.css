@@ -226,8 +226,6 @@ label > .dd { width: 100%; }
 }
 .avatar--lg { width: 32px; height: 32px; font-size: 12px; }
 
-.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.dot--accent { background: var(--accent); }
 
 /* ---------------------------------------------------------------------------
    Login — mirrors the site's hero: emptiness, wordmark, letterspaced caps.
@@ -1271,7 +1269,8 @@ body { transition: background-color 160ms ease, color 160ms ease; }
   animation: fade-in 140ms ease-out;
 }
 .draft-chip:hover { background: var(--accent-soft); }
-.tree-item__draftdot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.tree-item__label--draft { color: var(--accent); }
+.navlink--draft { color: var(--accent); }
 
 /* Page topbar Edit + editor breadcrumb state chip. */
 .topbar__edit svg { width: 13px; height: 13px; }

@@ -253,8 +253,9 @@ function treeRow(p, cur, prefs) {
   const active = p.id === cur && cur !== 'welcome';
   return `<div class="tree-item">
     <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}">
-      <span class="tree-item__label">${MD.esc(p.title)}</span>
-      ${typeof draftStash !== 'undefined' && draftStash.has(p.id) ? '<span class="tree-item__draftdot" title="You have an unsaved draft here"></span>' : ''}
+      ${typeof draftStash !== 'undefined' && draftStash.has(p.id)
+        ? `<span class="tree-item__label tree-item__label--draft" title="You have an unsaved draft here">${MD.esc(p.title)}</span>`
+        : `<span class="tree-item__label">${MD.esc(p.title)}</span>`}
       ${prefs.starred.includes(p.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
     </a>
   </div>`;
@@ -294,7 +295,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
-      ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink" data-action="resume-new-draft" title="Resume your unsaved new page"><span class="tree-item__draftdot" style="margin:0 3px"></span> Unsaved new page</button>` : ''}
+      ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
     <div class="sidebar__scroll">
       ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
