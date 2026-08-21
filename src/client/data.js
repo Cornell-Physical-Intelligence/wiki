@@ -197,7 +197,7 @@ If you explain something in Slack twice, it belongs on a wiki page. Press **N** 
 2. **Attach the source.** Screenshots of CAD go next to a link to the Onshape document; schematic PDFs go next to the Altium 365 link. A picture without the source file is a dead end. See [[How to Use This Wiki]].
 3. **Date your test data.** A measurement without a date and a setup is a rumor.
 
-Syntax and everything the editor can do: [[Formatting Guide]]. Questions about access or accounts → [[Onboarding Checklist]] or ask ${'`#general`'}.`,
+Questions about access or accounts → [[Onboarding Checklist]] or ask ${'`#general`'}.`,
   revs: [
     { ts: ago(180), by: 'ab3233@cornell.edu', summary: 'Created page', body: 'Welcome to the CUPI wiki. More soon.' },
     { ts: ago(90), by: 'nl482@cornell.edu', summary: 'Added house rules', body: `This is CUPI's internal knowledge base.\n\n## House rules\n\n1. Pages over threads.\n2. Attach the source.\n3. Date your test data.` },
@@ -276,7 +276,7 @@ Bench-testing a flight controller? Props come off before the battery goes on. No
 page({
   id: 'how-to-wiki', section: 'getting-started', title: 'How to Use This Wiki',
   owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 2), updatedBy: 'ab3233@cornell.edu',
-  body: `The wiki is plain Markdown with a few extras built for how a hardware team documents things. Full syntax lives in the **Formatting Guide** (link in the sidebar footer); this page covers the parts people miss.
+  body: `The wiki is plain Markdown with a few extras built for how a hardware team documents things. This page covers the parts people miss.
 
 **Edit any page** with the **Edit** button at the top right. Every save is a revision, so edit boldly.
 
@@ -350,71 +350,6 @@ Onshape, for all team CAD. The one reason that mattered most: **version control 
 - Easier: onboarding (nothing to install), design reviews (send a link), [[CAD Standards (Onshape)]] can mandate branching because it's free
 - Harder: complex surfacing; anyone needing it prototypes in SolidWorks on a lab machine, then rebuilds the final in Onshape
 - Revisit if: assemblies exceed Onshape's education-tier performance, or the education tier changes`,
-});
-
-page({
-  id: 'formatting-guide', section: 'getting-started', title: 'Formatting Guide',
-  reactions: { '❤️': ['jc3391@cornell.edu'] },
-  owner: 'ab3233@cornell.edu', created: ago(140), updated: ago(1, 1), updatedBy: 'ab3233@cornell.edu',
-  tags: ['reference'],
-  body: `Everything is Markdown, with a few team extras. This page is itself editable proof: hit Edit to see its source.
-
-## Text
-
-**Bold**, *italic*, ~~strikethrough~~, ${'`inline code`'}, and [external links](https://cornellphysicalintelligence.com). Headings with ${'`##`'} and ${'`###`'} build the table of contents automatically.
-
-## Linking pages
-
-${'`[[Hexapod]]`'} → [[Hexapod]]. Add a label with ${'`[[Hexapod|the walker]]`'} → [[Hexapod|the walker]]. Link straight to a section: ${'`[[Hexapod#Leg design]]`'}. A link to a page that doesn't exist yet shows red, like [[Landing Gear Study]], and clicking it creates the page.
-
-## Lists and tasks
-
-- Regular bullets and numbered lists nest by indentation
-- [ ] Task items are live checkboxes; tick them right on the page
-- [x] Done items cross out
-
-## Callouts
-
-::: note Three kinds
-${'`::: note`'} , ${'`::: warn`'} , ${'`::: tip`'}. Each takes an optional title.
-
-:::
-
-## Tables
-
-Click any column header to sort.
-
-| Rail | Budget | Measured |
-| --- | --- | --- |
-| 5 V | 6 A | 4.4 A |
-| 12 V | 8 A | 6.1 A |
-
-## Code
-
-~~~python
-tau_inv = (w_t - w_prev) / (w_prev * dt)   # optical looming
-~~~
-
-## Pictures, CAD, schematics
-
-Drag any file into the editor, or paste a screenshot:
-
-- Images embed inline with an optional caption, and open in a lightbox
-- STL/OBJ get an interactive 3D viewer, right in the page
-- STEP, SchDoc, PDF, anything else becomes a labeled file card
-- An **Onshape** or **Altium 365** URL pasted on its own line becomes a rich card
-- A **YouTube**, **Vimeo**, or **Loom** link on its own line becomes an embedded player
-
-## Keyboard
-
-| Key | Does |
-| --- | --- |
-| ⌘K | Search everything |
-| N | New page |
-| ⌘S / ⌘Enter | Save while editing |
-| ⌘F | Find in the editor |
-| ? | Keyboard shortcuts |
-| Esc | Close anything (drafts are kept) |`,
 });
 
 /* ------------------------------- Projects -------------------------------- */
@@ -1087,7 +1022,7 @@ Sponsor credits (Protolabs, JLC) route the same way; they're still budget, just 
    -------------------------------------------------------------------------- */
 
 const SEED_ACTIVITY = [
-  { ts: ago(0, 5), by: 'ab3233@cornell.edu', kind: 'edit', pageId: 'welcome', summary: 'Linked the formatting guide' },
+  { ts: ago(0, 5), by: 'ab3233@cornell.edu', kind: 'edit', pageId: 'welcome', summary: 'Tightened the welcome page' },
   { ts: ago(0, 8), by: 'js2801@cornell.edu', kind: 'edit', pageId: 'pdb', summary: 'Bring-up results + inrush known issue' },
   { ts: ago(0, 26), by: 'nl733@cornell.edu', kind: 'edit', pageId: 'ai-grand-prix', summary: 'VQ2: bearings + looming section' },
   { ts: ago(1, 2), by: 'ab3233@cornell.edu', kind: 'edit', pageId: 'how-to-wiki', summary: 'CAD link cards section' },

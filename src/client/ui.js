@@ -10,6 +10,7 @@
 /* ------------------------------- icons ----------------------------------- */
 
 const I = {
+  bug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 9V7a3 3 0 0 1 6 0v2"/><rect x="7" y="9" width="10" height="11" rx="5"/><path d="M12 20v-6M7 13H4M20 13h-3M7.5 17.5 5 19M16.5 17.5 19 19M7.5 10.5 5 9M16.5 10.5 19 9"/></svg>',
   smilePlus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 11.5V12a10 10 0 1 1-9.5-9.99"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/><path d="M16 5h6M19 2v6"/></svg>',
   logo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.5A2.5 2.5 0 016.5 4H20v13.5a2.5 2.5 0 01-2.5 2.5H4z"/><path d="M4 17.5A2.5 2.5 0 016.5 15H20"/><path d="M8.5 8h7M8.5 11h4"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>',
@@ -158,14 +159,55 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  // The formatting guide is a real (searchable, editable) page now; keep old links working.
-  if (name === 'guide') { UI.route = { name: 'page', params: { id: 'formatting-guide' } }; return; }
   const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
 
 /* ------------------------------- login ----------------------------------- */
+
+// The team site's footer, ported glyph-for-glyph (SiteFooter.jsx). The one
+// wording change is required: the registered-status claim is banned while
+// Cornell registration is pending.
+// The site's debug-box motif: the card starts as a dotted draft and
+// finalizes to a solid ring once seen (MissionTiles.jsx, verbatim timing).
+function mountLoginCard(el) {
+  if (!el || el.dataset.mounted) return;
+  el.dataset.mounted = '1';
+  let timer;
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      if (entry.isIntersecting) {
+        timer = setTimeout(() => {
+          el.classList.add('is-finalized');
+        }, 800);
+        observer.disconnect();
+      }
+    },
+    { threshold: 0.5 }
+  );
+  observer.observe(el);
+  cadCleanups.push(() => { observer.disconnect(); clearTimeout(timer); });
+}
+
+function loginFooter(previewLine) {
+  return `<footer class="site-footer">
+    <div class="site-footer__inner">
+      <div class="site-footer__socials" aria-label="CUPI social links">
+        <a href="https://github.com/Cornell-Physical-Intelligence" target="_blank" rel="noreferrer" aria-label="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.014 2.898-.014 3.293 0 .322.216.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+        <a href="https://www.instagram.com/cornellphysicalintelligence/" target="_blank" rel="noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></a>
+        <a href="https://www.linkedin.com/company/cu-physical-intelligence/" target="_blank" rel="noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg></a>
+      </div>
+      <div class="site-footer__copy">
+        ${previewLine ? `<p>${previewLine}</p>` : ''}
+        <p><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a></p>
+        <p>CUPI is a student robotics organization at Cornell University.</p>
+        <p>Equal Education and Employment: <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" target="_blank" rel="noreferrer">https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment</a></p>
+      </div>
+    </div>
+  </footer>`;
+}
+
 
 function viewLogin() {
   const denied = UI.route.name === 'denied';
@@ -180,8 +222,7 @@ function viewLogin() {
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
     </div>
     ${typeof PUBLIC_LANDING_ABOUT === 'string' ? PUBLIC_LANDING_ABOUT : ''}
-    <p class="login__foot">Preview build: sign-in is simulated and data stays in this browser.<br>
-    <a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
+    ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
   </div>`;
 }
 
@@ -212,8 +253,9 @@ function treeRow(p, cur, prefs) {
   const active = p.id === cur && cur !== 'welcome';
   return `<div class="tree-item">
     <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}">
-      <span class="tree-item__label">${MD.esc(p.title)}</span>
-      ${typeof draftStash !== 'undefined' && draftStash.has(p.id) ? '<span class="tree-item__draftdot" title="You have an unsaved draft here"></span>' : ''}
+      ${typeof draftStash !== 'undefined' && draftStash.has(p.id)
+        ? `<span class="tree-item__label tree-item__label--draft" title="You have an unsaved draft here">${MD.esc(p.title)}</span>`
+        : `<span class="tree-item__label">${MD.esc(p.title)}</span>`}
       ${prefs.starred.includes(p.id) ? `<span class="tree-item__star">${I.starFill}</span>` : ''}
     </a>
   </div>`;
@@ -253,7 +295,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
-      ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink" data-action="resume-new-draft" title="Resume your unsaved new page"><span class="tree-item__draftdot" style="margin:0 3px"></span> Unsaved new page</button>` : ''}
+      ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
     <div class="sidebar__scroll">
       ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
@@ -267,7 +309,8 @@ function viewSidebar() {
         <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
       </button>
       ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-      <button class="icon-btn" data-action="help-menu" aria-label="Help" title="Help">${I.help}</button>
+      <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
+      <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
     </div>
   </aside>`;
 }
@@ -324,7 +367,7 @@ function viewPage(id) {
             <span>${Math.max(1, Math.round(MD.mdToText(p.body).split(/\s+/).length / 220))} min read</span>
             ${(() => { const { total, done } = MD.countTasks(p.body); if (!total) return ''; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
           </span>` : ''}
-            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft"><span class="dot dot--accent"></span>Unsaved draft · Resume</button>` : ''}
+            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft">Unsaved draft · Resume</button>` : ''}
           </div>
         </header>
         <div class="prose" data-page="${id}">${html}</div>

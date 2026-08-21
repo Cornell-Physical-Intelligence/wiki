@@ -58,8 +58,7 @@ function viewHealth() {
   const rows = (list, empty, row) => list.length ? list.map(row).join('') : `<div class="audit__row"><span class="audit__what" style="color:var(--faint)">${empty}</span></div>`;
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Wiki health</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><span class="eyebrow">Gardening</span><h1>Wiki health</h1>
-    <p>A knowledge base rots quietly. This page makes the rot visible: links to pages that don't exist, pages nothing points to, and pages nobody has touched in a season.</p></div>
+    <div class="plain-head"><h1>Wiki health</h1></div>
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Broken links</h2><span class="count">${broken.length}</span></div>
@@ -175,6 +174,38 @@ function viewExtraModal(m) {
       <div class="modal__body"><div class="audit">
         ${rows.map(([k, d]) => `<div class="audit__row"><span class="audit__when"><span class="kbd">${k}</span></span><span class="audit__what">${d}</span></div>`).join('')}
       </div></div>
+    </div>`;
+  }
+  if (m.kind === 'bug') {
+    const d = UI.bugDraft || (UI.bugDraft = { title: '', body: '', images: [] });
+    if (d.sentUrl) {
+      return `<div class="modal" role="dialog" aria-label="Bug reported">
+        <div class="modal__head"><h3>Bug reported</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+        <div class="modal__body">
+          <p style="margin:0;font-size:14px;color:var(--muted)">Filed as a pull request. The team sees it with your screenshots attached.</p>
+          <p style="margin:0"><a class="btn" style="text-decoration:none" href="${MD.esc(d.sentUrl)}" target="_blank" rel="noreferrer">Open PR #${d.sentNumber} &#8599;</a></p>
+        </div>
+        <div class="modal__foot"><button class="btn btn--primary" data-action="bug-done">Done</button></div>
+      </div>`;
+    }
+    return `<div class="modal" role="dialog" aria-label="Report a bug">
+      <div class="modal__head"><h3>Report a bug</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body">
+        ${d.error ? `<div class="login__error">${MD.esc(d.error)}</div>` : ''}
+        <label>What broke? <input class="text-input" data-m="bug-title" placeholder="e.g. Saving a page loses the last line" maxlength="120" value="${MD.esc(d.title)}"></label>
+        <label>Details <span class="sub">What you did, what you expected, what happened instead.</span>
+        <textarea class="text-input" data-m="bug-body" rows="5" maxlength="10000" placeholder="Steps to reproduce help the most.">${MD.esc(d.body)}</textarea></label>
+        <div class="bug-drop" data-bug-drop tabindex="0" role="button" aria-label="Add screenshots">
+          ${I.imageIcon} Drop screenshots here, paste them, or <span class="linklike">browse</span>
+          <input type="file" data-bug-file hidden multiple accept="image/*">
+        </div>
+        ${d.images.length ? `<div class="bug-shots">${d.images.map((im, i) => `<span class="bug-shot"><img src="${im.dataUri}" alt=""><button class="icon-btn bug-shot__x" data-action="bug-remove-img" data-i="${i}" aria-label="Remove screenshot">${I.x}</button></span>`).join('')}</div>` : ''}
+        <p class="admin-block__sub" style="margin:0">Sent with your name, the page you're on, and your browser details.</p>
+      </div>
+      <div class="modal__foot">
+        <button class="btn" data-action="modal-close">Close</button>
+        <button class="btn btn--primary" data-action="bug-submit"${d.sending ? ' disabled' : ''}>${d.sending ? 'Filing…' : 'File the bug'}</button>
+      </div>
     </div>`;
   }
   if (m.kind === 'profile') {
