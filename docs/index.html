@@ -6416,8 +6416,7 @@ function viewHealth() {
   const rows = (list, empty, row) => list.length ? list.map(row).join('') : `<div class="audit__row"><span class="audit__what" style="color:var(--faint)">${empty}</span></div>`;
   return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Wiki health</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><span class="eyebrow">Gardening</span><h1>Wiki health</h1>
-    <p>A knowledge base rots quietly. This page makes the rot visible: links to pages that don't exist, pages nothing points to, and pages nobody has touched in a season.</p></div>
+    <div class="plain-head"><h1>Wiki health</h1></div>
     <div class="admin-grid">
       <section class="admin-block">
         <div class="admin-block__head"><h2>Broken links</h2><span class="count">${broken.length}</span></div>
