@@ -1,6 +1,6 @@
 # CUPI Wiki
 
-Internal knowledge base for Cornell University Physical Intelligence — built for how a hardware team documents things. Lives at **wiki.cornellphysicalintelligence.com**.
+Internal knowledge base for Cornell Physical Intelligence (CUPI), a Cornell University student robotics organization — built for how a hardware team documents things. Live at **[wiki.cornellphysicalintelligence.com](https://wiki.cornellphysicalintelligence.com)**; the main site is [cornellphysicalintelligence.com](https://cornellphysicalintelligence.com).
 
 - Markdown pages with `[[wiki links]]`, backlinks, callouts, live task checklists, tables (sortable), code blocks
 - Drag-and-drop **images, schematics, and CAD**: STL/OBJ get an interactive 3D viewer in the page; STEP / SchDoc / PcbDoc / PDF attach as labeled cards; **Onshape and Altium 365 links become rich cards**
