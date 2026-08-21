@@ -1500,6 +1500,30 @@ body { transition: background-color 160ms ease, color 160ms ease; }
   text-decoration: underline;
 }
 
+
+/* Bug reports: dropzone and screenshot strip. */
+.bug-drop {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 18px 12px; font-size: 13px; color: var(--muted);
+  border: 1.5px dashed var(--rule); border-radius: var(--radius);
+  cursor: pointer; user-select: none; text-align: center;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.bug-drop svg { width: 17px; height: 17px; flex: none; }
+.bug-drop:hover, .bug-drop.is-over { border-color: var(--fg); background: var(--hover); }
+.bug-shots { display: flex; flex-wrap: wrap; gap: 8px; }
+.bug-shot { position: relative; }
+.bug-shot img {
+  width: 92px; height: 64px; object-fit: cover; display: block;
+  border: 1px solid var(--hairline); border-radius: 6px; background: var(--hover);
+}
+.bug-shot__x {
+  position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
+  background: var(--fg); color: var(--page); border-radius: 50%;
+}
+.bug-shot__x svg { width: 11px; height: 11px; }
+.bug-shot__x:hover { background: var(--accent); color: #fff; }
+
 </style>
 </head>
 <body>
@@ -4775,6 +4799,7 @@ const Store = {
 /* ------------------------------- icons ----------------------------------- */
 
 const I = {
+  bug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 9V7a3 3 0 0 1 6 0v2"/><rect x="7" y="9" width="10" height="11" rx="5"/><path d="M12 20v-6M7 13H4M20 13h-3M7.5 17.5 5 19M16.5 17.5 19 19M7.5 10.5 5 9M16.5 10.5 19 9"/></svg>',
   smilePlus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 11.5V12a10 10 0 1 1-9.5-9.99"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/><path d="M16 5h6M19 2v6"/></svg>',
   logo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.5A2.5 2.5 0 016.5 4H20v13.5a2.5 2.5 0 01-2.5 2.5H4z"/><path d="M4 17.5A2.5 2.5 0 016.5 15H20"/><path d="M8.5 8h7M8.5 11h4"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>',
@@ -5072,6 +5097,7 @@ function viewSidebar() {
         <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
       </button>
       ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
+      <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
       <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
     </div>
   </aside>`;
@@ -6278,6 +6304,7 @@ function render() {
   }
   if (UI.palette) { const inp = $('.palette input'); inp?.focus(); inp?.setSelectionRange(inp.value.length, inp.value.length); }
   if (UI.modal) $('.modal [data-m], .modal .btn--primary')?.focus?.();
+  if (UI.modal?.kind === 'bug') mountBugDrop();
   if (r.name === 'page' && r.params.anchor) {
     $('#' + CSS.escape(r.params.anchor))?.scrollIntoView();
   }
@@ -6476,6 +6503,38 @@ function viewExtraModal(m) {
       </div></div>
     </div>`;
   }
+  if (m.kind === 'bug') {
+    const d = UI.bugDraft || (UI.bugDraft = { title: '', body: '', images: [] });
+    if (d.sentUrl) {
+      return `<div class="modal" role="dialog" aria-label="Bug reported">
+        <div class="modal__head"><h3>Bug reported</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+        <div class="modal__body">
+          <p style="margin:0;font-size:14px;color:var(--muted)">Filed as a pull request. The team sees it with your screenshots attached.</p>
+          <p style="margin:0"><a class="btn" style="text-decoration:none" href="${MD.esc(d.sentUrl)}" target="_blank" rel="noreferrer">Open PR #${d.sentNumber} &#8599;</a></p>
+        </div>
+        <div class="modal__foot"><button class="btn btn--primary" data-action="bug-done">Done</button></div>
+      </div>`;
+    }
+    return `<div class="modal" role="dialog" aria-label="Report a bug">
+      <div class="modal__head"><h3>Report a bug</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body">
+        ${d.error ? `<div class="login__error">${MD.esc(d.error)}</div>` : ''}
+        <label>What broke? <input class="text-input" data-m="bug-title" placeholder="e.g. Saving a page loses the last line" maxlength="120" value="${MD.esc(d.title)}"></label>
+        <label>Details <span class="sub">What you did, what you expected, what happened instead.</span>
+        <textarea class="text-input" data-m="bug-body" rows="5" maxlength="10000" placeholder="Steps to reproduce help the most.">${MD.esc(d.body)}</textarea></label>
+        <div class="bug-drop" data-bug-drop tabindex="0" role="button" aria-label="Add screenshots">
+          ${I.imageIcon} Drop screenshots here, paste them, or <span class="linklike">browse</span>
+          <input type="file" data-bug-file hidden multiple accept="image/*">
+        </div>
+        ${d.images.length ? `<div class="bug-shots">${d.images.map((im, i) => `<span class="bug-shot"><img src="${im.dataUri}" alt=""><button class="icon-btn bug-shot__x" data-action="bug-remove-img" data-i="${i}" aria-label="Remove screenshot">${I.x}</button></span>`).join('')}</div>` : ''}
+        <p class="admin-block__sub" style="margin:0">Sent with your name, the page you're on, and your browser details.</p>
+      </div>
+      <div class="modal__foot">
+        <button class="btn" data-action="modal-close">Close</button>
+        <button class="btn btn--primary" data-action="bug-submit"${d.sending ? ' disabled' : ''}>${d.sending ? 'Filing…' : 'File the bug'}</button>
+      </div>
+    </div>`;
+  }
   if (m.kind === 'profile') {
     const me = Store.me();
     return `<div class="modal" role="dialog" aria-label="Edit profile">
@@ -6557,6 +6616,119 @@ function autosaveDraft() {
     draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
     persistDrafts();
   }, 900);
+}
+
+/* ------------------------------ bug reports ------------------------------ */
+
+// Screenshots are recompressed client-side so a report with several full-res
+// captures still fits the serverless request ceiling.
+const BUG_MAX_IMAGES = 4;
+const BUG_MAX_EDGE = 1600;
+
+function bugSyncFields() {
+  const d = UI.bugDraft;
+  if (!d) return;
+  const t = $('.modal [data-m="bug-title"]');
+  const b = $('.modal [data-m="bug-body"]');
+  if (t) d.title = t.value;
+  if (b) d.body = b.value;
+}
+
+function bugAddFiles(files) {
+  const d = UI.bugDraft;
+  if (!d) return;
+  bugSyncFields();
+  const images = [...files].filter((f) => /^image\//.test(f.type));
+  if (!images.length) { toast('Screenshots only: PNG, JPG, GIF, or WebP'); return; }
+  const room = BUG_MAX_IMAGES - d.images.length;
+  if (room <= 0) { toast(`${BUG_MAX_IMAGES} screenshots is the cap`); return; }
+  if (images.length > room) toast(`Keeping the first ${room}; ${BUG_MAX_IMAGES} screenshots is the cap`);
+  Promise.all(images.slice(0, room).map(bugCompress)).then((out) => {
+    for (const im of out) if (im) d.images.push(im);
+    render();
+  });
+}
+
+function bugCompress(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, BUG_MAX_EDGE / Math.max(img.width, img.height));
+      const small = file.size < 400 * 1024 && scale === 1;
+      if (small) {
+        const r = new FileReader();
+        r.onload = () => resolve({ name: file.name, type: file.type, dataUri: r.result });
+        r.onerror = () => resolve(null);
+        r.readAsDataURL(file);
+        return;
+      }
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve({ name: file.name.replace(/\.[^.]*$/, '') + '.jpg', type: 'image/jpeg', dataUri: c.toDataURL('image/jpeg', 0.85) });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast(`Couldn't read ${file.name}`); resolve(null); };
+    img.src = url;
+  });
+}
+
+function mountBugDrop() {
+  const zone = $('[data-bug-drop]');
+  const input = $('[data-bug-file]');
+  if (!zone || zone.dataset.wired) return;
+  zone.dataset.wired = '1';
+  const pick = () => input.click();
+  zone.addEventListener('click', pick);
+  zone.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
+  input.addEventListener('change', () => { bugAddFiles(input.files); input.value = ''; });
+  for (const t of ['dragover', 'dragenter']) zone.addEventListener(t, (ev) => { ev.preventDefault(); zone.classList.add('is-over'); });
+  for (const t of ['dragleave', 'drop']) zone.addEventListener(t, (ev) => { ev.preventDefault(); zone.classList.remove('is-over'); });
+  zone.addEventListener('drop', (ev) => bugAddFiles(ev.dataTransfer?.files || []));
+}
+
+// Pasting a screenshot anywhere in the open bug dialog attaches it.
+document.addEventListener('paste', (ev) => {
+  if (UI.modal?.kind !== 'bug') return;
+  const files = [...(ev.clipboardData?.files || [])].filter((f) => /^image\//.test(f.type));
+  if (files.length) { ev.preventDefault(); bugAddFiles(files); }
+});
+
+async function submitBug() {
+  const d = UI.bugDraft;
+  if (!d || d.sending) return;
+  bugSyncFields();
+  if (!d.title.trim()) { d.error = 'Give the bug a one-line title.'; render(); return; }
+  if (!d.body.trim()) { d.error = 'Add a sentence or two so it can be reproduced.'; render(); return; }
+  if (typeof REMOTE === 'undefined') { d.error = 'Preview build: bug reports file from the live wiki.'; render(); return; }
+  d.error = null;
+  d.sending = true;
+  render();
+  try {
+    const out = await api('/bug', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: d.title.trim(),
+        body: d.body.trim(),
+        images: d.images.map((im, i) => ({ name: im.name || `shot-${i + 1}.png`, type: im.type, data: im.dataUri.split(',')[1] || '' })),
+        context: {
+          page: location.hash || '#/',
+          ua: navigator.userAgent,
+          viewport: `${innerWidth}x${innerHeight}`,
+        },
+      }),
+    });
+    d.sending = false;
+    d.sentUrl = out.url;
+    d.sentNumber = out.number;
+    render();
+  } catch (e) {
+    d.sending = false;
+    d.error = e.message || 'Filing failed. Your report is still here; try again.';
+    render();
+  }
 }
 
 function closeModal(after) {
@@ -6907,6 +7079,18 @@ document.addEventListener('click', async (ev) => {
 
     case 'help-menu': stop(); UI.modal = { kind: 'shortcuts' }; render(); break;
 
+    /* ---- bug reports ---- */
+    case 'bug-open': stop(); {
+      if (!UI.bugDraft) UI.bugDraft = { title: '', body: '', images: [] };
+      UI.bugDraft.error = null;
+      UI.modal = { kind: 'bug' };
+      render();
+      break;
+    }
+    case 'bug-done': stop(); UI.bugDraft = null; closeModal(); break;
+    case 'bug-remove-img': stop(); { bugSyncFields(); UI.bugDraft.images.splice(+el.dataset.i, 1); render(); } break;
+    case 'bug-submit': stop(); submitBug(); break;
+
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, title: el.dataset.title || '', tpl: 'blank' }; render(); break;
     case 'tpl-pick': stop(); {
@@ -7021,7 +7205,7 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- modal plumbing ---- */
-    case 'modal-close': stop(); closeModal(); break;
+    case 'modal-close': stop(); if (UI.modal?.kind === 'bug') bugSyncFields(); closeModal(); break;
     case 'modal-veil': if (ev.target === el) { stop(); closeModal(); } break;
     case 'confirm-go': stop(); { const go = UI.modal?.onGo; if (UI.modal) UI.modal.onGo = null; closeModal(go ? () => go() : null); } break;
 

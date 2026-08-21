@@ -10,6 +10,7 @@
 /* ------------------------------- icons ----------------------------------- */
 
 const I = {
+  bug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 9V7a3 3 0 0 1 6 0v2"/><rect x="7" y="9" width="10" height="11" rx="5"/><path d="M12 20v-6M7 13H4M20 13h-3M7.5 17.5 5 19M16.5 17.5 19 19M7.5 10.5 5 9M16.5 10.5 19 9"/></svg>',
   smilePlus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 11.5V12a10 10 0 1 1-9.5-9.99"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/><path d="M16 5h6M19 2v6"/></svg>',
   logo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.5A2.5 2.5 0 016.5 4H20v13.5a2.5 2.5 0 01-2.5 2.5H4z"/><path d="M4 17.5A2.5 2.5 0 016.5 15H20"/><path d="M8.5 8h7M8.5 11h4"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>',
@@ -307,6 +308,7 @@ function viewSidebar() {
         <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
       </button>
       ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
+      <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
       <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
     </div>
   </aside>`;

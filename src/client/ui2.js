@@ -914,6 +914,7 @@ function render() {
   }
   if (UI.palette) { const inp = $('.palette input'); inp?.focus(); inp?.setSelectionRange(inp.value.length, inp.value.length); }
   if (UI.modal) $('.modal [data-m], .modal .btn--primary')?.focus?.();
+  if (UI.modal?.kind === 'bug') mountBugDrop();
   if (r.name === 'page' && r.params.anchor) {
     $('#' + CSS.escape(r.params.anchor))?.scrollIntoView();
   }

@@ -1488,3 +1488,27 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .site-footer a:hover {
   text-decoration: underline;
 }
+
+
+/* Bug reports: dropzone and screenshot strip. */
+.bug-drop {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 18px 12px; font-size: 13px; color: var(--muted);
+  border: 1.5px dashed var(--rule); border-radius: var(--radius);
+  cursor: pointer; user-select: none; text-align: center;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.bug-drop svg { width: 17px; height: 17px; flex: none; }
+.bug-drop:hover, .bug-drop.is-over { border-color: var(--fg); background: var(--hover); }
+.bug-shots { display: flex; flex-wrap: wrap; gap: 8px; }
+.bug-shot { position: relative; }
+.bug-shot img {
+  width: 92px; height: 64px; object-fit: cover; display: block;
+  border: 1px solid var(--hairline); border-radius: 6px; background: var(--hover);
+}
+.bug-shot__x {
+  position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
+  background: var(--fg); color: var(--page); border-radius: 50%;
+}
+.bug-shot__x svg { width: 11px; height: 11px; }
+.bug-shot__x:hover { background: var(--accent); color: #fff; }

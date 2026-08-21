@@ -55,6 +55,119 @@ function autosaveDraft() {
   }, 900);
 }
 
+/* ------------------------------ bug reports ------------------------------ */
+
+// Screenshots are recompressed client-side so a report with several full-res
+// captures still fits the serverless request ceiling.
+const BUG_MAX_IMAGES = 4;
+const BUG_MAX_EDGE = 1600;
+
+function bugSyncFields() {
+  const d = UI.bugDraft;
+  if (!d) return;
+  const t = $('.modal [data-m="bug-title"]');
+  const b = $('.modal [data-m="bug-body"]');
+  if (t) d.title = t.value;
+  if (b) d.body = b.value;
+}
+
+function bugAddFiles(files) {
+  const d = UI.bugDraft;
+  if (!d) return;
+  bugSyncFields();
+  const images = [...files].filter((f) => /^image\//.test(f.type));
+  if (!images.length) { toast('Screenshots only: PNG, JPG, GIF, or WebP'); return; }
+  const room = BUG_MAX_IMAGES - d.images.length;
+  if (room <= 0) { toast(`${BUG_MAX_IMAGES} screenshots is the cap`); return; }
+  if (images.length > room) toast(`Keeping the first ${room}; ${BUG_MAX_IMAGES} screenshots is the cap`);
+  Promise.all(images.slice(0, room).map(bugCompress)).then((out) => {
+    for (const im of out) if (im) d.images.push(im);
+    render();
+  });
+}
+
+function bugCompress(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, BUG_MAX_EDGE / Math.max(img.width, img.height));
+      const small = file.size < 400 * 1024 && scale === 1;
+      if (small) {
+        const r = new FileReader();
+        r.onload = () => resolve({ name: file.name, type: file.type, dataUri: r.result });
+        r.onerror = () => resolve(null);
+        r.readAsDataURL(file);
+        return;
+      }
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve({ name: file.name.replace(/\.[^.]*$/, '') + '.jpg', type: 'image/jpeg', dataUri: c.toDataURL('image/jpeg', 0.85) });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast(`Couldn't read ${file.name}`); resolve(null); };
+    img.src = url;
+  });
+}
+
+function mountBugDrop() {
+  const zone = $('[data-bug-drop]');
+  const input = $('[data-bug-file]');
+  if (!zone || zone.dataset.wired) return;
+  zone.dataset.wired = '1';
+  const pick = () => input.click();
+  zone.addEventListener('click', pick);
+  zone.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
+  input.addEventListener('change', () => { bugAddFiles(input.files); input.value = ''; });
+  for (const t of ['dragover', 'dragenter']) zone.addEventListener(t, (ev) => { ev.preventDefault(); zone.classList.add('is-over'); });
+  for (const t of ['dragleave', 'drop']) zone.addEventListener(t, (ev) => { ev.preventDefault(); zone.classList.remove('is-over'); });
+  zone.addEventListener('drop', (ev) => bugAddFiles(ev.dataTransfer?.files || []));
+}
+
+// Pasting a screenshot anywhere in the open bug dialog attaches it.
+document.addEventListener('paste', (ev) => {
+  if (UI.modal?.kind !== 'bug') return;
+  const files = [...(ev.clipboardData?.files || [])].filter((f) => /^image\//.test(f.type));
+  if (files.length) { ev.preventDefault(); bugAddFiles(files); }
+});
+
+async function submitBug() {
+  const d = UI.bugDraft;
+  if (!d || d.sending) return;
+  bugSyncFields();
+  if (!d.title.trim()) { d.error = 'Give the bug a one-line title.'; render(); return; }
+  if (!d.body.trim()) { d.error = 'Add a sentence or two so it can be reproduced.'; render(); return; }
+  if (typeof REMOTE === 'undefined') { d.error = 'Preview build: bug reports file from the live wiki.'; render(); return; }
+  d.error = null;
+  d.sending = true;
+  render();
+  try {
+    const out = await api('/bug', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: d.title.trim(),
+        body: d.body.trim(),
+        images: d.images.map((im, i) => ({ name: im.name || `shot-${i + 1}.png`, type: im.type, data: im.dataUri.split(',')[1] || '' })),
+        context: {
+          page: location.hash || '#/',
+          ua: navigator.userAgent,
+          viewport: `${innerWidth}x${innerHeight}`,
+        },
+      }),
+    });
+    d.sending = false;
+    d.sentUrl = out.url;
+    d.sentNumber = out.number;
+    render();
+  } catch (e) {
+    d.sending = false;
+    d.error = e.message || 'Filing failed. Your report is still here; try again.';
+    render();
+  }
+}
+
 function closeModal(after) {
   const veil = document.querySelector('.modal-veil');
   if (!veil) { UI.modal = null; after ? after() : render(); return; }
@@ -403,6 +516,18 @@ document.addEventListener('click', async (ev) => {
 
     case 'help-menu': stop(); UI.modal = { kind: 'shortcuts' }; render(); break;
 
+    /* ---- bug reports ---- */
+    case 'bug-open': stop(); {
+      if (!UI.bugDraft) UI.bugDraft = { title: '', body: '', images: [] };
+      UI.bugDraft.error = null;
+      UI.modal = { kind: 'bug' };
+      render();
+      break;
+    }
+    case 'bug-done': stop(); UI.bugDraft = null; closeModal(); break;
+    case 'bug-remove-img': stop(); { bugSyncFields(); UI.bugDraft.images.splice(+el.dataset.i, 1); render(); } break;
+    case 'bug-submit': stop(); submitBug(); break;
+
     /* ---- new page ---- */
     case 'new-page': stop(); UI.modal = { kind: 'new-page', section: el.dataset.sec, title: el.dataset.title || '', tpl: 'blank' }; render(); break;
     case 'tpl-pick': stop(); {
@@ -517,7 +642,7 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- modal plumbing ---- */
-    case 'modal-close': stop(); closeModal(); break;
+    case 'modal-close': stop(); if (UI.modal?.kind === 'bug') bugSyncFields(); closeModal(); break;
     case 'modal-veil': if (ev.target === el) { stop(); closeModal(); } break;
     case 'confirm-go': stop(); { const go = UI.modal?.onGo; if (UI.modal) UI.modal.onGo = null; closeModal(go ? () => go() : null); } break;
 

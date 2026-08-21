@@ -5,6 +5,10 @@ import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart
 import { applyOp } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
+import { fileBugPR } from '../lib/github.js';
+
+// Best-effort per-instance spacing so one member cannot firehose PRs.
+const bugLast = new Map();
 import { createHash, randomBytes } from 'node:crypto';
 
 // The deployment's canonical origin is its OAuth client identity.
@@ -138,6 +142,37 @@ export default async function handler(req, res) {
     if (path === '/test-email' && req.method === 'POST') {
       if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
       const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host, settings: state.settings?.email, clientId: OAUTH_CLIENT_ID, saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }) });
+      return json(res, 200, out);
+    }
+
+    /* ------------------------------ bug reports ---------------------------- */
+
+    if (path === '/bug' && req.method === 'POST') {
+      const body = await readJson(req, 4 * 1024 * 1024);
+      const title = String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      const text = String(body.body || '').trim().slice(0, 10000);
+      if (!title || !text) return json(res, 400, { error: 'A title and a description are both required' });
+      const last = bugLast.get(me.email) || 0;
+      if (Date.now() - last < 20000) return json(res, 429, { error: 'Give it a few seconds between bug reports' });
+      const allowed = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+      const images = [];
+      let total = 0;
+      for (const im of (Array.isArray(body.images) ? body.images : []).slice(0, 4)) {
+        const data = String(im?.data || '');
+        if (!data) continue;
+        if (!/^[A-Za-z0-9+/=]+$/.test(data)) return json(res, 400, { error: 'A screenshot did not decode as an image' });
+        total += data.length;
+        if (total > 3.5 * 1024 * 1024) return json(res, 413, { error: 'Screenshots are too large even after compression. Drop one and retry' });
+        images.push({ type: allowed.has(im.type) ? im.type : 'image/png', data });
+      }
+      const context = {
+        page: String(body.context?.page || '').slice(0, 200),
+        ua: String(body.context?.ua || '').slice(0, 300),
+        viewport: String(body.context?.viewport || '').slice(0, 20),
+      };
+      const out = await fileBugPR({ title, body: text, images, context, reporter: { name: me.name, email: me.email } });
+      if (out.error) return json(res, out.status || 502, { error: out.error });
+      bugLast.set(me.email, Date.now());
       return json(res, 200, out);
     }
 
