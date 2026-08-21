@@ -513,19 +513,22 @@ function viewAdmin() {
                 : (es.keySet || es.envKeySet)
                   ? `A Resend key is present but no From address is set, so emails only reach the Resend account owner. Verify a domain in Resend, then put an address on it here.`
                   : `Not connected. One click links this wiki to a Resend account; members you add can sign in either way, the email is a courtesy.`;
+          const setupOpen = es.oauthConnected && !es.from;
           return `<p class="admin-block__sub">${status}</p>
         <div class="invite-add" style="margin-bottom:10px">
           ${es.oauthConnected
             ? `<button class="btn" data-action="resend-disconnect">Disconnect Resend</button>`
             : `<a class="btn btn--primary" style="text-decoration:none" href="/api/resend/connect" data-action-preview="resend-connect">Connect Resend</a>`}
         </div>
-        <p class="admin-block__sub" style="margin:0 0 6px">${es.oauthConnected ? 'Sender identity:' : 'Or configure manually with an API key:'}</p>
-        <form class="invite-add" data-action="email-settings-form">
-          <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
-          <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
-          ${es.oauthConnected ? '' : `<input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">`}
-          <button class="btn btn--primary" type="submit">Save</button>
-        </form>`;
+        <details class="email-adv"${setupOpen ? ' open' : ''}>
+          <summary>${es.oauthConnected ? 'Sender identity' : 'Configure manually instead'}</summary>
+          <form class="invite-add" data-action="email-settings-form">
+            <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+            <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
+            ${es.oauthConnected ? '' : `<input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">`}
+            <button class="btn btn--primary" type="submit">Save</button>
+          </form>
+        </details>`;
         })()}
       </section>
       <section class="admin-block">
