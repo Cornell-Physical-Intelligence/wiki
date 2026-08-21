@@ -83,6 +83,78 @@ assert(
   page.includes('This wiki is the team\'s internal knowledge base'),
   'production shell is missing wiki-specific public prose',
 );
+assert(
+  page.includes('<a href="/about">About this wiki</a>'),
+  'production shell does not link the /about page',
+);
+
+/* ------------------------------ about page -------------------------------- */
+const about = read('public/about/index.html');
+
+assert(about.includes('<meta name="robots" content="index, follow">'), '/about is not indexable');
+assert(!about.includes('noindex'), '/about contains a noindex directive');
+assert(
+  about.includes('<title>About the CUPI Wiki | Cornell Physical Intelligence</title>'),
+  '/about has the wrong title',
+);
+assert(about.includes('<meta name="description" content="'), '/about is missing its description');
+assert(
+  about.includes(`<link rel="canonical" href="${WIKI_URL}/about">`),
+  '/about is missing its canonical URL',
+);
+assert(
+  about.includes(`<meta property="og:url" content="${WIKI_URL}/about">`),
+  '/about is missing og:url',
+);
+assert(
+  about.includes(`<meta property="og:image" content="${WIKI_URL}/favicon-cupi.png">`),
+  '/about is missing og:image',
+);
+
+const aboutLd = about.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
+assert(aboutLd, '/about is missing structured data');
+const aboutGraph = JSON.parse(aboutLd)['@graph'];
+const webPage = aboutGraph.find((n) => n['@type'] === 'WebPage');
+const breadcrumbs = aboutGraph.find((n) => n['@type'] === 'BreadcrumbList');
+assert(webPage?.url === `${WIKI_URL}/about`, 'WebPage node is missing or mis-URLed');
+assert(
+  webPage?.publisher?.['@id'] === `${MAIN_SITE}/#organization`,
+  'WebPage publisher does not reference the main-site Organization entity',
+);
+assert(
+  webPage?.isPartOf?.['@id'] === `${WIKI_URL}/#website`,
+  'WebPage is not tied to the wiki WebSite entity',
+);
+assert(breadcrumbs, '/about is missing its BreadcrumbList');
+assert(
+  JSON.stringify(breadcrumbs).includes(`{"@type":"ListItem","position":1,"name":"Home","item":"${WIKI_URL}/"}`),
+  'BreadcrumbList does not start at Home',
+);
+
+// /about must be pure static: no SPA shell, so hydration can never bounce a
+// crawler toward sign-in, and unique factual prose in the raw HTML.
+assert(!about.includes('id="app"'), '/about must not ship the SPA app shell');
+assert(!about.includes('Store.boot'), '/about must not ship SPA boot code');
+assert(
+  about.includes('The CUPI Wiki is the team knowledge base of Cornell Physical Intelligence (CUPI)'),
+  '/about is missing unique prose about the wiki',
+);
+assert(
+  about.includes('<link rel="canonical" href=') && about.includes(`<a href="/">the landing page</a>`),
+  '/about does not link back to the landing',
+);
+assert(
+  about.includes('href="https://cornellphysicalintelligence.com/"'),
+  '/about does not link the main site',
+);
+assert(
+  about.includes('https://cornell.campusgroups.com/cupi/home/'),
+  '/about is missing the Campus Groups listing link',
+);
+assert(
+  about.includes('mailto:cuphysint@cornell.edu'),
+  '/about is missing the contact email link',
+);
 
 /* ------------------------ preview builds stay private --------------------- */
 const preview = read('docs/index.html');
@@ -106,12 +178,12 @@ assert(robots.includes(`Sitemap: ${WIKI_URL}/sitemap.xml`), 'robots.txt does not
 const sitemap = read('public/sitemap.xml');
 const locs = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
 assert(
-  locs.length === 1 && locs[0] === `${WIKI_URL}/`,
-  'sitemap.xml must list exactly the signed-out root page',
+  locs.length === 2 && locs[0] === `${WIKI_URL}/` && locs[1] === `${WIKI_URL}/about`,
+  'sitemap.xml must list exactly the root and /about',
 );
 
 const shipped = readFileSync(new URL('../public/favicon-cupi.png', import.meta.url));
 const master = readFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url));
 assert(shipped.equals(master), 'shipped favicon bytes do not match the source asset');
 
-console.log('Wiki SEO verification passed: indexable shell, noindexed previews, robots, sitemap, favicon.');
+console.log('Wiki SEO verification passed: indexable shell + /about, noindexed previews, robots, sitemap, favicon.');
