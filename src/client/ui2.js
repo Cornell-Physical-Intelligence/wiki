@@ -522,12 +522,31 @@ function viewAdmin() {
         </div>
         <details class="email-adv"${setupOpen ? ' open' : ''}>
           <summary>${es.oauthConnected ? 'Sender identity' : 'Configure manually instead'}</summary>
-          <form class="invite-add" data-action="email-settings-form">
-            <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
-            <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
-            ${es.oauthConnected ? '' : `<input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">`}
-            <button class="btn btn--primary" type="submit">Save</button>
-          </form>
+          ${(() => {
+            const doms = typeof REMOTE === 'undefined'
+              ? [{ name: 'mail.cornellphysicalintelligence.com', status: 'verified' }]
+              : (Array.isArray(UI.resendDomains) ? UI.resendDomains : null);
+            const verified = (doms || []).filter((d) => d.status === 'verified');
+            const useDd = verified.length > 0 && !UI.emailFromCustom;
+            if (!useDd) return `<form class="invite-add" data-action="email-settings-form">
+              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+              <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
+              ${es.oauthConnected ? '' : `<input class="text-input" name="key" type="password" placeholder="${es.keySet ? `API key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">`}
+              <button class="btn btn--primary" type="submit">Save</button>
+            </form>`;
+            const opts = verified.map((d) => ({ value: `wiki@${d.name}`, label: `wiki@${d.name}` }));
+            if (es.from && !opts.some((o) => o.value === es.from)) {
+              opts.unshift({ value: es.from, label: `${es.from} (not on a verified domain)` });
+            }
+            opts.push({ value: '__custom', label: 'Custom address…' });
+            const current = es.from || opts[0].value;
+            return `<form class="invite-add" data-action="email-settings-form">
+              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+              ${dd('email-from', opts, current, {})}
+              <input type="hidden" name="from" value="${MD.esc(current)}">
+              <button class="btn btn--primary" type="submit">Save</button>
+            </form>`;
+          })()}
         </details>`;
         })()}
       </section>
@@ -866,6 +885,13 @@ function render() {
   // Mount hooks.
   $$('.cad-embed').forEach(mountCadViewer);
   { const vt = $('.login .vt-title'); if (vt) mountHeroTitle(vt); }
+  if (typeof REMOTE !== 'undefined' && r.name === 'admin' && !UI.editor && UI.resendDomains === undefined && Store.isAdmin()) {
+    const es = Store.emailSettings();
+    if (es.oauthConnected || es.keySet || es.envKeySet) {
+      UI.resendDomains = 'pending';
+      api('/resend/domains').then((out) => { UI.resendDomains = out.domains; render(); }).catch(() => { UI.resendDomains = null; });
+    }
+  }
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
     edUpdatePreview();

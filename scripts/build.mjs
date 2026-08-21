@@ -29,7 +29,7 @@ writeFileSync(out('oauth/client.json'), JSON.stringify({
   grant_types: ['authorization_code', 'refresh_token'],
   response_types: ['code'],
   token_endpoint_auth_method: 'none',
-  scope: 'emails:send',
+  scope: 'emails:send full_access',
 }, null, 2) + '\n');
 
 writeFileSync(

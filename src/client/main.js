@@ -306,6 +306,16 @@ document.addEventListener('click', async (ev) => {
           host.querySelector('.dd__label').textContent = o.label;
           if (host.dataset.m === 'ed-section' && UI.editor) { UI.editor.section = o.value; markDirty(); autosaveDraft(); }
           if (host.dataset.m === 'section' && UI.modal) UI.modal.sectionTouched = true;
+          if (host.dataset.m === 'email-from') {
+            if (o.value === '__custom') { UI.emailFromCustom = true; render(); }
+            else {
+              const nm = $('form[data-action="email-settings-form"] [name="fromname"]')?.value || '';
+              Store.setEmailSettings({ key: '', from: o.value, name: nm });
+              UI.emailFromCustom = false;
+              render();
+              toast('Sender updated');
+            }
+          }
         },
       })), host);
       break;
@@ -364,7 +374,7 @@ document.addEventListener('click', async (ev) => {
     case 'resend-disconnect': stop(); {
       if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
       el.disabled = true;
-      try { adoptServer(await api('/resend/disconnect', { method: 'POST', body: JSON.stringify({}) })); toast('Resend disconnected'); }
+      try { adoptServer(await api('/resend/disconnect', { method: 'POST', body: JSON.stringify({}) })); UI.resendDomains = undefined; toast('Resend disconnected'); }
       catch (e) { toast(`Couldn't disconnect: ${e.message}`); }
       render();
       break;
@@ -526,6 +536,7 @@ document.addEventListener('submit', (ev) => {
   const act = form.dataset.action;
 
   if (act === 'email-settings-form') {
+    UI.emailFromCustom = false;
     const from = form.from.value.trim();
     const key = form.key ? form.key.value.trim() : '';
     const name = form.fromname.value.trim();
@@ -832,7 +843,8 @@ function syncViewerTheme() {
   {
     const flag = UI.route.params.resend;
     if (flag) {
-      toast(flag === 'connected' ? 'Resend connected. Set the From address and send yourself a test.'
+      UI.resendDomains = undefined;
+      toast(flag === 'connected' ? 'Resend connected. Check the sender identity and send yourself a test.'
         : flag === 'denied' ? 'Resend connection was declined.'
         : 'Resend connection failed. Try again.');
     }

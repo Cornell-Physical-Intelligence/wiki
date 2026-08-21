@@ -4,7 +4,7 @@
 import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts, StorageNotConfigured } from '../lib/db.js';
 import { applyOp } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
-import { sendWelcome } from '../lib/email.js';
+import { sendWelcome, freshOauthToken } from '../lib/email.js';
 import { createHash, randomBytes } from 'node:crypto';
 
 // The deployment's canonical origin is its OAuth client identity.
@@ -155,7 +155,7 @@ export default async function handler(req, res) {
       u.searchParams.set('client_id', OAUTH_CLIENT_ID);
       u.searchParams.set('response_type', 'code');
       u.searchParams.set('redirect_uri', `${WIKI_URL}/api/resend/callback`);
-      u.searchParams.set('scope', 'emails:send');
+      u.searchParams.set('scope', 'full_access');
       u.searchParams.set('state', ostate);
       u.searchParams.set('code_challenge', challenge);
       u.searchParams.set('code_challenge_method', 'S256');
@@ -184,13 +184,24 @@ export default async function handler(req, res) {
       });
       if (!tr.ok) return redirect(res, '/#/admin?resend=exchange', [clear]);
       const t = await tr.json();
+      // With the grant in hand, pick a sender automatically: wiki@ on the
+      // account's first verified domain. Nothing to type when all is well.
+      let autoFrom = '';
+      try {
+        const dr = await fetch('https://api.resend.com/domains', { headers: { authorization: `Bearer ${t.access_token}` } });
+        if (dr.ok) {
+          const dj = await dr.json();
+          const verified = (dj.data || []).find((x) => x.status === 'verified');
+          if (verified) autoFrom = `wiki@${verified.name}`;
+        }
+      } catch (e) { /* the dropdown covers it later */ }
       await updateState((s) => {
         if (!s.settings) s.settings = {};
         const cur = s.settings.email || {};
         s.settings.email = {
           ...cur,
           name: cur.name || 'CUPI Wiki',
-          from: cur.from || '',
+          from: cur.from || autoFrom,
           oauth: {
             refresh: t.refresh_token,
             access: t.access_token,
@@ -200,6 +211,27 @@ export default async function handler(req, res) {
         return s;
       });
       return redirect(res, '/#/admin?resend=connected', [clear]);
+    }
+
+    if (path === '/resend/domains') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
+      const email = state.settings?.email;
+      let bearer = null;
+      if (email?.oauth?.refresh) {
+        try {
+          bearer = await freshOauthToken(email.oauth, OAUTH_CLIENT_ID, (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }));
+        } catch (e) { bearer = null; }
+      }
+      if (!bearer) bearer = email?.key || process.env.RESEND_API_KEY || null;
+      if (!bearer) return json(res, 200, { domains: null });
+      try {
+        const dr = await fetch('https://api.resend.com/domains', { headers: { authorization: `Bearer ${bearer}` } });
+        if (!dr.ok) return json(res, 200, { domains: null });
+        const dj = await dr.json();
+        return json(res, 200, { domains: (dj.data || []).map((d) => ({ name: d.name, status: d.status })) });
+      } catch (e) {
+        return json(res, 200, { domains: null });
+      }
     }
 
     if (path === '/resend/disconnect' && req.method === 'POST') {
