@@ -1372,7 +1372,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .integration__name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .integration__status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--muted); }
 .integration__status--off { color: var(--faint); font-weight: 400; }
-.dot--good { background: var(--good); }
+.integration__status--on { color: var(--good); font-weight: 500; }
 .integration__sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .integration__actions { display: flex; gap: 8px; flex: none; }
 .integration__editor { margin-top: 12px; }
@@ -5024,7 +5024,7 @@ function viewPage(id) {
             <span>${Math.max(1, Math.round(MD.mdToText(p.body).split(/\s+/).length / 220))} min read</span>
             ${(() => { const { total, done } = MD.countTasks(p.body); if (!total) return ''; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
           </span>` : ''}
-            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft"><span class="dot dot--accent"></span>Unsaved draft · Resume</button>` : ''}
+            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft">Unsaved draft · Resume</button>` : ''}
           </div>
         </header>
         <div class="prose" data-page="${id}">${html}</div>
@@ -5326,7 +5326,7 @@ function viewEditor() {
   ];
   return `<div class="editor mode-${e.mode}">
     ${topbar(
-      `${e.isNew ? '<span class="crumbs__here">New page</span>' : (() => { const p = Store.page(e.pageId); return p ? crumbsFor(p) : '<span class="crumbs__here">Editing</span>'; })()}<span class="crumbs__mode">Editing</span>${e.dirty ? '<span class="crumbs__draft"><span class="dot dot--accent"></span>unsaved</span>' : ''}`,
+      `${e.isNew ? '<span class="crumbs__here">New page</span>' : (() => { const p = Store.page(e.pageId); return p ? crumbsFor(p) : '<span class="crumbs__here">Editing</span>'; })()}<span class="crumbs__mode">Editing</span>${e.dirty ? '<span class="crumbs__draft">unsaved</span>' : ''}`,
       `<div class="editor__mode" role="tablist" aria-label="Editor mode">
         <button role="tab" data-action="ed-mode" data-mode="write" class="${e.mode === 'write' ? 'active' : ''}">Write</button>
         <button role="tab" data-action="ed-mode" data-mode="split" class="${e.mode === 'split' ? 'active' : ''}">Split</button>
@@ -5783,7 +5783,7 @@ function viewAdmin() {
             <span class="integration__tile${connected ? '' : ' integration__tile--off'}">${RESEND_MARK}</span>
             <span class="integration__meta">
               <span class="integration__name">Resend
-                ${connected ? '<span class="integration__status"><span class="dot dot--good"></span>Connected</span>'
+                ${connected ? '<span class="integration__status integration__status--on">Connected</span>'
                   : manual ? '<span class="integration__status">Manual</span>'
                   : '<span class="integration__status integration__status--off">Not connected</span>'}
               </span>

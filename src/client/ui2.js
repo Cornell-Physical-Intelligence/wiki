@@ -67,7 +67,7 @@ function viewEditor() {
   ];
   return `<div class="editor mode-${e.mode}">
     ${topbar(
-      `${e.isNew ? '<span class="crumbs__here">New page</span>' : (() => { const p = Store.page(e.pageId); return p ? crumbsFor(p) : '<span class="crumbs__here">Editing</span>'; })()}<span class="crumbs__mode">Editing</span>${e.dirty ? '<span class="crumbs__draft"><span class="dot dot--accent"></span>unsaved</span>' : ''}`,
+      `${e.isNew ? '<span class="crumbs__here">New page</span>' : (() => { const p = Store.page(e.pageId); return p ? crumbsFor(p) : '<span class="crumbs__here">Editing</span>'; })()}<span class="crumbs__mode">Editing</span>${e.dirty ? '<span class="crumbs__draft">unsaved</span>' : ''}`,
       `<div class="editor__mode" role="tablist" aria-label="Editor mode">
         <button role="tab" data-action="ed-mode" data-mode="write" class="${e.mode === 'write' ? 'active' : ''}">Write</button>
         <button role="tab" data-action="ed-mode" data-mode="split" class="${e.mode === 'split' ? 'active' : ''}">Split</button>
@@ -524,7 +524,7 @@ function viewAdmin() {
             <span class="integration__tile${connected ? '' : ' integration__tile--off'}">${RESEND_MARK}</span>
             <span class="integration__meta">
               <span class="integration__name">Resend
-                ${connected ? '<span class="integration__status"><span class="dot dot--good"></span>Connected</span>'
+                ${connected ? '<span class="integration__status integration__status--on">Connected</span>'
                   : manual ? '<span class="integration__status">Manual</span>'
                   : '<span class="integration__status integration__status--off">Not connected</span>'}
               </span>

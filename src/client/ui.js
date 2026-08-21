@@ -323,7 +323,7 @@ function viewPage(id) {
             <span>${Math.max(1, Math.round(MD.mdToText(p.body).split(/\s+/).length / 220))} min read</span>
             ${(() => { const { total, done } = MD.countTasks(p.body); if (!total) return ''; return `<span class="taskmeter"><span class="taskmeter__bar"><span style="width:${Math.round(done / total * 100)}%"></span></span>${done}/${total} tasks</span>`; })()}
           </span>` : ''}
-            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft"><span class="dot dot--accent"></span>Unsaved draft · Resume</button>` : ''}
+            ${typeof draftStash !== 'undefined' && draftStash.has(id) ? `<button class="draft-chip" data-action="edit" data-id="${id}" title="Resume your unsaved draft">Unsaved draft · Resume</button>` : ''}
           </div>
         </header>
         <div class="prose" data-page="${id}">${html}</div>
