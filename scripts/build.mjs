@@ -8,6 +8,9 @@ import { fullPage, WIKI_URL } from './assemble.mjs';
 // when that page or its metadata really changes — never to simulate freshness.
 const PUBLIC_SURFACE_MODIFIED = '2026-08-21';
 
+// IndexNow key: the file at this exact URL must serve the key verbatim.
+const INDEXNOW_KEY = '614d4186b0a00e9f4760e52e3a0a931d';
+
 const out = (f) => new URL(`../public/${f}`, import.meta.url);
 mkdirSync(new URL('../public', import.meta.url), { recursive: true });
 
@@ -41,5 +44,7 @@ writeFileSync(
   out('sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${WIKI_URL}/</loc>\n    <lastmod>${PUBLIC_SURFACE_MODIFIED}</lastmod>\n  </url>\n</urlset>\n`,
 );
+
+writeFileSync(out(`${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
 
 console.log('public/index.html', html.length, 'bytes (+ robots.txt, sitemap.xml, favicon-cupi.png)');
