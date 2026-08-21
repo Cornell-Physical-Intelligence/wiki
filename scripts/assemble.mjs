@@ -56,6 +56,23 @@ const STRUCTURED_DATA = JSON.stringify({
   ],
 });
 
+// Visible, unique public prose so a logged-out fetch (no JS) is not an empty
+// #app shell. Crawlers read this block in the raw HTML. A tiny inline script
+// hides it for JS clients so the Voronoi sign-in title is the human landing;
+// viewLogin then repeats the same sentences so a rendered snapshot matches.
+export const PUBLIC_LANDING_ABOUT = `<div class="login__about">
+<p>Cornell Physical Intelligence (CUPI) is a Cornell University student robotics organization in Ithaca, New York. We build robots that reason about the physical world: intelligent manipulation, autonomous perception, and navigation on aerial and ground platforms.</p>
+<p>This wiki is the team's internal knowledge base. Members document CAD conventions, board bring-up, flight-test procedure, project pages, and the processes that keep Mechanical, Electrical, Software, and Business working as one team.</p>
+<p>Wiki pages stay private to the CUPI roster. Sign in with a cornell.edu Google account. Access is allowlisted; once a team lead has added you, signing in is all it takes.</p>
+</div>`;
+
+export const PUBLIC_LANDING = `<section id="seo-public" class="seo-public">
+<h1>CUPI Wiki</h1>
+<p class="seo-public__kicker">Cornell University Physical Intelligence</p>
+${PUBLIC_LANDING_ABOUT}
+<p class="seo-public__links"><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a> &middot; <a href="https://www.linkedin.com/company/cu-physical-intelligence/">LinkedIn</a></p>
+</section>`;
+
 export function styles() {
   return `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${b64('playfair.woff2')}) format('woff2');}
 @font-face{font-family:'Questrial';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,${b64('questrial.woff2')}) format('woff2');}
@@ -66,7 +83,8 @@ ${read('styles.css')}`;
 export function scripts({ remote = false } = {}) {
   const assets = `'use strict';
 const CUPI_LOGO = 'data:image/png;base64,${b64('cupi-logo-192.png')}';
-const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
+const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';
+const PUBLIC_LANDING_ABOUT = ${JSON.stringify(PUBLIC_LANDING_ABOUT)};`;
   return [
     assets,
     read('icons.js'),
@@ -120,6 +138,8 @@ ${styles()}
 </style>
 </head>
 <body>
+${PUBLIC_LANDING}
+<script>document.getElementById('seo-public').hidden = true;</script>
 <div id="app"></div>
 <script>
 ${scripts({ remote })}

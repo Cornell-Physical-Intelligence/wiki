@@ -54,6 +54,14 @@ assert(
   'live wiki shell is missing its canonical URL',
 );
 assert(
+  homeHtml.includes('id="seo-public"'),
+  'live wiki shell is missing the crawlable public landing',
+);
+assert(
+  homeHtml.includes('Cornell Physical Intelligence (CUPI) is a Cornell University student robotics organization'),
+  'live wiki shell is missing unique public prose about CUPI',
+);
+assert(
   homeHtml.includes('<link rel="icon" type="image/png" sizes="192x192" href="/favicon-cupi.png">'),
   'live wiki shell is missing the crawlable circular favicon',
 );

@@ -6,7 +6,7 @@ import { fullPage, WIKI_URL } from './assemble.mjs';
 
 // The date the signed-out public surface last materially changed. Update it
 // when that page or its metadata really changes — never to simulate freshness.
-const PUBLIC_SURFACE_MODIFIED = '2026-08-20';
+const PUBLIC_SURFACE_MODIFIED = '2026-08-21';
 
 const out = (f) => new URL(`../public/${f}`, import.meta.url);
 mkdirSync(new URL('../public', import.meta.url), { recursive: true });

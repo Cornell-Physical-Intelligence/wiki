@@ -221,6 +221,7 @@ function viewLogin() {
       <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
     </div>
+    ${typeof PUBLIC_LANDING_ABOUT === 'string' ? PUBLIC_LANDING_ABOUT : ''}
     ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
   </div>`;
 }
