@@ -1540,3 +1540,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 }
 .bug-shot__x svg { width: 11px; height: 11px; }
 .bug-shot__x:hover { background: var(--accent); color: #fff; }
+
+/* selected source text, mirrored in the editor preview */
+::highlight(wiki-sync) { background-color: var(--accent-soft); color: var(--accent); }

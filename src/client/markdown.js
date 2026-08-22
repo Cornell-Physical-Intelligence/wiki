@@ -159,7 +159,7 @@ function renderInline(src, ctx, opts = {}) {
       srcUri = att.dataUri || att.url;
     }
     // Unsupported scheme: show the author their literal syntax, never half of it.
-    if (!/^(data:|https?:|\/api\/att\/)/.test(srcUri)) return whole;
+    if (!/^(data:|https?:|\/api\/att\/)/.test(srcUri) && !(srcUri.startsWith('/') && !srcUri.startsWith('//'))) return whole;
     const img = `<img src="${srcUri}" alt="${alt}" loading="lazy" data-action="lightbox">`;
     return cap ? `<figure>${img}<figcaption>${cap}</figcaption></figure>` : img;
   });

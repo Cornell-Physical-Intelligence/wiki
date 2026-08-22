@@ -1545,6 +1545,9 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .bug-shot__x svg { width: 11px; height: 11px; }
 .bug-shot__x:hover { background: var(--accent); color: #fff; }
 
+/* selected source text, mirrored in the editor preview */
+::highlight(wiki-sync) { background-color: var(--accent-soft); color: var(--accent); }
+
 </style>
 <section id="seo-public" class="seo-public">
 <h1>CUPI Wiki</h1>
@@ -3946,7 +3949,7 @@ function renderInline(src, ctx, opts = {}) {
       srcUri = att.dataUri || att.url;
     }
     // Unsupported scheme: show the author their literal syntax, never half of it.
-    if (!/^(data:|https?:|\/api\/att\/)/.test(srcUri)) return whole;
+    if (!/^(data:|https?:|\/api\/att\/)/.test(srcUri) && !(srcUri.startsWith('/') && !srcUri.startsWith('//'))) return whole;
     const img = `<img src="${srcUri}" alt="${alt}" loading="lazy" data-action="lightbox">`;
     return cap ? `<figure>${img}<figcaption>${cap}</figcaption></figure>` : img;
   });
@@ -7309,7 +7312,7 @@ document.addEventListener('input', (ev) => {
     markDirty();
     autosaveDraft();
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(edUpdatePreview, 160);
+    previewTimer = setTimeout(() => { edUpdatePreview(); edMirrorSel(); }, 160);
   }
   if (t.matches('[data-ed="body"]')) {
     UI.editor.body = t.value;
@@ -7319,8 +7322,105 @@ document.addEventListener('input', (ev) => {
     autosaveDraft();
     edAutocomplete(t);
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(edUpdatePreview, 160);
+    previewTimer = setTimeout(() => { edUpdatePreview(); edMirrorSel(); }, 160);
   }
+});
+
+/* ------------------ source selection mirrored in preview ------------------ */
+
+const MIRROR_BLOCKS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TR', 'PRE', 'BLOCKQUOTE', 'TABLE', 'FIGURE', 'FIGCAPTION', 'UL', 'OL', 'HR', 'DETAILS', 'SUMMARY', 'ASIDE', 'DIV', 'BR']);
+
+// What the renderer keeps of a selected markdown span: link labels survive,
+// syntax marks do not. Only needs to agree with MD.render on visible text.
+function mdSelText(s) {
+  return s
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[\[([^\]#|]+)(?:#[^\]|]*)?\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]#|]+)(?:#[^\]|]*)?\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^ {0,3}#{1,6} +/gm, ' ')
+    .replace(/^ {0,3}(?:[-*+]|\d+[.)]) +(?:\[[ xX]\] +)?/gm, ' ')
+    .replace(/^ {0,3}>+ ?/gm, ' ')
+    .replace(/^ *:::.*$/gm, ' ')
+    .replace(/^ *(?:-{3,}|_{3,}|\*{3,}) *$/gm, ' ')
+    .replace(/^```.*$/gm, ' ')
+    .replace(/\|/g, ' ')
+    .replace(/[*_~`]+/g, '');
+}
+
+const MIRROR_FOLD = { '\u2019': "'", '\u2018': "'", '\u201c': '"', '\u201d': '"', '\u2013': '-', '\u2014': '-', '\u00a0': ' ' };
+const foldCh = (c) => MIRROR_FOLD[c] || c.toLowerCase();
+
+function foldCollapse(s) {
+  let out = ''; let ws = false;
+  for (const ch of s) {
+    if (/\s/.test(foldCh(ch))) { ws = out.length > 0; continue; }
+    if (ws) { out += ' '; ws = false; }
+    out += foldCh(ch);
+  }
+  return out;
+}
+
+// Fold the preview's visible text the same way, keeping a per-character map
+// back to (text node, offset) so a match can become a live Range.
+function previewIndex(host) {
+  const chars = []; const locs = []; let boundary = false;
+  (function walk(n) {
+    if (n.nodeType === 3) {
+      const s = n.nodeValue;
+      for (let i = 0; i < s.length; i++) {
+        const f = foldCh(s[i]);
+        if (/\s/.test(f)) { boundary = chars.length > 0; continue; }
+        if (boundary) { chars.push(' '); locs.push(null); boundary = false; }
+        chars.push(f); locs.push({ node: n, off: i });
+      }
+      return;
+    }
+    if (n.nodeType !== 1 || n.hidden || n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return;
+    if (MIRROR_BLOCKS.has(n.tagName) && chars.length) boundary = true;
+    for (const c of n.childNodes) walk(c);
+    if (MIRROR_BLOCKS.has(n.tagName) && chars.length) boundary = true;
+  })(host);
+  return { text: chars.join(''), locs };
+}
+
+function edMirrorSel() {
+  const clear = () => window.CSS?.highlights?.delete('wiki-sync');
+  const ta = $('[data-ed="body"]'); const host = $('[data-ed-preview]');
+  if (!ta || !host || !UI.editor) { clear(); return; }
+  const a = ta.selectionStart; const b = ta.selectionEnd;
+  if (document.activeElement !== ta || a === b) { clear(); return; }
+  const needle = foldCollapse(mdSelText(ta.value.slice(a, b)));
+  if (needle.length < 2) { clear(); return; }
+  const { text, locs } = previewIndex(host);
+  const hits = [];
+  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) hits.push(i);
+  if (!hits.length) { clear(); return; }
+  // several matches: take the one sitting at about the same depth into the page
+  const want = a / Math.max(1, ta.value.length);
+  const best = hits.reduce((p, c) => (Math.abs(c / text.length - want) < Math.abs(p / text.length - want) ? c : p));
+  let s = best; let e = best + needle.length - 1;
+  while (s <= e && !locs[s]) s++;
+  while (e >= s && !locs[e]) e--;
+  if (s > e) { clear(); return; }
+  const range = document.createRange();
+  range.setStart(locs[s].node, locs[s].off);
+  range.setEnd(locs[e].node, locs[e].off + 1);
+  if (window.CSS?.highlights) CSS.highlights.set('wiki-sync', new Highlight(range));
+  const pane = host.closest('.editor__pane--preview');
+  if (pane && pane.clientWidth) {
+    const r = range.getBoundingClientRect(); const pr = pane.getBoundingClientRect();
+    if (r.top < pr.top + 40 || r.bottom > pr.bottom - 40) {
+      pane.scrollTo({ top: pane.scrollTop + (r.top - pr.top) - pane.clientHeight * 0.35, behavior: 'smooth' });
+    }
+  }
+}
+
+let mirrorTimer = null;
+document.addEventListener('selectionchange', () => {
+  if (!UI.editor) return;
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(edMirrorSel, 120);
 });
 
 document.addEventListener('click', (ev) => {

@@ -2,13 +2,14 @@
 // Rewrites in vercel.json send every /api/* request here.
 
 import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts, StorageNotConfigured } from '../lib/db.js';
-import { applyOp } from '../lib/ops.js';
+import { applyOp, healWelcomeCrab } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
 import { fileBugPR } from '../lib/github.js';
 
 // Best-effort per-instance spacing so one member cannot firehose PRs.
 const bugLast = new Map();
+let crabHealed = false; // once per instance; the transform itself no-ops after the first real write
 import { createHash, randomBytes } from 'node:crypto';
 
 // The deployment's canonical origin is its OAuth client identity.
@@ -119,6 +120,7 @@ export default async function handler(req, res) {
 
     const devAuth = process.env.DEV_FAKE_AUTH; // local dev only
     const email = devAuth || readSession(req.headers.cookie);
+    if (!crabHealed) { crabHealed = true; try { await updateState(healWelcomeCrab); } catch (e) { crabHealed = false; } }
     const { state, version } = await getState();
     const me = email ? state.users.find((u) => u.email === email && u.status === 'active') : null;
 
