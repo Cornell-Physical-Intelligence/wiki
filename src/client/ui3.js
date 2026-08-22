@@ -192,9 +192,9 @@ function viewExtraModal(m) {
       <div class="modal__head"><h3>Report a bug</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
         ${d.error ? `<div class="login__error">${MD.esc(d.error)}</div>` : ''}
-        <label>What broke? <input class="text-input" data-m="bug-title" placeholder="e.g. Saving a page loses the last line" maxlength="120" value="${MD.esc(d.title)}"></label>
+        <label>What broke? <input class="text-input" data-m="bug-title" placeholder="e.g. Saving a page loses the last line" maxlength="120" value="${MD.esc(d.title)}" spellcheck="true" autocorrect="off"></label>
         <label>Details <span class="sub">What you did, what you expected, what happened instead.</span>
-        <textarea class="text-input" data-m="bug-body" rows="5" maxlength="10000" placeholder="Steps to reproduce help the most.">${MD.esc(d.body)}</textarea></label>
+        <textarea class="text-input" data-m="bug-body" rows="5" maxlength="10000" placeholder="Steps to reproduce help the most." spellcheck="true" autocorrect="off">${MD.esc(d.body)}</textarea></label>
         <div class="bug-drop" data-bug-drop tabindex="0" role="button" aria-label="Add screenshots">
           ${lucide('image')} Drop screenshots here, paste them, or <span class="linklike">browse</span>
           <input type="file" data-bug-file hidden multiple accept="image/*">
@@ -213,9 +213,9 @@ function viewExtraModal(m) {
     return `<div class="modal" role="dialog" aria-label="Edit profile">
       <div class="modal__head"><h3>Your profile</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
-        <label>Name<input class="text-input" data-m="pname" value="${MD.esc(me.name)}" maxlength="60" autocomplete="name"></label>
+        <label>Name<input class="text-input" data-m="pname" value="${MD.esc(me.name)}" maxlength="60" autocomplete="name" spellcheck="false"></label>
         <label>Subteam <span class="sub">Optional. Shows on the members roster.</span>
-        <input class="text-input" data-m="psub" value="${MD.esc(me.subteam || '')}" maxlength="40" placeholder="e.g. Electrical"></label>
+        <input class="text-input" data-m="psub" value="${MD.esc(me.subteam || '')}" maxlength="40" placeholder="e.g. Electrical" spellcheck="false"></label>
         <p class="admin-block__sub" style="margin:0">Signed in as ${me.email}. Your name starts as your Google account's name; set it to whatever the team actually calls you.</p>
       </div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="profile-save">Save</button></div>

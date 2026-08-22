@@ -294,7 +294,7 @@ function edFindOpen() {
   if (bar) { $('.findbar input').select(); return; }
   bar = document.createElement('div');
   bar.className = 'findbar';
-  bar.innerHTML = `<input type="text" placeholder="Find in page…" aria-label="Find in page">
+  bar.innerHTML = `<input type="text" placeholder="Find in page…" spellcheck="false" aria-label="Find in page">
     <span class="findbar__count"></span>
     <button class="icon-btn" data-find="prev" aria-label="Previous match">${lucide('h2', 2).replace(/<svg[^>]*>[\s\S]*<\/svg>/, '')}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg></button>
     <button class="icon-btn" data-find="next" aria-label="Next match"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>

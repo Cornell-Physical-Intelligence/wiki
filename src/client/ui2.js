@@ -92,8 +92,8 @@ function viewEditor() {
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
-        <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90">
-        <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="false">${MD.esc(e.body)}</textarea>
+        <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90" spellcheck="true" autocorrect="off">
+        <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="true" autocorrect="off">${MD.esc(e.body)}</textarea>
       </div>
       <div class="editor__pane editor__pane--preview">
         <div class="preview-tag"><span class="eyebrow">Preview</span></div>
@@ -514,7 +514,7 @@ function viewAdmin() {
           opts.push({ value: '__custom', label: 'Custom address…' });
           const current = es.from || (opts[0] && opts[0].value !== '__custom' ? opts[0].value : '');
           const editor = `<form class="invite-add integration__editor" data-action="email-settings-form">
-              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" spellcheck="false" aria-label="From name">
               ${useDd
                 ? `${dd('email-from', opts, current, {})}<input type="hidden" name="from" value="${MD.esc(current)}">`
                 : `<input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">`}
@@ -544,7 +544,7 @@ function viewAdmin() {
           ${connected ? '' : `<details class="email-adv"${UI.emailFromCustom ? ' open' : ''}>
             <summary>Use an API key instead</summary>
             <form class="invite-add" data-action="email-settings-form">
-              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" aria-label="From name">
+              <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" spellcheck="false" aria-label="From name">
               <input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">
               <input class="text-input" name="key" type="password" placeholder="${es.keySet ? `Key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">
               <button class="btn" type="submit">Save</button>
@@ -647,7 +647,7 @@ function viewPalette() {
   if (!UI.palette) return '';
   return `<div class="palette-veil" data-action="palette-close">
     <div class="palette" role="dialog" aria-label="Search">
-      <div class="palette__head">${I.search}<input placeholder="Search every page by title or text…" value="${MD.esc(UI.palette.q)}" aria-label="Search query"><span class="kbd">esc</span></div>
+      <div class="palette__head">${I.search}<input placeholder="Search every page by title or text…" value="${MD.esc(UI.palette.q)}" spellcheck="false" aria-label="Search query"><span class="kbd">esc</span></div>
       <div class="palette__list">${paletteListHtml()}</div>
       <div class="palette__foot"><span>↑↓ navigate</span><span>↵ open</span><span>esc close</span></div>
     </div>
@@ -673,7 +673,7 @@ function viewModal() {
     inner = `<div class="modal modal--wide" role="dialog" aria-label="New page">
       <div class="modal__head"><h3>New page</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
-        <label>Title<input class="text-input" data-m="title" placeholder="e.g. Landing Gear Study" value="${MD.esc(m.title || '')}" maxlength="90"></label>
+        <label>Title<input class="text-input" data-m="title" placeholder="e.g. Landing Gear Study" value="${MD.esc(m.title || '')}" maxlength="90" spellcheck="true" autocorrect="off"></label>
         <label>Section${ddSections(m.section || 'projects')}</label>
         <label>Template<span class="sub">Start from a structure the team already uses.</span></label>
         <div class="tpl-grid">${TEMPLATES.map((t) => `<button class="tpl ${(m.tpl || 'blank') === t.id ? 'sel' : ''}" data-action="tpl-pick" data-tpl="${t.id}" aria-label="${MD.esc(t.name)}">${thumb(t)}<b>${t.name}</b><span class="tpl__desc">${MD.esc(t.desc)}</span></button>`).join('')}</div>
@@ -686,7 +686,7 @@ function viewModal() {
       <div class="modal__head"><h3>${UI.editor?.isNew ? 'Create page' : 'Save changes'}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body">
         <label>What changed? <span class="sub">Optional: one line for the history, so anyone can find this change later.</span>
-        <input class="text-input" data-m="summary" placeholder="${UI.editor?.isNew ? 'Created page' : 'e.g. Added rev D bring-up results'}" maxlength="120"></label>
+        <input class="text-input" data-m="summary" placeholder="${UI.editor?.isNew ? 'Created page' : 'e.g. Added rev D bring-up results'}" maxlength="120" spellcheck="true" autocorrect="off"></label>
       </div>
       <div class="modal__foot"><button class="btn" data-action="modal-close">Keep editing</button><button class="btn btn--primary" data-action="save-commit">Save</button></div>
     </div>`;
