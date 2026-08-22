@@ -27,6 +27,7 @@
   --pop-shadow: 0 10px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
   --accent: #b31b1b;            /* Cornell carnelian, functional only */
   --accent-soft: rgba(179, 27, 27, 0.09);
+  --mirror-hl: rgba(0, 0, 0, 0.1);
   --good: #1a7f37;
   --good-bg: rgba(26, 127, 55, 0.1);
   --diff-add-hl: rgba(26, 127, 55, 0.26);
@@ -63,6 +64,7 @@
     --pop-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
     --accent: #e04343;
     --accent-soft: rgba(224, 67, 67, 0.14);
+    --mirror-hl: rgba(255, 255, 255, 0.16);
     --good: #3fb950;
     --good-bg: rgba(63, 185, 80, 0.14);
     --diff-add-hl: rgba(63, 185, 80, 0.32);
@@ -92,6 +94,7 @@
   --pop-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
   --accent: #e04343;
   --accent-soft: rgba(224, 67, 67, 0.14);
+  --mirror-hl: rgba(255, 255, 255, 0.16);
   --good: #3fb950;
   --good-bg: rgba(63, 185, 80, 0.14);
   --diff-add-hl: rgba(63, 185, 80, 0.32);
@@ -1542,4 +1545,4 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .bug-shot__x:hover { background: var(--accent); color: #fff; }
 
 /* selected source text, mirrored in the editor preview */
-::highlight(wiki-sync) { background-color: var(--accent-soft); color: var(--accent); }
+::highlight(wiki-sync) { background-color: var(--mirror-hl); }

@@ -37,6 +37,7 @@ function openEditor(pageId, isNew, draft) {
 
 function viewEditor() {
   const e = UI.editor;
+  const spell = Store.prefs().spellcheck !== false;
   if (innerWidth <= 900 && e.mode === 'split') e.mode = 'write';
   // Standard document-editor toolbar, drawn from Lucide — the same visual
   // vocabulary as Notion/Obsidian-class editors.
@@ -82,6 +83,7 @@ function viewEditor() {
           `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       </div>
       <div class="editor__toolend">
+        <button class="icon-btn${spell ? ' active' : ''}" data-action="ed-spell" aria-pressed="${spell}" title="Spell check" aria-label="Spell check">${lucide('spellcheck')}</button>
         <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
           ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
@@ -92,8 +94,8 @@ function viewEditor() {
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
-        <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90" spellcheck="true" autocorrect="off">
-        <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="true" autocorrect="off">${MD.esc(e.body)}</textarea>
+        <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90" spellcheck="${spell}" autocorrect="off">
+        <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="${spell}" autocorrect="off">${MD.esc(e.body)}</textarea>
       </div>
       <div class="editor__pane editor__pane--preview">
         <div class="preview-tag"><span class="eyebrow">Preview</span></div>
@@ -866,9 +868,21 @@ function render() {
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'new') {
-    const draft = draftStash.get('new');
-    openEditor(null, true, draft || { title: r.params.title || '', section: r.params.section || 'projects' });
-    if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    // Re-renders while typing must not rebuild editor state from the stash:
+    // the autosave is debounced, so the stash can trail the textarea by 900ms.
+    if (!UI.editor || !UI.editor.isNew) {
+      const draft = draftStash.get('new');
+      openEditor(null, true, draft || { title: r.params.title || '', section: r.params.section || 'projects' });
+      if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    }
+    view = viewEditor();
+  }
+  else if (r.name === 'edit' && Store.page(r.params.id)) {
+    if (!UI.editor || UI.editor.pageId !== r.params.id) {
+      const draft = draftStash.get(r.params.id);
+      openEditor(r.params.id, false, draft);
+      if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    }
     view = viewEditor();
   }
   else view = viewPage('welcome');

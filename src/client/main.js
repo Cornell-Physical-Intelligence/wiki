@@ -38,7 +38,7 @@ function stashDraftIfDirty(silent) {
     draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
     draftDeleted.delete(e.pageId || 'new');
     persistDrafts();
-    if (!silent) toast('Draft kept', { label: 'Resume', run: () => { const k = e.pageId || 'new'; startEdit(e.pageId, !e.pageId, draftStash.get(k)); } });
+    if (!silent) toast('Draft kept', { label: 'Resume', run: () => nav(e.pageId ? '#/edit/' + e.pageId : '#/new') });
   }
   UI.editor = null;
 }
@@ -204,16 +204,6 @@ function requestEditorClose() {
     return;
   }
   showModal({ kind: 'close-editor' });
-}
-
-function startEdit(pageId, isNew, draftOverride) {
-  const key = pageId || 'new';
-  const draft = draftOverride || draftStash.get(key);
-  openEditor(pageId, isNew, draft);
-  // The stash entry survives until the draft is saved or explicitly discarded —
-  // resuming and immediately reloading must not be the one path that loses work.
-  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
-  render();
 }
 
 function mountMenu(host, anchor) {
@@ -391,7 +381,17 @@ document.addEventListener('click', async (ev) => {
     ], el); break;
 
     /* ---- page ---- */
-    case 'edit': stop(); startEdit(el.dataset.id, false); break;
+    case 'edit': stop(); nav('#/edit/' + el.dataset.id); break;
+    case 'ed-spell': stop(); {
+      const p = Store.prefs();
+      const on = p.spellcheck === false;
+      p.spellcheck = on;
+      Store.persist();
+      for (const fld of $$('[data-ed="title"], [data-ed="body"]')) fld.spellcheck = on;
+      el.setAttribute('aria-pressed', String(on));
+      el.classList.toggle('active', on);
+      toast(on ? 'Spell check on' : 'Spell check off');
+    } break;
     case 'toc-menu': {
       stop();
       const p = Store.page(el.dataset.id);
@@ -438,7 +438,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const id = el.dataset.id;
       openMenu([
-        { icon: I.edit, label: 'Edit', run: () => startEdit(id, false) },
+        { icon: I.edit, label: 'Edit', run: () => nav('#/edit/' + id) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
         '-',
         { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated. Edit away'); } },
@@ -483,7 +483,7 @@ document.addEventListener('click', async (ev) => {
     case 'react': stop(); Store.toggleReaction(el.dataset.id, el.dataset.emoji); render(); break;
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
-    case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'resume-new-draft': stop(); nav('#/new'); break;
     case 'email-edit': stop(); UI.emailEdit = !UI.emailEdit; render(); break;
     case 'resend-disconnect': stop(); {
       if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
@@ -812,7 +812,7 @@ function edMirrorSel() {
   if (pane && pane.clientWidth) {
     const r = range.getBoundingClientRect(); const pr = pane.getBoundingClientRect();
     if (r.top < pr.top + 40 || r.bottom > pr.bottom - 40) {
-      pane.scrollTo({ top: pane.scrollTop + (r.top - pr.top) - pane.clientHeight * 0.35, behavior: 'smooth' });
+      pane.scrollTo({ top: pane.scrollTop + (r.top - pr.top) - pane.clientHeight * 0.35 });
     }
   }
 }

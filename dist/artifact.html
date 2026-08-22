@@ -31,6 +31,7 @@
   --pop-shadow: 0 10px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
   --accent: #b31b1b;            /* Cornell carnelian, functional only */
   --accent-soft: rgba(179, 27, 27, 0.09);
+  --mirror-hl: rgba(0, 0, 0, 0.1);
   --good: #1a7f37;
   --good-bg: rgba(26, 127, 55, 0.1);
   --diff-add-hl: rgba(26, 127, 55, 0.26);
@@ -67,6 +68,7 @@
     --pop-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
     --accent: #e04343;
     --accent-soft: rgba(224, 67, 67, 0.14);
+    --mirror-hl: rgba(255, 255, 255, 0.16);
     --good: #3fb950;
     --good-bg: rgba(63, 185, 80, 0.14);
     --diff-add-hl: rgba(63, 185, 80, 0.32);
@@ -96,6 +98,7 @@
   --pop-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
   --accent: #e04343;
   --accent-soft: rgba(224, 67, 67, 0.14);
+  --mirror-hl: rgba(255, 255, 255, 0.16);
   --good: #3fb950;
   --good-bg: rgba(63, 185, 80, 0.14);
   --diff-add-hl: rgba(63, 185, 80, 0.32);
@@ -1546,7 +1549,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .bug-shot__x:hover { background: var(--accent); color: #fff; }
 
 /* selected source text, mirrored in the editor preview */
-::highlight(wiki-sync) { background-color: var(--accent-soft); color: var(--accent); }
+::highlight(wiki-sync) { background-color: var(--mirror-hl); }
 
 </style>
 <section id="seo-public" class="seo-public">
@@ -1568,7 +1571,7 @@ const CRAB_URI = 'data:image/webp;base64,UklGRnS2AABXRUJQVlA4WAoAAAAQAAAA3QEAHQE
 const PUBLIC_LANDING_ABOUT = "<div class=\"login__about\">\n<p>Cornell Physical Intelligence (CUPI) is a Cornell University student robotics organization in Ithaca, New York. We build robots that reason about the physical world: intelligent manipulation, autonomous perception, and navigation on aerial and ground platforms.</p>\n<p>This wiki is the team's internal knowledge base. Members document CAD conventions, board bring-up, flight-test procedure, project pages, and the processes that keep Mechanical, Electrical, Software, and Business working as one team.</p>\n<p>Wiki pages stay private to the CUPI roster. Sign in with a cornell.edu Google account. Access is allowlisted; once a team lead has added you, signing in is all it takes.</p>\n</div>";
 /* Lucide icons (https://lucide.dev) — ISC license. Inner markup vendored
    at build-authoring time; wrapped in the app's own <svg> for sizing. */
-const LUCIDE = {"bold":"<path d=\"M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8\" />","italic":"<line x1=\"19\" x2=\"10\" y1=\"4\" y2=\"4\" /><line x1=\"14\" x2=\"5\" y1=\"20\" y2=\"20\" /><line x1=\"15\" x2=\"9\" y1=\"4\" y2=\"20\" />","strike":"<path d=\"M16 4H9a3 3 0 0 0-2.83 4\" /><path d=\"M14 12a4 4 0 0 1 0 8H6\" /><line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\" />","code":"<path d=\"m16 18 6-6-6-6\" /><path d=\"m8 6-6 6 6 6\" />","h2":"<path d=\"M4 12h8\" /><path d=\"M4 18V6\" /><path d=\"M12 18V6\" /><path d=\"M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1\" />","h3":"<path d=\"M4 12h8\" /><path d=\"M4 18V6\" /><path d=\"M12 18V6\" /><path d=\"M17.5 10.5c1.7-1 3.5 0 3.5 1.5a2 2 0 0 1-2 2\" /><path d=\"M17 17.5c2 1.5 4 .3 4-1.5a2 2 0 0 0-2-2\" />","ul":"<path d=\"M3 5h.01\" /><path d=\"M3 12h.01\" /><path d=\"M3 19h.01\" /><path d=\"M8 5h13\" /><path d=\"M8 12h13\" /><path d=\"M8 19h13\" />","ol":"<path d=\"M11 5h10\" /><path d=\"M11 12h10\" /><path d=\"M11 19h10\" /><path d=\"M4 4h1v5\" /><path d=\"M4 9h2\" /><path d=\"M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02\" />","task":"<path d=\"M13 5h8\" /><path d=\"M13 12h8\" /><path d=\"M13 19h8\" /><path d=\"m3 17 2 2 4-4\" /><rect x=\"3\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\" />","quote":"<path d=\"M17 5H3\" /><path d=\"M21 12H8\" /><path d=\"M21 19H8\" /><path d=\"M3 12v7\" />","fence":"<path d=\"m10 9-3 3 3 3\" /><path d=\"m14 15 3-3-3-3\" /><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" />","table":"<path d=\"M12 3v18\" /><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /><path d=\"M3 9h18\" /><path d=\"M3 15h18\" />","callout":"<path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\" /><path d=\"M12 15h.01\" /><path d=\"M12 7v4\" />","link2":"<path d=\"M9 17H7A5 5 0 0 1 7 7h2\" /><path d=\"M15 7h2a5 5 0 1 1 0 10h-2\" /><line x1=\"8\" x2=\"16\" y1=\"12\" y2=\"12\" />","wikilink":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />","image":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /><circle cx=\"9\" cy=\"9\" r=\"2\" /><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />","attach":"<path d=\"m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551\" />","hr":"<path d=\"M5 12h14\" />","search":"<path d=\"m21 21-4.34-4.34\" /><circle cx=\"11\" cy=\"11\" r=\"8\" />","home":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","clock":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /><path d=\"M12 7v5l4 2\" />","star":"<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" />","page":"<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\" /><path d=\"M14 2v5a1 1 0 0 0 1 1h5\" /><path d=\"M10 9H8\" /><path d=\"M16 13H8\" /><path d=\"M16 17H8\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","edit":"<path d=\"M13 21h8\" /><path d=\"m15 5 4 4\" /><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />","dots":"<circle cx=\"12\" cy=\"12\" r=\"1\" /><circle cx=\"19\" cy=\"12\" r=\"1\" /><circle cx=\"5\" cy=\"12\" r=\"1\" />","menu":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /><path d=\"M9 3v18\" />","trash":"<path d=\"M10 11v6\" /><path d=\"M14 11v6\" /><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /><path d=\"M3 6h18\" /><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />","users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /><path d=\"M16 3.128a4 4 0 0 1 0 7.744\" /><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\" /><circle cx=\"9\" cy=\"7\" r=\"4\" />","x":"<path d=\"M18 6 6 18\" /><path d=\"m6 6 12 12\" />","help":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\" /><path d=\"M12 17h.01\" />","mail":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\" /><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\" />","send":"<path d=\"M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z\" /><path d=\"m21.854 2.147-10.94 10.939\" />","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","imageIcon":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /><circle cx=\"9\" cy=\"9\" r=\"2\" /><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />","shield":"<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\" /><path d=\"M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","info":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />","cube":"<path d=\"M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z\" /><path d=\"m3.3 7 8.7 5 8.7-5\" /><path d=\"M12 22V12\" />","arrowL":"<path d=\"m15 14 5-5-5-5\" /><path d=\"M4 20v-7a4 4 0 0 1 4-4h12\" />","historyIcon":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /><path d=\"M12 7v5l4 2\" />"};
+const LUCIDE = {"bold":"<path d=\"M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8\" />","italic":"<line x1=\"19\" x2=\"10\" y1=\"4\" y2=\"4\" /><line x1=\"14\" x2=\"5\" y1=\"20\" y2=\"20\" /><line x1=\"15\" x2=\"9\" y1=\"4\" y2=\"20\" />","strike":"<path d=\"M16 4H9a3 3 0 0 0-2.83 4\" /><path d=\"M14 12a4 4 0 0 1 0 8H6\" /><line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\" />","code":"<path d=\"m16 18 6-6-6-6\" /><path d=\"m8 6-6 6 6 6\" />","h2":"<path d=\"M4 12h8\" /><path d=\"M4 18V6\" /><path d=\"M12 18V6\" /><path d=\"M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1\" />","h3":"<path d=\"M4 12h8\" /><path d=\"M4 18V6\" /><path d=\"M12 18V6\" /><path d=\"M17.5 10.5c1.7-1 3.5 0 3.5 1.5a2 2 0 0 1-2 2\" /><path d=\"M17 17.5c2 1.5 4 .3 4-1.5a2 2 0 0 0-2-2\" />","ul":"<path d=\"M3 5h.01\" /><path d=\"M3 12h.01\" /><path d=\"M3 19h.01\" /><path d=\"M8 5h13\" /><path d=\"M8 12h13\" /><path d=\"M8 19h13\" />","ol":"<path d=\"M11 5h10\" /><path d=\"M11 12h10\" /><path d=\"M11 19h10\" /><path d=\"M4 4h1v5\" /><path d=\"M4 9h2\" /><path d=\"M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02\" />","task":"<path d=\"M13 5h8\" /><path d=\"M13 12h8\" /><path d=\"M13 19h8\" /><path d=\"m3 17 2 2 4-4\" /><rect x=\"3\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\" />","quote":"<path d=\"M17 5H3\" /><path d=\"M21 12H8\" /><path d=\"M21 19H8\" /><path d=\"M3 12v7\" />","fence":"<path d=\"m10 9-3 3 3 3\" /><path d=\"m14 15 3-3-3-3\" /><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" />","table":"<path d=\"M12 3v18\" /><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /><path d=\"M3 9h18\" /><path d=\"M3 15h18\" />","callout":"<path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\" /><path d=\"M12 15h.01\" /><path d=\"M12 7v4\" />","link2":"<path d=\"M9 17H7A5 5 0 0 1 7 7h2\" /><path d=\"M15 7h2a5 5 0 1 1 0 10h-2\" /><line x1=\"8\" x2=\"16\" y1=\"12\" y2=\"12\" />","wikilink":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />","image":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /><circle cx=\"9\" cy=\"9\" r=\"2\" /><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />","attach":"<path d=\"m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551\" />","hr":"<path d=\"M5 12h14\" />","search":"<path d=\"m21 21-4.34-4.34\" /><circle cx=\"11\" cy=\"11\" r=\"8\" />","home":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","clock":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /><path d=\"M12 7v5l4 2\" />","star":"<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" />","page":"<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\" /><path d=\"M14 2v5a1 1 0 0 0 1 1h5\" /><path d=\"M10 9H8\" /><path d=\"M16 13H8\" /><path d=\"M16 17H8\" />","plus":"<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />","edit":"<path d=\"M13 21h8\" /><path d=\"m15 5 4 4\" /><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />","dots":"<circle cx=\"12\" cy=\"12\" r=\"1\" /><circle cx=\"19\" cy=\"12\" r=\"1\" /><circle cx=\"5\" cy=\"12\" r=\"1\" />","menu":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /><path d=\"M9 3v18\" />","trash":"<path d=\"M10 11v6\" /><path d=\"M14 11v6\" /><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /><path d=\"M3 6h18\" /><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />","users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /><path d=\"M16 3.128a4 4 0 0 1 0 7.744\" /><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\" /><circle cx=\"9\" cy=\"7\" r=\"4\" />","x":"<path d=\"M18 6 6 18\" /><path d=\"m6 6 12 12\" />","help":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\" /><path d=\"M12 17h.01\" />","mail":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\" /><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\" />","send":"<path d=\"M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z\" /><path d=\"m21.854 2.147-10.94 10.939\" />","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","imageIcon":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /><circle cx=\"9\" cy=\"9\" r=\"2\" /><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />","shield":"<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\" /><path d=\"M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","info":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />","cube":"<path d=\"M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z\" /><path d=\"m3.3 7 8.7 5 8.7-5\" /><path d=\"M12 22V12\" />","arrowL":"<path d=\"m15 14 5-5-5-5\" /><path d=\"M4 20v-7a4 4 0 0 1 4-4h12\" />","historyIcon":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><path d=\"M3 3v5h5\" /><path d=\"M12 7v5l4 2\" />","spellcheck":"<path d=\"m6 16 6-12 6 12\" /><path d=\"M8 12h8\" /><path d=\"m16 20 2 2 4-4\" />"};
 const lucide = (name, sw = 2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${LUCIDE[name]}</svg>`;
 
 /* Ported from the team site's homepage hero: voronoiConfig.js + voronoiEngine.js,
@@ -4982,7 +4985,7 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'login', 'denied'];
+  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
@@ -5463,6 +5466,7 @@ function openEditor(pageId, isNew, draft) {
 
 function viewEditor() {
   const e = UI.editor;
+  const spell = Store.prefs().spellcheck !== false;
   if (innerWidth <= 900 && e.mode === 'split') e.mode = 'write';
   // Standard document-editor toolbar, drawn from Lucide — the same visual
   // vocabulary as Notion/Obsidian-class editors.
@@ -5508,6 +5512,7 @@ function viewEditor() {
           `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       </div>
       <div class="editor__toolend">
+        <button class="icon-btn${spell ? ' active' : ''}" data-action="ed-spell" aria-pressed="${spell}" title="Spell check" aria-label="Spell check">${lucide('spellcheck')}</button>
         <span class="editor__count" data-ed-count>${e.body.trim() ? e.body.trim().split(/\s+/).length : 0} words</span>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">Section
           ${dd('ed-section', SECTIONS.map((s) => ({ value: s.id, label: s.name })), e.section, { small: true })}
@@ -5518,8 +5523,8 @@ function viewEditor() {
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
-        <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90" spellcheck="true" autocorrect="off">
-        <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="true" autocorrect="off">${MD.esc(e.body)}</textarea>
+        <input class="editor__title" data-ed="title" placeholder="Page title" value="${MD.esc(e.title)}" maxlength="90" spellcheck="${spell}" autocorrect="off">
+        <textarea data-ed="body" placeholder="Write. Drop images or CAD files anywhere. [[ links a page." spellcheck="${spell}" autocorrect="off">${MD.esc(e.body)}</textarea>
       </div>
       <div class="editor__pane editor__pane--preview">
         <div class="preview-tag"><span class="eyebrow">Preview</span></div>
@@ -6292,9 +6297,21 @@ function render() {
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'new') {
-    const draft = draftStash.get('new');
-    openEditor(null, true, draft || { title: r.params.title || '', section: r.params.section || 'projects' });
-    if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    // Re-renders while typing must not rebuild editor state from the stash:
+    // the autosave is debounced, so the stash can trail the textarea by 900ms.
+    if (!UI.editor || !UI.editor.isNew) {
+      const draft = draftStash.get('new');
+      openEditor(null, true, draft || { title: r.params.title || '', section: r.params.section || 'projects' });
+      if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    }
+    view = viewEditor();
+  }
+  else if (r.name === 'edit' && Store.page(r.params.id)) {
+    if (!UI.editor || UI.editor.pageId !== r.params.id) {
+      const draft = draftStash.get(r.params.id);
+      openEditor(r.params.id, false, draft);
+      if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
+    }
     view = viewEditor();
   }
   else view = viewPage('welcome');
@@ -6637,7 +6654,7 @@ function stashDraftIfDirty(silent) {
     draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
     draftDeleted.delete(e.pageId || 'new');
     persistDrafts();
-    if (!silent) toast('Draft kept', { label: 'Resume', run: () => { const k = e.pageId || 'new'; startEdit(e.pageId, !e.pageId, draftStash.get(k)); } });
+    if (!silent) toast('Draft kept', { label: 'Resume', run: () => nav(e.pageId ? '#/edit/' + e.pageId : '#/new') });
   }
   UI.editor = null;
 }
@@ -6803,16 +6820,6 @@ function requestEditorClose() {
     return;
   }
   showModal({ kind: 'close-editor' });
-}
-
-function startEdit(pageId, isNew, draftOverride) {
-  const key = pageId || 'new';
-  const draft = draftOverride || draftStash.get(key);
-  openEditor(pageId, isNew, draft);
-  // The stash entry survives until the draft is saved or explicitly discarded —
-  // resuming and immediately reloading must not be the one path that loses work.
-  if (draft) { UI.editor.dirty = true; UI.editor.fromDraft = true; }
-  render();
 }
 
 function mountMenu(host, anchor) {
@@ -6990,7 +6997,17 @@ document.addEventListener('click', async (ev) => {
     ], el); break;
 
     /* ---- page ---- */
-    case 'edit': stop(); startEdit(el.dataset.id, false); break;
+    case 'edit': stop(); nav('#/edit/' + el.dataset.id); break;
+    case 'ed-spell': stop(); {
+      const p = Store.prefs();
+      const on = p.spellcheck === false;
+      p.spellcheck = on;
+      Store.persist();
+      for (const fld of $$('[data-ed="title"], [data-ed="body"]')) fld.spellcheck = on;
+      el.setAttribute('aria-pressed', String(on));
+      el.classList.toggle('active', on);
+      toast(on ? 'Spell check on' : 'Spell check off');
+    } break;
     case 'toc-menu': {
       stop();
       const p = Store.page(el.dataset.id);
@@ -7037,7 +7054,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const id = el.dataset.id;
       openMenu([
-        { icon: I.edit, label: 'Edit', run: () => startEdit(id, false) },
+        { icon: I.edit, label: 'Edit', run: () => nav('#/edit/' + id) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
         '-',
         { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated. Edit away'); } },
@@ -7082,7 +7099,7 @@ document.addEventListener('click', async (ev) => {
     case 'react': stop(); Store.toggleReaction(el.dataset.id, el.dataset.emoji); render(); break;
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
-    case 'resume-new-draft': stop(); startEdit(null, true); break;
+    case 'resume-new-draft': stop(); nav('#/new'); break;
     case 'email-edit': stop(); UI.emailEdit = !UI.emailEdit; render(); break;
     case 'resend-disconnect': stop(); {
       if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
@@ -7411,7 +7428,7 @@ function edMirrorSel() {
   if (pane && pane.clientWidth) {
     const r = range.getBoundingClientRect(); const pr = pane.getBoundingClientRect();
     if (r.top < pr.top + 40 || r.bottom > pr.bottom - 40) {
-      pane.scrollTo({ top: pane.scrollTop + (r.top - pr.top) - pane.clientHeight * 0.35, behavior: 'smooth' });
+      pane.scrollTo({ top: pane.scrollTop + (r.top - pr.top) - pane.clientHeight * 0.35 });
     }
   }
 }

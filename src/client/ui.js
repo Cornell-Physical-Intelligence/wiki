@@ -159,7 +159,7 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'login', 'denied'];
+  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
