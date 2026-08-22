@@ -196,7 +196,7 @@ function viewExtraModal(m) {
         <label>Details <span class="sub">What you did, what you expected, what happened instead.</span>
         <textarea class="text-input" data-m="bug-body" rows="5" maxlength="10000" placeholder="Steps to reproduce help the most.">${MD.esc(d.body)}</textarea></label>
         <div class="bug-drop" data-bug-drop tabindex="0" role="button" aria-label="Add screenshots">
-          ${I.imageIcon} Drop screenshots here, paste them, or <span class="linklike">browse</span>
+          ${lucide('image')} Drop screenshots here, paste them, or <span class="linklike">browse</span>
           <input type="file" data-bug-file hidden multiple accept="image/*">
         </div>
         ${d.images.length ? `<div class="bug-shots">${d.images.map((im, i) => `<span class="bug-shot"><img src="${im.dataUri}" alt=""><button class="icon-btn bug-shot__x" data-action="bug-remove-img" data-i="${i}" aria-label="Remove screenshot">${I.x}</button></span>`).join('')}</div>` : ''}
