@@ -201,7 +201,6 @@ function loginFooter(previewLine) {
       <div class="site-footer__copy">
         ${previewLine ? `<p>${previewLine}</p>` : ''}
         <p><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a></p>
-        <p><a href="/about">About this wiki</a></p>
         <p>CUPI is a student robotics organization at Cornell University.</p>
         <p>Equal Education and Employment: <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" target="_blank" rel="noreferrer">https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment</a></p>
       </div>
@@ -222,7 +221,6 @@ function viewLogin() {
       <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
     </div>
-    ${typeof PUBLIC_LANDING_ABOUT === 'string' ? PUBLIC_LANDING_ABOUT : ''}
     ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
   </div>`;
 }

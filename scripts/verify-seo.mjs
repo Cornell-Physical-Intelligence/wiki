@@ -61,99 +61,20 @@ assert(
   'Organization sameAs is missing the LinkedIn entity URL',
 );
 
-// The signed-out view must carry the visible cross-links and no claims we
-// cannot support while Cornell registration is pending.
-assert(
-  page.includes('href="https://cornellphysicalintelligence.com/"'),
-  'signed-out view is missing the main-site link',
-);
-assert(
-  page.includes('href="https://www.linkedin.com/company/cu-physical-intelligence/"'),
-  'signed-out view is missing the LinkedIn link',
-);
+// SEO stays in the document head. The signed-out interface must contain only
+// the real wiki login experience, never additional crawl-oriented prose.
 assert(
   !page.includes('registered student organization'),
   'the shell claims registered status, which is unsupported while Cornell registration is pending',
 );
-
-const UNIQUE = 'Cornell Physical Intelligence (CUPI) is a Cornell University student robotics organization';
-assert(page.includes('id="seo-public"'), 'production shell is missing the crawlable public landing');
-assert(page.includes(UNIQUE), 'production shell is missing unique public prose about CUPI');
 assert(
-  page.includes('This wiki is the team\'s internal knowledge base'),
-  'production shell is missing wiki-specific public prose',
+  !page.includes('id="seo-public"') && !page.includes('login__about'),
+  'production shell contains an SEO-only visible content block',
 );
 assert(
-  page.includes('<a href="/about">About this wiki</a>'),
-  'production shell does not link the /about page',
-);
-
-/* ------------------------------ about page -------------------------------- */
-const about = read('public/about/index.html');
-
-assert(about.includes('<meta name="robots" content="index, follow">'), '/about is not indexable');
-assert(!about.includes('noindex'), '/about contains a noindex directive');
-assert(
-  about.includes('<title>About the CUPI Wiki | Cornell Physical Intelligence</title>'),
-  '/about has the wrong title',
-);
-assert(about.includes('<meta name="description" content="'), '/about is missing its description');
-assert(
-  about.includes(`<link rel="canonical" href="${WIKI_URL}/about">`),
-  '/about is missing its canonical URL',
-);
-assert(
-  about.includes(`<meta property="og:url" content="${WIKI_URL}/about">`),
-  '/about is missing og:url',
-);
-assert(
-  about.includes(`<meta property="og:image" content="${WIKI_URL}/favicon-cupi.png">`),
-  '/about is missing og:image',
-);
-
-const aboutLd = about.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
-assert(aboutLd, '/about is missing structured data');
-const aboutGraph = JSON.parse(aboutLd)['@graph'];
-const webPage = aboutGraph.find((n) => n['@type'] === 'WebPage');
-const breadcrumbs = aboutGraph.find((n) => n['@type'] === 'BreadcrumbList');
-assert(webPage?.url === `${WIKI_URL}/about`, 'WebPage node is missing or mis-URLed');
-assert(
-  webPage?.publisher?.['@id'] === `${MAIN_SITE}/#organization`,
-  'WebPage publisher does not reference the main-site Organization entity',
-);
-assert(
-  webPage?.isPartOf?.['@id'] === `${WIKI_URL}/#website`,
-  'WebPage is not tied to the wiki WebSite entity',
-);
-assert(breadcrumbs, '/about is missing its BreadcrumbList');
-assert(
-  JSON.stringify(breadcrumbs).includes(`{"@type":"ListItem","position":1,"name":"Home","item":"${WIKI_URL}/"}`),
-  'BreadcrumbList does not start at Home',
-);
-
-// /about must be pure static: no SPA shell, so hydration can never bounce a
-// crawler toward sign-in, and unique factual prose in the raw HTML.
-assert(!about.includes('id="app"'), '/about must not ship the SPA app shell');
-assert(!about.includes('Store.boot'), '/about must not ship SPA boot code');
-assert(
-  about.includes('The CUPI Wiki is the team knowledge base of Cornell Physical Intelligence (CUPI)'),
-  '/about is missing unique prose about the wiki',
-);
-assert(
-  about.includes('<link rel="canonical" href=') && about.includes(`<a href="/">the landing page</a>`),
-  '/about does not link back to the landing',
-);
-assert(
-  about.includes('href="https://cornellphysicalintelligence.com/"'),
-  '/about does not link the main site',
-);
-assert(
-  about.includes('https://cornell.campusgroups.com/cupi/home/'),
-  '/about is missing the Campus Groups listing link',
-);
-assert(
-  about.includes('mailto:cuphysint@cornell.edu'),
-  '/about is missing the contact email link',
+  !page.includes('Cornell University student robotics organization in Ithaca') &&
+    !page.includes('Access is allowlisted'),
+  'production shell contains the removed crawl-oriented landing prose',
 );
 
 /* ------------------------ preview builds stay private --------------------- */
@@ -166,8 +87,12 @@ assert(
   !preview.includes('registered student organization'),
   'the preview claims registered status, which is unsupported while Cornell registration is pending',
 );
-assert(preview.includes('id="seo-public"'), 'preview is missing the crawlable public landing');
-assert(preview.includes(UNIQUE), 'preview is missing unique public prose about CUPI');
+assert(!preview.includes('id="seo-public"'), 'preview contains an SEO-only visible content block');
+assert(
+  !preview.includes('Cornell University student robotics organization in Ithaca') &&
+    !preview.includes('Access is allowlisted'),
+  'preview contains the removed landing prose',
+);
 
 /* ------------------------------ crawl files ------------------------------- */
 const robots = read('public/robots.txt');
@@ -178,12 +103,12 @@ assert(robots.includes(`Sitemap: ${WIKI_URL}/sitemap.xml`), 'robots.txt does not
 const sitemap = read('public/sitemap.xml');
 const locs = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
 assert(
-  locs.length === 2 && locs[0] === `${WIKI_URL}/` && locs[1] === `${WIKI_URL}/about`,
-  'sitemap.xml must list exactly the root and /about',
+  locs.length === 1 && locs[0] === `${WIKI_URL}/`,
+  'sitemap.xml must list only the wiki root',
 );
 
 const shipped = readFileSync(new URL('../public/favicon-cupi.png', import.meta.url));
 const master = readFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url));
 assert(shipped.equals(master), 'shipped favicon bytes do not match the source asset');
 
-console.log('Wiki SEO verification passed: indexable shell + /about, noindexed previews, robots, sitemap, favicon.');
+console.log('Wiki verification passed: head-only SEO, no visible SEO copy, noindexed previews, robots, sitemap, favicon.');

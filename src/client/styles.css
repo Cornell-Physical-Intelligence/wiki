@@ -1401,34 +1401,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .email-adv > form { margin-top: 10px; }
 
 
-/* Crawlable public landing: raw HTML for fetchers; JS hides #seo-public and
-   repeats the same sentences under the Voronoi sign-in card. */
-.seo-public {
-  max-width: 40rem; margin: 12vh auto; padding: 0 24px;
-  font-size: 16px; line-height: 1.6; color: var(--fg);
-}
-.seo-public h1 {
-  font-family: var(--font-display); font-weight: 700;
-  font-size: clamp(40px, 8vw, 72px); line-height: 1; letter-spacing: 0.01em;
-  margin: 0 0 8px;
-}
-.seo-public__kicker {
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
-  margin: 0 0 28px;
-}
-.seo-public p, .login__about p { margin: 0 0 1em; }
-.seo-public__links { color: var(--muted); font-size: 14px; }
-.seo-public__links a, .login__about a {
-  color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
-}
-.seo-public__links a:hover, .login__about a:hover { color: var(--fg); }
-.login__about {
-  width: min(40rem, 100%);
-  margin-top: clamp(28px, 5vh, 48px);
-  font-size: 14px; line-height: 1.6; color: var(--muted); text-wrap: pretty;
-}
-
 /* Integration card: logo tile, name + status, sender line, actions. */
 .integration { display: flex; align-items: center; gap: 12px; }
 .integration__tile {
