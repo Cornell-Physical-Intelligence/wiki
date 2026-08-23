@@ -1546,3 +1546,5 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 /* selected source text, mirrored in the editor preview */
 ::highlight(wiki-sync) { background-color: var(--mirror-hl); }
+.editor__pane--src { position: relative; }
+.src-mirror { position: absolute; left: 10px; right: 10px; background: var(--mirror-hl); border-radius: 4px; pointer-events: none; }

@@ -1557,6 +1557,8 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 /* selected source text, mirrored in the editor preview */
 ::highlight(wiki-sync) { background-color: var(--mirror-hl); }
+.editor__pane--src { position: relative; }
+.src-mirror { position: absolute; left: 10px; right: 10px; background: var(--mirror-hl); border-radius: 4px; pointer-events: none; }
 
 </style>
 </head>
@@ -7342,6 +7344,7 @@ document.addEventListener('input', (ev) => {
   }
   if (t.matches('[data-ed="body"]')) {
     UI.editor.body = t.value;
+    $('.src-mirror')?.remove();
     const wc = $('[data-ed-count]');
     if (wc) wc.textContent = (t.value.trim() ? t.value.trim().split(/\s+/).length : 0) + ' words';
     markDirty();
@@ -7442,11 +7445,103 @@ function edMirrorSel() {
   }
 }
 
+/* ---- and the reverse: a preview selection finds its markdown ---- */
+
+// Strip each source line to its rendered text and remember raw offsets, so a
+// phrase copied from the preview can be located back in the markdown.
+function sourceFind(raw, needle, wantRatio) {
+  const lines = raw.split('\n');
+  let concat = ''; const lineMap = []; let rawPos = 0;
+  for (const ln of lines) {
+    const stripped = foldCollapse(mdSelText(ln));
+    if (stripped) {
+      if (concat) concat += ' ';
+      lineMap.push({ cStart: concat.length, cEnd: concat.length + stripped.length, rawStart: rawPos, rawEnd: rawPos + ln.length });
+      concat += stripped;
+    }
+    rawPos += ln.length + 1;
+  }
+  const hits = [];
+  for (let i = concat.indexOf(needle); i !== -1; i = concat.indexOf(needle, i + 1)) hits.push(i);
+  if (!hits.length) return null;
+  const best = hits.reduce((p, c) => (Math.abs(c / concat.length - wantRatio) < Math.abs(p / concat.length - wantRatio) ? c : p));
+  const endC = best + needle.length;
+  const first = lineMap.find((l) => l.cEnd > best);
+  const last = [...lineMap].reverse().find((l) => l.cStart < endC);
+  return first && last ? { start: first.rawStart, end: last.rawEnd } : null;
+}
+
+// y of a source offset inside the soft-wrapped textarea, via a matching ghost.
+function taTextY(ta, idx) {
+  const d = document.createElement('div');
+  const cs = getComputedStyle(ta);
+  for (const p of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize', 'overflowWrap', 'wordBreak']) d.style[p] = cs[p];
+  d.style.cssText += ';position:absolute;visibility:hidden;white-space:pre-wrap;padding:0;border:0;';
+  d.style.width = (ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  d.textContent = ta.value.slice(0, idx) + 'x';
+  document.body.appendChild(d);
+  const h = d.offsetHeight;
+  d.remove();
+  const lineH = parseFloat(cs.lineHeight) || 20;
+  return { top: h - lineH, bottom: h };
+}
+
+function srcMirrorMark(ta, y0, y1) {
+  $('.src-mirror')?.remove();
+  const pane = ta.closest('.editor__pane--src');
+  if (!pane) return;
+  const m = document.createElement('div');
+  m.className = 'src-mirror';
+  m.dataset.top = y0; m.dataset.height = Math.max(y1 - y0, 4);
+  pane.appendChild(m);
+  srcMirrorPlace(ta);
+}
+
+function srcMirrorPlace(ta) {
+  const m = $('.src-mirror');
+  if (!m || !ta) return;
+  const padTop = parseFloat(getComputedStyle(ta).paddingTop) || 0;
+  const y = ta.offsetTop + padTop + (+m.dataset.top) - ta.scrollTop;
+  m.style.top = y + 'px';
+  m.style.height = m.dataset.height + 'px';
+  m.hidden = y + +m.dataset.height < ta.offsetTop || y > ta.offsetTop + ta.clientHeight;
+}
+
+document.addEventListener('scroll', (ev) => {
+  if (ev.target instanceof Element && ev.target.matches('[data-ed="body"]')) srcMirrorPlace(ev.target);
+}, true);
+
+function edReverseMirror() {
+  const host = $('[data-ed-preview]'); const ta = $('[data-ed="body"]');
+  const clear = () => $('.src-mirror')?.remove();
+  if (!host || !ta || !UI.editor || UI.editor.mode !== 'split') { clear(); return; }
+  const sel = document.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) { clear(); return; }
+  const range = sel.getRangeAt(0);
+  if (!host.contains(range.commonAncestorContainer)) { clear(); return; }
+  const needle = foldCollapse(sel.toString());
+  if (needle.length < 2) { clear(); return; }
+  // rank duplicate matches by how deep into the page the selection sits
+  const { text, locs } = previewIndex(host);
+  let pos = 0;
+  for (let i = 0; i < locs.length; i++) {
+    const L = locs[i];
+    if (L && L.node === range.startContainer && L.off >= range.startOffset) { pos = i; break; }
+  }
+  const found = sourceFind(ta.value, needle, pos / Math.max(1, text.length));
+  if (!found) { clear(); return; }
+  const a = taTextY(ta, found.start); const b = taTextY(ta, found.end);
+  const padTop = parseFloat(getComputedStyle(ta).paddingTop) || 0;
+  const want = a.top + padTop - ta.clientHeight * 0.35;
+  if (a.top + padTop < ta.scrollTop + 40 || b.bottom + padTop > ta.scrollTop + ta.clientHeight - 40) ta.scrollTop = Math.max(0, want);
+  srcMirrorMark(ta, a.top, b.bottom);
+}
+
 let mirrorTimer = null;
 document.addEventListener('selectionchange', () => {
   if (!UI.editor) return;
   clearTimeout(mirrorTimer);
-  mirrorTimer = setTimeout(edMirrorSel, 120);
+  mirrorTimer = setTimeout(() => { edMirrorSel(); edReverseMirror(); }, 120);
 });
 
 document.addEventListener('click', (ev) => {
