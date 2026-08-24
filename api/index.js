@@ -392,7 +392,7 @@ export default async function handler(req, res) {
       const f = await getFile(attMatch[1]);
       if (!f) return json(res, 404, { error: 'No such file' });
       res.statusCode = 200;
-      res.setHeader('content-type', f.type);
+      res.setHeader('content-type', f.type || 'application/octet-stream');
       res.setHeader('content-disposition', `inline; filename="${encodeURIComponent(f.name)}"`);
       res.setHeader('cache-control', 'private, max-age=31536000, immutable');
       return res.end(Buffer.from(f.data));

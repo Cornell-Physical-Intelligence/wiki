@@ -112,6 +112,8 @@ const FILE_ICONS = {
 
 function fileKind(name, type) {
   const n = (name || '').toLowerCase();
+  if (/\.urdf$/.test(n)) return { icon: 'cad', tag: 'URDF', viewer: 'urdf' };
+  if (/\.xacro$/.test(n)) return { icon: 'cad', tag: 'XACRO', viewer: false };
   if (/\.(stl|obj)$/.test(n) || /^model\//.test(type || '')) return { icon: 'cad', tag: n.endsWith('.obj') ? 'OBJ' : 'STL', viewer: true };
   if (/\.(step|stp|f3d|iges|igs|sldprt|3mf)$/.test(n)) return { icon: 'cad', tag: n.split('.').pop().toUpperCase(), viewer: false };
   if (/\.(schdoc|pcbdoc|prjpcb|kicad_sch|kicad_pcb)$/.test(n)) return { icon: 'ecad', tag: n.split('.').pop().replace('kicad_', '').toUpperCase(), viewer: false };
@@ -132,7 +134,9 @@ function fileCard(label, att) {
   const body = `<span class="filecard__icon">${FILE_ICONS[k.icon]}</span>
     <span class="filecard__meta"><b>${esc(label || att.name)}</b><span>${esc(att.name)} · ${k.tag} · ${fmtSize(att.size)}</span></span>`;
   if (k.viewer) {
-    return `<div class="cad-embed" data-att="${esc(att.id)}"><div class="cad-embed__head">${body}<span class="cad-embed__hint">drag to orbit · scroll to zoom</span></div><div class="cad-embed__stage"><canvas></canvas></div></div>`;
+    const dl = att.url || att.dataUri ? `<a class="btn btn--sm" href="${esc(att.url || att.dataUri)}" download="${esc(att.name)}">Download</a>` : '';
+    const facts = k.viewer === 'urdf' ? '<div class="cad-embed__facts" data-urdf-facts></div>' : '';
+    return `<div class="cad-embed" data-att="${esc(att.id)}"><div class="cad-embed__head">${body}${dl}<span class="cad-embed__hint">drag to orbit · scroll to zoom</span></div><div class="cad-embed__stage"><canvas></canvas></div>${facts}</div>`;
   }
   return `<div class="filecard" data-att="${esc(att.id)}">${body}<button class="btn btn--sm" data-action="att-open" data-id="${esc(att.id)}">Open</button></div>`;
 }
