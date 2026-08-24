@@ -930,7 +930,14 @@ function render() {
   if (UI.modal) $('.modal [data-m], .modal .btn--primary')?.focus?.();
   if (UI.modal?.kind === 'bug') mountBugDrop();
   if (r.name === 'page' && r.params.anchor) {
-    $('#' + CSS.escape(r.params.anchor))?.scrollIntoView();
+    const el = $('#' + CSS.escape(r.params.anchor));
+    const c = $('.content');
+    if (el && c) {
+      const land = () => { c.scrollTop = c.scrollTop + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68; };
+      land();
+      // media above the heading can size in after the first paint and push it
+      requestAnimationFrame(land);
+    }
   }
   mountTocSpy();
 }
@@ -943,6 +950,9 @@ function mountTocSpy() {
   const spy = () => {
     let cur = heads[0];
     for (const h of heads) if (h.getBoundingClientRect().top < 120) cur = h;
+    // At the very bottom the last section may be too short to cross the line,
+    // yet it is where the reader was taken — highlight it, not its neighbor.
+    if (content.scrollTop + content.clientHeight >= content.scrollHeight - 2) cur = heads[heads.length - 1];
     links.forEach((a) => a.classList.toggle('here', a.dataset.toc === cur?.id));
   };
   content.addEventListener('scroll', spy, { passive: true });

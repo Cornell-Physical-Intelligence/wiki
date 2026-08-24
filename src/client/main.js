@@ -1112,12 +1112,51 @@ window.addEventListener('beforeunload', (ev) => {
 
 /* ------------------------------- routing + boot -------------------------- */
 
+// Snappy in-page scroll: the content pane animates to just below the topbar,
+// distance-scaled so nearby jumps feel immediate and long ones stay readable.
+function smoothAnchor(el) {
+  const c = $('.content');
+  if (!c) { el.scrollIntoView({ behavior: 'smooth' }); return; }
+  const dest = () => Math.max(0, Math.min(c.scrollTop + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68, c.scrollHeight - c.clientHeight));
+  const from = c.scrollTop;
+  const d = dest() - from;
+  if (Math.abs(d) < 2) return;
+  const t0 = performance.now();
+  const dur = Math.min(420, 180 + Math.abs(d) * 0.08);
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur);
+    c.scrollTop = from + d * (1 - Math.pow(1 - k, 3));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// A link to a heading on the page already open skips the router entirely:
+// no re-render (which shifts layout under the jump), just the scroll, with
+// the fragment pushed into the URL the way a plain anchor would be.
+document.addEventListener('click', (ev) => {
+  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+  const a = ev.target instanceof Element && ev.target.closest('a[href^="#/page/"]');
+  if (!a) return;
+  const href = a.getAttribute('href');
+  const hi = href.indexOf('#', 2);
+  if (hi === -1) return;
+  if (UI.route.name !== 'page' || href.slice(0, hi) !== '#/page/' + (UI.route.params.id || 'welcome')) return;
+  const el = document.getElementById(href.slice(hi + 1));
+  if (!el) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  smoothAnchor(el);
+  history.pushState(null, '', location.pathname + location.search + href);
+  UI.route.params.anchor = href.slice(hi + 1);
+});
+
 window.addEventListener('hashchange', () => {
   // A bare "#heading" hash is an in-page anchor (TOC, heading permalinks) —
   // scroll to it without re-routing.
   if (location.hash && !location.hash.startsWith('#/')) {
     const el = document.getElementById(location.hash.slice(1));
-    if (el) { el.scrollIntoView({ behavior: 'smooth' }); return; }
+    if (el) { smoothAnchor(el); return; }
   }
   const wasEditing = !!UI.editor;
   if (wasEditing) stashDraftIfDirty();
