@@ -937,6 +937,7 @@ function render() {
       land();
       // media above the heading can size in after the first paint and push it
       requestAnimationFrame(land);
+      UI._tocPin = el.id;
     }
   }
   mountTocSpy();
@@ -953,8 +954,13 @@ function mountTocSpy() {
     // At the very bottom the last section may be too short to cross the line,
     // yet it is where the reader was taken — highlight it, not its neighbor.
     if (content.scrollTop + content.clientHeight >= content.scrollHeight - 2) cur = heads[heads.length - 1];
+    const pin = UI._tocPin && heads.find((h) => h.id === UI._tocPin);
+    if (pin) cur = pin;
     links.forEach((a) => a.classList.toggle('here', a.dataset.toc === cur?.id));
   };
+  const unpin = () => { if (UI._tocPin) { UI._tocPin = null; spy(); } };
+  content.addEventListener('wheel', unpin, { passive: true });
+  content.addEventListener('touchmove', unpin, { passive: true });
   content.addEventListener('scroll', spy, { passive: true });
   spy();
 }

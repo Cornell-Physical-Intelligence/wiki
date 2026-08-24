@@ -536,7 +536,7 @@ label > .dd { width: 100%; }
   display: flex; align-items: center; gap: 10px; margin-top: 12px;
   font-size: 13px; color: var(--muted);
 }
-.page-head__byline .who { display: inline-flex; align-items: center; gap: 8px; }
+.page-head__byline .who { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex: none; }
 /* shadcn-style ghost icon button: visible affordance, quiet at rest. */
 .page-head__info {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1530,6 +1530,8 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 /* selected source text, mirrored in the editor preview */
 ::highlight(wiki-sync) { background-color: var(--mirror-hl); }
+.anchor-flash { animation: anchor-flash 900ms ease-out; border-radius: 4px; }
+@keyframes anchor-flash { 0%, 25% { background-color: var(--mirror-hl); } 100% { background-color: transparent; } }
 .editor__pane--src { position: relative; }
 .src-mirror { position: absolute; left: 10px; right: 10px; background: var(--mirror-hl); border-radius: 4px; pointer-events: none; }
 
@@ -6495,6 +6497,7 @@ function render() {
       land();
       // media above the heading can size in after the first paint and push it
       requestAnimationFrame(land);
+      UI._tocPin = el.id;
     }
   }
   mountTocSpy();
@@ -6511,8 +6514,13 @@ function mountTocSpy() {
     // At the very bottom the last section may be too short to cross the line,
     // yet it is where the reader was taken — highlight it, not its neighbor.
     if (content.scrollTop + content.clientHeight >= content.scrollHeight - 2) cur = heads[heads.length - 1];
+    const pin = UI._tocPin && heads.find((h) => h.id === UI._tocPin);
+    if (pin) cur = pin;
     links.forEach((a) => a.classList.toggle('here', a.dataset.toc === cur?.id));
   };
+  const unpin = () => { if (UI._tocPin) { UI._tocPin = null; spy(); } };
+  content.addEventListener('wheel', unpin, { passive: true });
+  content.addEventListener('touchmove', unpin, { passive: true });
   content.addEventListener('scroll', spy, { passive: true });
   spy();
 }
@@ -7869,16 +7877,24 @@ window.addEventListener('beforeunload', (ev) => {
 
 // Snappy in-page scroll: the content pane animates to just below the topbar,
 // distance-scaled so nearby jumps feel immediate and long ones stay readable.
+let anchorAnim = 0;
 function smoothAnchor(el) {
+  const my = ++anchorAnim; // a newer jump owns the scroll from its first frame
+  // The pulse answers every click, including targets the scroll can't reach:
+  // a heading near the end of the page bottoms out before the 68px line.
+  el.classList.remove('anchor-flash');
+  void el.offsetWidth;
+  el.classList.add('anchor-flash');
+  setTimeout(() => { if (el.isConnected) el.classList.remove('anchor-flash'); }, 950);
   const c = $('.content');
   if (!c) { el.scrollIntoView({ behavior: 'smooth' }); return; }
-  const dest = () => Math.max(0, Math.min(c.scrollTop + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68, c.scrollHeight - c.clientHeight));
   const from = c.scrollTop;
-  const d = dest() - from;
+  const d = Math.max(0, Math.min(from + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68, c.scrollHeight - c.clientHeight)) - from;
   if (Math.abs(d) < 2) return;
   const t0 = performance.now();
   const dur = Math.min(420, 180 + Math.abs(d) * 0.08);
   const step = (now) => {
+    if (my !== anchorAnim) return;
     const k = Math.min(1, (now - t0) / dur);
     c.scrollTop = from + d * (1 - Math.pow(1 - k, 3));
     if (k < 1) requestAnimationFrame(step);
@@ -7902,6 +7918,7 @@ document.addEventListener('click', (ev) => {
   ev.preventDefault();
   ev.stopPropagation();
   smoothAnchor(el);
+  UI._tocPin = el.id; // the clicked entry stays lit even if the scroll clamps
   history.pushState(null, '', location.pathname + location.search + href);
   UI.route.params.anchor = href.slice(hi + 1);
 });
@@ -7916,6 +7933,7 @@ window.addEventListener('hashchange', () => {
   const wasEditing = !!UI.editor;
   if (wasEditing) stashDraftIfDirty();
   UI.navOpen = false;
+  UI._tocPin = null;
   route();
   render();
 });

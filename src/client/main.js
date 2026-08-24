@@ -1114,16 +1114,24 @@ window.addEventListener('beforeunload', (ev) => {
 
 // Snappy in-page scroll: the content pane animates to just below the topbar,
 // distance-scaled so nearby jumps feel immediate and long ones stay readable.
+let anchorAnim = 0;
 function smoothAnchor(el) {
+  const my = ++anchorAnim; // a newer jump owns the scroll from its first frame
+  // The pulse answers every click, including targets the scroll can't reach:
+  // a heading near the end of the page bottoms out before the 68px line.
+  el.classList.remove('anchor-flash');
+  void el.offsetWidth;
+  el.classList.add('anchor-flash');
+  setTimeout(() => { if (el.isConnected) el.classList.remove('anchor-flash'); }, 950);
   const c = $('.content');
   if (!c) { el.scrollIntoView({ behavior: 'smooth' }); return; }
-  const dest = () => Math.max(0, Math.min(c.scrollTop + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68, c.scrollHeight - c.clientHeight));
   const from = c.scrollTop;
-  const d = dest() - from;
+  const d = Math.max(0, Math.min(from + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68, c.scrollHeight - c.clientHeight)) - from;
   if (Math.abs(d) < 2) return;
   const t0 = performance.now();
   const dur = Math.min(420, 180 + Math.abs(d) * 0.08);
   const step = (now) => {
+    if (my !== anchorAnim) return;
     const k = Math.min(1, (now - t0) / dur);
     c.scrollTop = from + d * (1 - Math.pow(1 - k, 3));
     if (k < 1) requestAnimationFrame(step);
@@ -1147,6 +1155,7 @@ document.addEventListener('click', (ev) => {
   ev.preventDefault();
   ev.stopPropagation();
   smoothAnchor(el);
+  UI._tocPin = el.id; // the clicked entry stays lit even if the scroll clamps
   history.pushState(null, '', location.pathname + location.search + href);
   UI.route.params.anchor = href.slice(hi + 1);
 });
@@ -1161,6 +1170,7 @@ window.addEventListener('hashchange', () => {
   const wasEditing = !!UI.editor;
   if (wasEditing) stashDraftIfDirty();
   UI.navOpen = false;
+  UI._tocPin = null;
   route();
   render();
 });

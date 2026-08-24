@@ -525,7 +525,7 @@ label > .dd { width: 100%; }
   display: flex; align-items: center; gap: 10px; margin-top: 12px;
   font-size: 13px; color: var(--muted);
 }
-.page-head__byline .who { display: inline-flex; align-items: center; gap: 8px; }
+.page-head__byline .who { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex: none; }
 /* shadcn-style ghost icon button: visible affordance, quiet at rest. */
 .page-head__info {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1519,5 +1519,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 /* selected source text, mirrored in the editor preview */
 ::highlight(wiki-sync) { background-color: var(--mirror-hl); }
+.anchor-flash { animation: anchor-flash 900ms ease-out; border-radius: 4px; }
+@keyframes anchor-flash { 0%, 25% { background-color: var(--mirror-hl); } 100% { background-color: transparent; } }
 .editor__pane--src { position: relative; }
 .src-mirror { position: absolute; left: 10px; right: 10px; background: var(--mirror-hl); border-radius: 4px; pointer-events: none; }
