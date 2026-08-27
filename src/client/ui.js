@@ -94,6 +94,7 @@ const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const mdCtx = (extra) => ({
   att: (id) => Store.att(id),
   pageByTitle: (t) => Store.pageByTitle(t),
+  interest: () => (Store.isAdmin() && Array.isArray(Store.s.interest) ? Store.s.interest : null),
   readonly: false,
   ...extra,
 });

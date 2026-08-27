@@ -498,6 +498,29 @@ function viewAdmin() {
           </tr>`).join('')}
           </tbody></table></div></div>
       </section>
+      ${(() => {
+        const interest = Store.s.interest || [];
+        const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `<section class="admin-block">
+        <div class="admin-block__head"><h2>Interest list</h2><span class="count">${interest.length}</span>
+          ${interest.length ? `<span class="admin-block__grow"></span>
+          <a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
+          <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
+        </div>
+        <p class="admin-block__sub">The Apply page on the site feeds this table live. Paste <code>{{interest}}</code> into any wiki page to embed it; the CSV reflects this exact moment.</p>
+        ${interest.length ? `<div class="roster"><div class="roster__scroll"><table>
+          <thead><tr><th>Person</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
+          ${interest.map((r) => `<tr>
+            <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' · not cornell.edu'}</span></span></span></td>
+            <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
+            <td class="interest-note">${MD.esc(r.project || '')}</td>
+            <td>${r.fileId ? `<a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noreferrer">${MD.esc(r.fileName || 'file')}</a>` : ''}</td>
+            <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}${r.updated && r.updated !== r.ts ? ` · upd ${when(r.updated)}` : ''}</span></td>
+            <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
+          </tr>`).join('')}
+          </tbody></table></div></div>` : '<p class="admin-block__sub">No submissions yet.</p>'}
+      </section>`;
+      })()}
       <section class="admin-block">
         <div class="admin-block__head"><h2>Email</h2></div>
         ${(() => {

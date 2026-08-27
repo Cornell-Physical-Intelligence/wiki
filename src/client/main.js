@@ -622,6 +622,24 @@ document.addEventListener('click', async (ev) => {
       break;
     }
 
+    /* ---- interest list ---- */
+    case 'interest-remove': {
+      stop();
+      const id = el.dataset.id;
+      UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
+      UI.modal.onGo = () => { Store.deleteInterest(id); render(); toast('Removed from the interest list'); };
+      render();
+      break;
+    }
+    case 'interest-clear': {
+      stop();
+      const n = (Store.s.interest || []).length;
+      UI.modal = { kind: 'confirm', title: 'Clear the interest list?', text: `All <b>${n}</b> submissions and their files are permanently erased. Download the CSV first if you want a record.`, confirm: 'Clear list', danger: true };
+      UI.modal.onGo = () => { Store.purgeInterest(); render(); toast('Interest list cleared'); };
+      render();
+      break;
+    }
+
     /* ---- trash ---- */
     case 'trash-restore': stop(); { const p = Store.restorePage(el.dataset.id); render(); toast(`Restored “${p.title}”`); } break;
     case 'trash-purge': {

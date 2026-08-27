@@ -827,6 +827,12 @@ a.rev:hover { background: var(--hover); }
 
 .roster { border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; }
 .roster__scroll { overflow-x: auto; }
+
+/* Interest list: header actions sit right, project notes stay readable. */
+.admin-block__grow { flex: 1; }
+.interest-note { max-width: 340px; min-width: 180px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.interest-foot { font-size: 12.5px; color: var(--muted); margin: 6px 2px 16px; }
+.interest-foot a { color: inherit; }
 .roster table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 660px; }
 .roster th {
   font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;

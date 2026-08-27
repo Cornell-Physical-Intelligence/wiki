@@ -89,6 +89,8 @@ const OP_MAP = {
   setEmailSettings: (a) => ({ op: 'setEmailSettings', args: a[0] }),
   setRole: (a) => ({ op: 'setRole', args: { email: a[0], role: a[1] } }),
   removeUser: (a) => ({ op: 'removeUser', args: { email: a[0] } }),
+  deleteInterest: (a) => ({ op: 'deleteInterest', args: { id: a[0] } }),
+  purgeInterest: () => ({ op: 'purgeInterest', args: {} }),
 };
 
 for (const [name, toOp] of Object.entries(OP_MAP)) {
