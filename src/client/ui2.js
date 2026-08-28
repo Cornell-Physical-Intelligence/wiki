@@ -448,7 +448,7 @@ function viewActivity() {
 
 function viewInterest() {
   const shell = (inner) => topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
-    `<div class="content"><div class="page-wrap"><div class="page-col">${inner}</div></div></div>`;
+    `<div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">${inner}</div></div></div>`;
   if (!Store.isAdmin()) {
     return shell(`<div class="empty">${I.mail}<b>Only admins can read the interest list</b>
       <p>Apply-page submissions carry personal info, so they stay with team leads.</p>
@@ -460,9 +460,10 @@ function viewInterest() {
   }
   const st = UI.interest || { loading: true };
   const rows = st.rows || [];
+  const flaggedCount = rows.filter((r) => r.flag).length;
   const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
-    <p>People who filled the form on the site's Apply page. Newest first; resubmits update in place. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>
-    <div class="admin-block__head"><h2>Submissions</h2><span class="count">${rows.length}</span><span class="admin-block__grow"></span>
+    <p>People who filled the form on the site's Apply page. Flagged people stay pinned on top; resubmits update in place. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>
+    <div class="admin-block__head"><h2>Submissions</h2><span class="count">${rows.length}${flaggedCount ? ` · ${flaggedCount} flagged` : ''}</span><span class="admin-block__grow"></span>
       <button class="btn btn--sm" data-action="interest-refresh">Refresh</button>
       ${rows.length ? `<a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
       <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
@@ -471,18 +472,22 @@ function viewInterest() {
   if (st.error) return shell(head + `<p class="admin-block__sub">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
   if (!rows.length) return shell(head + '<p class="admin-block__sub">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>');
   const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return shell(head + `<div class="roster"><div class="roster__scroll"><table>
-    <thead><tr><th>Person</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
-    ${rows.map((r) => `<tr>
-      <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' · not cornell.edu'}</span></span></span></td>
+  const FLAG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>';
+  const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>';
+  return shell(head + `<div class="roster roster--interest"><div class="roster__scroll"><table>
+    <thead><tr><th></th><th>Person</th><th>Subteam</th><th>Coolest project</th><th>Note</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
+    ${rows.map((r) => `<tr class="${r.flag ? 'is-flagged' : ''}">
+      <td class="interest-flagcell"><button class="icon-btn interest-flagbtn ${r.flag ? 'on' : ''}" data-action="interest-flag" data-id="${r.id}" data-flag="${r.flag ? '1' : ''}" aria-pressed="${r.flag ? 'true' : 'false'}" aria-label="${r.flag ? 'Unflag' : 'Flag'} ${MD.esc(r.name)}" title="${r.flag ? 'Unflag' : 'Flag for follow-up'}">${FLAG_ICON}</button></td>
+      <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' <span class="interest-notcornell">not cornell.edu</span>'}</span></span></span></td>
       <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
-      <td class="interest-note">${MD.esc(r.project || '')}</td>
-      <td>${r.fileId ? `<a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noreferrer">${MD.esc(r.fileName || 'file')}</a>` : ''}</td>
-      <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}${r.updated && r.updated !== r.ts ? ` · upd ${when(r.updated)}` : ''}</span></td>
+      <td><div class="interest-note" title="${MD.esc(r.project || '')}">${MD.esc(r.project || '')}</div></td>
+      <td><button class="linklike interest-notebtn ${r.note ? '' : 'interest-notebtn--empty'}" data-action="interest-note" data-id="${r.id}" data-name="${MD.esc(r.name)}" data-note="${MD.esc(r.note || '')}" title="${MD.esc(r.note || 'Add a note')}">${r.note ? MD.esc(r.note) : 'Add note'}</button></td>
+      <td><span class="interest-filecell">${r.fileId ? `<button class="linklike" data-action="interest-file" data-id="${r.id}" aria-expanded="${UI.interestFile === r.id ? 'true' : 'false'}">${MD.esc(r.fileName || 'file')}</button>${UI.interestFile === r.id ? `<a class="icon-btn interest-dl" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}" aria-label="Download ${MD.esc(r.fileName || 'file')}" title="Download">${DL_ICON}</a>` : ''}` : ''}</span></td>
+      <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}</span></td>
       <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
     </tr>`).join('')}
     </tbody></table></div></div>
-    <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list</p>`);
+    <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list${flaggedCount ? `, ${flaggedCount} flagged` : ''}</p>`);
 }
 
 function viewAdmin() {
@@ -747,10 +752,21 @@ function viewModal() {
       <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;
   } else if (m.kind === 'confirm') {
+    // Optional extras: a free-text field handed to onGo, and a GitHub-style
+    // type-to-confirm phrase that keeps the danger button locked until it
+    // matches exactly.
+    const field = m.field
+      ? `<label class="modal-typed">${MD.esc(m.field.label || 'Note')}
+          <input class="text-input" data-m="modal-field" value="${MD.esc(m.field.value || '')}" placeholder="${MD.esc(m.field.placeholder || '')}" maxlength="${m.field.maxlength || 280}" autocomplete="off" spellcheck="true"></label>`
+      : '';
+    const typed = m.typed
+      ? `<label class="modal-typed">Type <b class="modal-typed__phrase">${MD.esc(m.typed)}</b> to confirm
+          <input class="text-input" data-m="modal-typed" data-phrase="${MD.esc(m.typed)}" placeholder="${MD.esc(m.typed)}" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"></label>`
+      : '';
     inner = `<div class="modal" role="dialog" aria-label="Confirm">
       <div class="modal__head"><h3>${MD.esc(m.title)}</h3></div>
-      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">${m.text}</p></div>
-      <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn ${m.danger ? 'btn--danger' : 'btn--primary'}" data-action="confirm-go">${MD.esc(m.confirm || 'Confirm')}</button></div>
+      <div class="modal__body"><p style="margin:0;font-size:14px;color:var(--muted)">${m.text}</p>${field}${typed}</div>
+      <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn ${m.danger ? 'btn--danger' : 'btn--primary'}" data-action="confirm-go" ${m.typed ? 'disabled' : ''}>${MD.esc(m.confirm || 'Confirm')}</button></div>
     </div>`;
   }
   if (m.kind === 'conflict') {
@@ -963,6 +979,14 @@ function render() {
     api('/interest')
       .then((out) => { UI.interest = { rows: out.rows || [] }; render(); })
       .catch((e) => { UI.interest = { error: e.message || 'load failed' }; render(); });
+  }
+  // The sidebar badge only needs counts, fetched once per session for admins
+  // so flagged candidates are visible from anywhere in the wiki.
+  if (typeof REMOTE !== 'undefined' && Store.isAdmin() && UI.interestSummary === undefined) {
+    UI.interestSummary = { flagged: 0 };
+    api('/interest/summary')
+      .then((out) => { UI.interestSummary = out; render(); })
+      .catch(() => { /* the badge is a courtesy */ });
   }
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {

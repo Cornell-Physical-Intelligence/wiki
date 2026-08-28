@@ -828,11 +828,80 @@ a.rev:hover { background: var(--hover); }
 .roster { border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; }
 .roster__scroll { overflow-x: auto; }
 
-/* Interest list: header actions sit right, project notes stay readable. */
+/* Interest list: a wide screen with locked row heights so the table reads as
+   a sheet, not a pile. */
+.page-wrap--wide { grid-template-columns: minmax(0, 1080px); }
+.page-col--wide { width: min(1080px, 100%); }
 .admin-block__grow { flex: 1; }
-.interest-note { max-width: 340px; min-width: 180px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+
+/* Fixed layout: the sheet always fits its column; cells clip with ellipsis
+   instead of pushing the table into a sideways scroll. */
+.roster--interest table { table-layout: fixed; width: 100%; min-width: 920px; }
+.roster--interest th:nth-child(1) { width: 30px; }
+.roster--interest th:nth-child(2) { width: 23%; }
+.roster--interest th:nth-child(3) { width: 96px; }
+.roster--interest th:nth-child(5) { width: 17%; }
+.roster--interest th:nth-child(6) { width: 118px; }
+.roster--interest th:nth-child(7) { width: 60px; }
+.roster--interest th:nth-child(8) { width: 92px; }
+.roster--interest td { height: 64px; padding-top: 8px; padding-bottom: 8px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.roster--interest .who { max-width: 100%; }
+.roster--interest .who b { overflow: hidden; text-overflow: ellipsis; display: block; }
+.roster--interest .mail { overflow: hidden; text-overflow: ellipsis; display: block; white-space: nowrap; }
+
+.interest-note {
+  max-width: 250px;
+  min-width: 170px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.interest-notcornell { color: var(--bad); font-weight: 600; }
+
+.interest-flagcell { width: 26px; padding-right: 0; padding-left: 8px; }
+.interest-flagbtn { color: var(--faint); }
+.interest-flagbtn.on { color: var(--bad); }
+.interest-flagbtn svg { width: 15px; height: 15px; }
+.roster--interest tr.is-flagged td { background: var(--bad-bg); }
+
+.interest-notebtn {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  text-align: left;
+  font-size: 12.5px;
+}
+.interest-notebtn--empty { color: var(--faint); text-decoration-style: dotted; }
+
+.interest-filecell { display: inline-flex; align-items: center; gap: 6px; max-width: 150px; }
+.interest-filecell .linklike { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 116px; }
+.interest-dl svg { width: 15px; height: 15px; }
+
 .interest-foot { font-size: 12.5px; color: var(--muted); margin: 6px 2px 16px; }
 .interest-foot a { color: inherit; }
+
+.nav-flag {
+  margin-left: auto;
+  background: var(--bad);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 99px;
+}
+
+.modal-typed { display: block; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.modal-typed .text-input { margin-top: 6px; width: 100%; }
+.modal-typed__phrase { font-family: var(--font-mono, ui-monospace, monospace); color: var(--fg); }
 .roster table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 660px; }
 .roster th {
   font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;

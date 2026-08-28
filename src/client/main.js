@@ -626,6 +626,42 @@ document.addEventListener('click', async (ev) => {
     case 'interest-refresh': {
       stop();
       UI.interest = undefined; // the route loader refetches
+      UI.interestSummary = undefined;
+      UI.interestFile = null;
+      render();
+      break;
+    }
+    case 'interest-file': {
+      stop();
+      UI.interestFile = UI.interestFile === el.dataset.id ? null : el.dataset.id;
+      render();
+      break;
+    }
+    case 'interest-flag': {
+      stop();
+      const id = el.dataset.id;
+      const next = el.dataset.flag !== '1';
+      api(`/interest/${id}`, { method: 'PATCH', body: JSON.stringify({ flag: next }) })
+        .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); })
+        .catch((e) => { toast(`Could not ${next ? 'flag' : 'unflag'}: ${e.message}`); });
+      break;
+    }
+    case 'interest-note': {
+      stop();
+      const id = el.dataset.id;
+      const current = el.dataset.note || '';
+      UI.modal = {
+        kind: 'confirm',
+        title: current ? 'Edit note' : 'Add a note',
+        text: `Pinned to <b>${MD.esc(el.dataset.name || 'this person')}</b> wherever the list appears, the CSV included. Leave it empty to remove the note.`,
+        confirm: 'Save note',
+        field: { label: 'Note', value: current, placeholder: 'e.g. Strong CAD portfolio, invite to coffee chat', maxlength: 280 },
+      };
+      UI.modal.onGo = (value) => {
+        api(`/interest/${id}`, { method: 'PATCH', body: JSON.stringify({ note: String(value ?? '') }) })
+          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Note saved'); })
+          .catch((e) => { toast(`Could not save the note: ${e.message}`); });
+      };
       render();
       break;
     }
@@ -635,7 +671,7 @@ document.addEventListener('click', async (ev) => {
       UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
       UI.modal.onGo = () => {
         api(`/interest/${id}`, { method: 'DELETE' })
-          .then(() => { UI.interest = undefined; render(); toast('Removed from the interest list'); })
+          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Removed from the interest list'); })
           .catch((e) => { toast(`Could not remove: ${e.message}`); });
       };
       render();
@@ -644,10 +680,26 @@ document.addEventListener('click', async (ev) => {
     case 'interest-clear': {
       stop();
       const n = (UI.interest?.rows || []).length;
-      UI.modal = { kind: 'confirm', title: 'Clear the interest list?', text: `All <b>${n}</b> submissions and their files are permanently erased. Download the CSV first if you want a record.`, confirm: 'Clear list', danger: true };
+      // The record leaves before the data does: opening this modal snapshots
+      // the CSV automatically, so there is always an export from just before
+      // any clear.
+      const snap = document.createElement('a');
+      snap.href = '/api/interest.csv';
+      snap.download = '';
+      document.body.appendChild(snap);
+      snap.click();
+      snap.remove();
+      UI.modal = {
+        kind: 'confirm',
+        title: 'Clear the interest list?',
+        text: `All <b>${n}</b> submissions, notes, and files are permanently erased. A CSV snapshot just downloaded; keep it somewhere safe.`,
+        confirm: 'Clear list',
+        danger: true,
+        typed: 'clear interest list',
+      };
       UI.modal.onGo = () => {
         api('/interest/clear', { method: 'POST', body: '{}' })
-          .then(() => { UI.interest = undefined; render(); toast('Interest list cleared'); })
+          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Interest list cleared'); })
           .catch((e) => { toast(`Could not clear: ${e.message}`); });
       };
       render();
@@ -676,7 +728,7 @@ document.addEventListener('click', async (ev) => {
     /* ---- modal plumbing ---- */
     case 'modal-close': stop(); if (UI.modal?.kind === 'bug') bugSyncFields(); closeModal(); break;
     case 'modal-veil': if (ev.target === el) { stop(); closeModal(); } break;
-    case 'confirm-go': stop(); { const go = UI.modal?.onGo; if (UI.modal) UI.modal.onGo = null; closeModal(go ? () => go() : null); } break;
+    case 'confirm-go': stop(); { const go = UI.modal?.onGo; const v = document.querySelector('.modal [data-m="modal-field"]')?.value; if (UI.modal) UI.modal.onGo = null; closeModal(go ? () => go(v) : null); } break;
 
     case 'toast-act': stop(); { const t = UI.toasts.find((x) => x.id === el.dataset.tid); if (t?.action) { const run = t.action.run; dismissToast(t); run(); } } break;
   }
@@ -735,6 +787,14 @@ document.addEventListener('input', (ev) => {
     UI.palette.q = t.value;
     UI.palette.sel = 0;
     renderPaletteList(); // input DOM stays put — the caret never jumps
+    return;
+  }
+
+  // Type-to-confirm gates: the danger button unlocks only on an exact match,
+  // toggled directly on the DOM so the caret never jumps.
+  if (t.matches('[data-m="modal-typed"]')) {
+    const go = document.querySelector('.modal [data-action="confirm-go"]');
+    if (go) go.disabled = t.value.trim() !== t.dataset.phrase;
     return;
   }
 
