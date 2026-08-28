@@ -832,76 +832,94 @@ a.rev:hover { background: var(--hover); }
 .roster { border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; }
 .roster__scroll { overflow-x: auto; }
 
-/* Interest list: a wide screen with locked row heights so the table reads as
-   a sheet, not a pile. */
+/* ------------------------------ interest list -----------------------------
+   A wide sheet: fixed layout so it always fits its column, one line per cell
+   with ellipsis, and uniform rows. Anything longer opens in the row's detail
+   view rather than stretching the table. */
+
 .page-wrap--wide { grid-template-columns: minmax(0, 1080px); }
 .page-col--wide { width: min(1080px, 100%); }
 .admin-block__grow { flex: 1; }
 
-/* Fixed layout: the sheet always fits its column; cells clip with ellipsis
-   instead of pushing the table into a sideways scroll. */
-.roster--interest table { table-layout: fixed; width: 100%; min-width: 920px; }
-.roster--interest th:nth-child(1) { width: 30px; }
-.roster--interest th:nth-child(2) { width: 23%; }
-.roster--interest th:nth-child(3) { width: 96px; }
-.roster--interest th:nth-child(5) { width: 17%; }
-.roster--interest th:nth-child(6) { width: 118px; }
-.roster--interest th:nth-child(7) { width: 60px; }
-.roster--interest th:nth-child(8) { width: 92px; }
-.roster--interest td { height: 64px; padding-top: 8px; padding-bottom: 8px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.roster--interest .who { max-width: 100%; }
-.roster--interest .who b { overflow: hidden; text-overflow: ellipsis; display: block; }
-.roster--interest .mail { overflow: hidden; text-overflow: ellipsis; display: block; white-space: nowrap; }
+.interest-tools { margin: 14px 0 10px; }
+.interest-search { width: 100%; max-width: 420px; }
 
-.interest-note {
-  max-width: 250px;
-  min-width: 170px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.interest-notcornell { color: var(--bad); font-weight: 600; }
-
-.interest-flagcell { width: 26px; padding-right: 0; padding-left: 8px; }
-.interest-flagbtn { color: var(--faint); }
-.interest-flagbtn.on { color: var(--bad); }
-.interest-flagbtn svg { width: 15px; height: 15px; }
-.roster--interest tr.is-flagged td { background: var(--bad-bg); }
-
-.interest-notebtn {
-  max-width: 160px;
+.roster--interest table { table-layout: fixed; width: 100%; min-width: 860px; }
+.roster--interest th:nth-child(1) { width: 24%; }
+.roster--interest th:nth-child(2) { width: 108px; }
+.roster--interest th:nth-child(4) { width: 23%; }
+.roster--interest th:nth-child(5) { width: 32px; padding-left: 0; padding-right: 0; }
+.roster--interest th:nth-child(6) { width: 104px; }
+.roster--interest td {
+  height: 52px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  text-align: left;
-  font-size: 12.5px;
 }
-.interest-notebtn--empty { color: var(--faint); text-decoration-style: dotted; }
+.roster--interest tbody tr { cursor: pointer; }
+.roster--interest tbody tr:hover td { background: var(--hover); }
+.roster--interest tbody tr:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
 
-.interest-filecell { display: inline-flex; align-items: center; gap: 6px; max-width: 150px; }
-.interest-filecell .linklike { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 116px; }
-.interest-dl svg { width: 15px; height: 15px; }
+.interest-person { display: block; min-width: 0; }
+.interest-person b { display: flex; align-items: center; gap: 5px; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.interest-person .mail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.interest-foot { font-size: 12.5px; color: var(--muted); margin: 6px 2px 16px; }
-.interest-foot a { color: inherit; }
+/* Warnings are a symbol, not a sentence: the words live in the tooltip. */
+.interest-warn { display: inline-flex; flex: none; color: var(--bad); }
+.interest-warn svg { width: 13px; height: 13px; }
 
-.nav-flag {
-  margin-left: auto;
-  background: var(--bad);
-  color: #fff;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 3px 6px;
-  border-radius: 99px;
+.interest-commentcell { color: var(--muted); font-size: 12.5px; }
+.interest-badge { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); font-weight: 600; }
+.interest-badge svg { width: 12px; height: 12px; }
+.interest-lastcomment { color: var(--muted); }
+
+.interest-filecol svg { width: 14px; height: 14px; color: var(--faint); vertical-align: middle; }
+.interest-filecell { text-align: center; }
+.interest-fileicon { display: inline-flex; color: var(--muted); }
+.interest-fileicon:hover { color: var(--fg); }
+.interest-fileicon svg { width: 15px; height: 15px; }
+.interest-when { font-size: 12.5px; color: var(--muted); }
+
+.sort-th {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
 }
+.sort-th:hover, .sort-th.on { color: var(--fg); }
+.sort-arrow { font-size: 10px; }
+
+.interest-foot { font-size: 12.5px; color: var(--muted); margin: 6px 2px 24px; }
+.interest-back { margin: 0 0 6px; }
+
+.interest-archives { margin-top: 8px; }
+.interest-archivelist { list-style: none; margin: 4px 0 0; padding: 0; }
+.interest-archivelist li {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px;
+}
+.interest-archivelist li:last-child { border-bottom: none; }
+.interest-archivelist .faint { flex: 1; font-size: 12.5px; }
+
+/* Row detail: where the full text lives. */
+.interest-detail { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 18px; font-size: 13.5px; }
+.interest-detail dt { color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+.interest-detail dd { margin: 0; overflow-wrap: anywhere; }
+.interest-subhead { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.interest-subhead .count { font-weight: 400; color: var(--faint); }
+.interest-project { margin: 0 0 18px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.interest-thread { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; max-height: 260px; overflow-y: auto; }
+.interest-comment { border-left: 2px solid var(--hairline); padding-left: 10px; }
+.interest-comment__meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.interest-comment__meta b { color: var(--fg); font-size: 12.5px; }
+.interest-comment__x { margin-left: auto; opacity: 0; }
+.interest-comment:hover .interest-comment__x, .interest-comment__x:focus-visible { opacity: 1; }
+.interest-comment__x svg { width: 12px; height: 12px; }
+.interest-comment p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.interest-add { display: flex; gap: 8px; }
+.interest-add .text-input { flex: 1; }
 
 .modal-typed { display: block; margin-top: 14px; font-size: 13px; color: var(--muted); }
 .modal-typed .text-input { margin-top: 6px; width: 100%; }
@@ -5167,7 +5185,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'page' && r.params.id === 'welcome' ? 'active' : ''}" href="#/page/welcome">${I.home} Home</a>
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
-      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest${UI.interestSummary?.flagged ? ` <span class="nav-flag" title="${UI.interestSummary.flagged} flagged">${UI.interestSummary.flagged}</span>` : ''}</a>` : ''}
+      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
@@ -6077,6 +6095,80 @@ function viewActivity() {
    own cache (UI.interest). Nothing here touches the shared wiki state, and
    any page can link it with [Interest list](#/interest). */
 
+const INTEREST_ICONS = {
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>',
+  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  paperclip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.4 8.6a2 2 0 0 0 2.8 2.8L18.8 9a4 4 0 1 0-5.6-5.7l-8.4 8.6a6 6 0 1 0 8.5 8.5l8.4-8.6"/></svg>',
+};
+
+// 8/28/26 — short, sortable-looking, and unambiguous next to a full title.
+const interestDate = (ts) =>
+  new Date(ts).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+
+// Filter and sort live in the UI only: the endpoint always returns the whole
+// list, so a huge roster stays one fetch and every view of it is instant.
+function interestVisible() {
+  const rows = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
+  const q = (UI.interestQuery || '').trim().toLowerCase();
+  const filtered = q
+    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam} ${r.project} ${(r.comments || []).map((c) => c.text).join(' ')}`.toLowerCase().includes(q))
+    : rows;
+  const { key, dir } = UI.interestSort || { key: 'ts', dir: 'desc' };
+  const val = (r) => {
+    if (key === 'name') return r.name.toLowerCase();
+    if (key === 'subteam') return (r.subteam || '~').toLowerCase(); // blanks sort last
+    if (key === 'comments') return (r.comments || []).length;
+    return r.ts;
+  };
+  const sorted = [...filtered].sort((a, b) => {
+    const x = val(a);
+    const y = val(b);
+    if (x === y) return b.ts - a.ts;
+    return (x > y ? 1 : -1) * (dir === 'asc' ? 1 : -1);
+  });
+  return sorted;
+}
+
+// Every cell is one line that clips; the full text lives in the row's detail
+// view, so a long project answer can never break the sheet's rhythm.
+function interestRowsHtml(rows) {
+  return rows.map((r) => {
+    const comments = r.comments || [];
+    const last = comments[comments.length - 1];
+    return `<tr data-action="interest-open" data-id="${r.id}" tabindex="0" role="button" aria-label="Open ${MD.esc(r.name)}">
+      <td><span class="interest-person"><b>${MD.esc(r.name)}${r.cornell ? '' : ` <span class="interest-warn" title="Not a cornell.edu address" aria-label="Not a cornell.edu address">${INTEREST_ICONS.warn}</span>`}</b><span class="mail">${MD.esc(r.email)}</span></span></td>
+      <td class="clip">${MD.esc(r.subteam || 'Not sure yet')}</td>
+      <td class="clip" title="${MD.esc(r.project || '')}">${MD.esc(r.project || '')}</td>
+      <td class="clip interest-commentcell">${comments.length
+        ? `<span class="interest-badge" title="${comments.length} comment${comments.length === 1 ? '' : 's'}">${INTEREST_ICONS.comment}${comments.length}</span> <span class="interest-lastcomment">${MD.esc(last.text)}</span>`
+        : '<span class="faint">Add a comment</span>'}</td>
+      <td class="interest-filecell">${r.fileId
+        ? `<a class="interest-fileicon" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}" title="Download ${MD.esc(r.fileName || 'file')}" aria-label="Download ${MD.esc(r.fileName || 'file')}" data-stop="1">${INTEREST_ICONS.download}</a>`
+        : ''}</td>
+      <td class="mono interest-when" title="${new Date(r.ts).toLocaleString()}">${interestDate(r.ts)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Filtering re-renders only the body, so the search box keeps its caret.
+function renderInterestRows() {
+  const body = $('.roster--interest tbody');
+  if (!body) return;
+  const rows = interestVisible();
+  body.innerHTML = interestRowsHtml(rows);
+  const foot = $('.interest-foot');
+  if (foot) foot.textContent = interestFootText(rows.length);
+}
+
+function interestFootText(shown) {
+  const total = (UI.interestArchiveView?.archive?.rows || UI.interest?.rows || []).length;
+  const noun = shown === 1 ? 'person' : 'people';
+  return shown === total
+    ? `${total} ${noun} on the list`
+    : `${shown} of ${total} shown`;
+}
+
 function viewInterest() {
   const shell = (inner) => topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
     `<div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">${inner}</div></div></div>`;
@@ -6089,36 +6181,72 @@ function viewInterest() {
     return shell(`<div class="empty">${I.mail}<b>Live on the deployed wiki</b>
       <p>This preview has no server. The real wiki lists Apply-page submissions here, with CSV download.</p></div>`);
   }
+  /* ---- viewing a past cycle ---- */
+  const av = UI.interestArchiveView;
+  if (av) {
+    const back = `<p class="interest-back"><button class="linklike" data-action="interest-archive-back">← Back to the live list</button></p>`;
+    if (av.loading) return shell(back + '<p class="admin-block__sub">Loading archive…</p>');
+    if (av.error || !av.archive) return shell(back + `<p class="admin-block__sub">Could not open that archive.</p>`);
+    const a = av.archive;
+    const ahead = `${back}<div class="plain-head"><span class="eyebrow">Archived ${interestDate(a.ts)}</span><h1>${MD.esc(a.name)}</h1>
+      <p>A snapshot of the interest list, kept exactly as it stood. Read-only: comments and removals apply to the live list only.</p></div>
+      <div class="admin-block__head"><h2>Submissions</h2><span class="count">${a.rows.length}</span><span class="admin-block__grow"></span>
+        <a class="btn btn--sm" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>Download CSV</a>
+        <button class="btn btn--sm btn--danger" data-action="interest-archive-remove" data-id="${MD.esc(a.id)}" data-name="${MD.esc(a.name)}">Delete archive…</button>
+      </div>`;
+    return shell(ahead + interestSheet(interestVisible(), { archived: true }));
+  }
+
   const st = UI.interest || { loading: true };
   const rows = st.rows || [];
-  const flaggedCount = rows.filter((r) => r.flag).length;
+  const archives = UI.interestArchives?.list || [];
+  const archivesBlock = archives.length ? `
+    <section class="admin-block interest-archives">
+      <div class="admin-block__head"><h2>Archives</h2><span class="count">${archives.length}</span></div>
+      <ul class="interest-archivelist">
+        ${archives.map((a) => `<li>
+          <button class="linklike" data-action="interest-archive-open" data-id="${MD.esc(a.id)}">${MD.esc(a.name)}</button>
+          <span class="faint">${a.count} ${a.count === 1 ? 'person' : 'people'} · archived ${interestDate(a.ts)}</span>
+          <a class="linklike" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>CSV</a>
+        </li>`).join('')}
+      </ul>
+    </section>` : '';
   const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
-    <p>People who filled the form on the site's Apply page. Flagged people stay pinned on top; resubmits update in place. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>
-    <div class="admin-block__head"><h2>Submissions</h2><span class="count">${rows.length}${flaggedCount ? ` · ${flaggedCount} flagged` : ''}</span><span class="admin-block__grow"></span>
+    <p>People who filled the form on the site's Apply page. Open a row for the whole answer and its comments. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>
+    <div class="admin-block__head"><h2>Submissions</h2><span class="count">${rows.length}</span><span class="admin-block__grow"></span>
       <button class="btn btn--sm" data-action="interest-refresh">Refresh</button>
       ${rows.length ? `<a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
-      <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
+      <button class="btn btn--sm" data-action="interest-archive">Archive list…</button>` : ''}
     </div>`;
   if (st.loading) return shell(head + '<p class="admin-block__sub">Loading…</p>');
   if (st.error) return shell(head + `<p class="admin-block__sub">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
-  if (!rows.length) return shell(head + '<p class="admin-block__sub">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>');
-  const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const FLAG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>';
-  const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>';
-  return shell(head + `<div class="roster roster--interest"><div class="roster__scroll"><table>
-    <thead><tr><th></th><th>Person</th><th>Subteam</th><th>Coolest project</th><th>Note</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
-    ${rows.map((r) => `<tr class="${r.flag ? 'is-flagged' : ''}">
-      <td class="interest-flagcell"><button class="icon-btn interest-flagbtn ${r.flag ? 'on' : ''}" data-action="interest-flag" data-id="${r.id}" data-flag="${r.flag ? '1' : ''}" aria-pressed="${r.flag ? 'true' : 'false'}" aria-label="${r.flag ? 'Unflag' : 'Flag'} ${MD.esc(r.name)}" title="${r.flag ? 'Unflag' : 'Flag for follow-up'}">${FLAG_ICON}</button></td>
-      <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' <span class="interest-notcornell">not cornell.edu</span>'}</span></span></span></td>
-      <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
-      <td><div class="interest-note" title="${MD.esc(r.project || '')}">${MD.esc(r.project || '')}</div></td>
-      <td><button class="linklike interest-notebtn ${r.note ? '' : 'interest-notebtn--empty'}" data-action="interest-note" data-id="${r.id}" data-name="${MD.esc(r.name)}" data-note="${MD.esc(r.note || '')}" title="${MD.esc(r.note || 'Add a note')}">${r.note ? MD.esc(r.note) : 'Add note'}</button></td>
-      <td><span class="interest-filecell">${r.fileId ? `<button class="linklike" data-action="interest-file" data-id="${r.id}" aria-expanded="${UI.interestFile === r.id ? 'true' : 'false'}">${MD.esc(r.fileName || 'file')}</button>${UI.interestFile === r.id ? `<a class="icon-btn interest-dl" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}" aria-label="Download ${MD.esc(r.fileName || 'file')}" title="Download">${DL_ICON}</a>` : ''}` : ''}</span></td>
-      <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}</span></td>
-      <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
-    </tr>`).join('')}
-    </tbody></table></div></div>
-    <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list${flaggedCount ? `, ${flaggedCount} flagged` : ''}</p>`);
+  if (!rows.length) return shell(head + '<p class="admin-block__sub">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>' + archivesBlock);
+
+  return shell(head + interestSheet(interestVisible()) + archivesBlock);
+}
+
+// The sheet itself: filter, sortable headers, one-line rows.
+function interestSheet(visible, { archived = false } = {}) {
+  const sort = UI.interestSort || { key: 'ts', dir: 'desc' };
+  const arrow = (key) => (sort.key === key ? `<span class="sort-arrow">${sort.dir === 'asc' ? '↑' : '↓'}</span>` : '');
+  const th = (key, label, cls = '') =>
+    `<th class="${cls}"><button class="sort-th ${sort.key === key ? 'on' : ''}" data-action="interest-sort" data-key="${key}" aria-sort="${sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${label}${arrow(key)}</button></th>`;
+
+  return `
+    <div class="interest-tools">
+      <input class="text-input interest-search" data-m="interest-q" type="search" placeholder="Filter by name, email, subteam, project, or comment…" value="${MD.esc(UI.interestQuery || '')}" aria-label="Filter submissions" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="roster roster--interest ${archived ? 'roster--archived' : ''}"><div class="roster__scroll"><table>
+    <thead><tr>
+      ${th('name', 'Person')}
+      ${th('subteam', 'Subteam')}
+      <th>Coolest project</th>
+      ${th('comments', 'Comments')}
+      <th class="interest-filecol" aria-label="File">${INTEREST_ICONS.paperclip}</th>
+      ${th('ts', 'When', 'interest-whencol')}
+    </tr></thead>
+    <tbody>${interestRowsHtml(visible)}</tbody></table></div></div>
+    <p class="interest-foot">${interestFootText(visible.length)}</p>`;
 }
 
 function viewAdmin() {
@@ -6382,6 +6510,46 @@ function viewModal() {
       </div>
       <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;
+  } else if (m.kind === 'interest-row') {
+    // The row's full text, its file, and the comment thread anyone on the
+    // list can add to. Nothing is truncated here — this is where the sheet's
+    // one-line cells send you.
+    const archived = Boolean(UI.interestArchiveView);
+    const source = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
+    const r = source.find((x) => x.id === m.id);
+    if (r) {
+      const comments = r.comments || [];
+      inner = `<div class="modal modal--wide" role="dialog" aria-label="Submission">
+        <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+        <div class="modal__body">
+          <dl class="interest-detail">
+            <dt>Email</dt><dd>${MD.esc(r.email)}${r.cornell ? '' : ` <span class="interest-warn" title="Not a cornell.edu address">${INTEREST_ICONS.warn}</span> <span class="faint">not a cornell.edu address</span>`}</dd>
+            <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Not sure yet')}</dd>
+            <dt>Submitted</dt><dd>${new Date(r.ts).toLocaleString()}${r.updated && r.updated !== r.ts ? ` <span class="faint">· updated ${new Date(r.updated).toLocaleString()}</span>` : ''}</dd>
+            ${r.fileId ? `<dt>File</dt><dd><a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}">${MD.esc(r.fileName || 'file')}</a> <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
+          </dl>
+          <h4 class="interest-subhead">Coolest project they've done</h4>
+          <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
+          <h4 class="interest-subhead">Comments${comments.length ? ` <span class="count">${comments.length}</span>` : ''}</h4>
+          <div class="interest-thread">
+            ${comments.length ? comments.map((c) => `<div class="interest-comment">
+              <div class="interest-comment__meta"><b>${MD.esc(c.byName || c.by)}</b><span class="mono">${relTime(c.ts)}</span>
+                ${archived ? '' : `<button class="icon-btn interest-comment__x" data-action="interest-comment-remove" data-id="${r.id}" data-cid="${c.id}" aria-label="Delete comment" title="Delete comment">${I.x}</button>`}</div>
+              <p>${MD.esc(c.text)}</p>
+            </div>`).join('') : `<p class="faint" style="margin:0 0 4px">${archived ? 'No comments were left on this one.' : 'No comments yet. Anyone reading this list can leave one.'}</p>`}
+          </div>
+          ${archived ? '' : `<form class="interest-add" data-action="interest-comment-form" data-id="${r.id}">
+            <input class="text-input" data-m="interest-comment" placeholder="Add a comment about this person…" maxlength="1000" autocomplete="off" spellcheck="true">
+            <button class="btn btn--primary" type="submit">Comment</button>
+          </form>`}
+        </div>
+        <div class="modal__foot modal__foot--split">
+          ${archived ? '' : `<button class="btn btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove from list</button>`}
+          <span style="flex:1"></span>
+          <button class="btn" data-action="modal-close">Close</button>
+        </div>
+      </div>`;
+    }
   } else if (m.kind === 'confirm') {
     // Optional extras: a free-text field handed to onGo, and a GitHub-style
     // type-to-confirm phrase that keeps the danger button locked until it
@@ -6611,13 +6779,23 @@ function render() {
       .then((out) => { UI.interest = { rows: out.rows || [] }; render(); })
       .catch((e) => { UI.interest = { error: e.message || 'load failed' }; render(); });
   }
-  // The sidebar badge only needs counts, fetched once per session for admins
-  // so flagged candidates are visible from anywhere in the wiki.
-  if (typeof REMOTE !== 'undefined' && Store.isAdmin() && UI.interestSummary === undefined) {
-    UI.interestSummary = { flagged: 0 };
-    api('/interest/summary')
-      .then((out) => { UI.interestSummary = out; render(); })
-      .catch(() => { /* the badge is a courtesy */ });
+  if (typeof REMOTE !== 'undefined' && r.name === 'interest' && UI.interestArchives === undefined && Store.isAdmin()) {
+    UI.interestArchives = { list: [] };
+    api('/interest/archives')
+      .then((out) => { UI.interestArchives = { list: out.archives || [] }; render(); })
+      .catch(() => { /* the archive shelf is a courtesy */ });
+  }
+  // Opening one archive pulls its rows once.
+  if (typeof REMOTE !== 'undefined' && UI.interestArchiveView?.loading && UI.interestArchiveView.id) {
+    const id = UI.interestArchiveView.id;
+    api(`/interest/archives/${id}`)
+      .then((out) => {
+        if (UI.interestArchiveView?.id === id) { UI.interestArchiveView = { id, archive: out.archive }; render(); }
+      })
+      .catch(() => {
+        if (UI.interestArchiveView?.id === id) { UI.interestArchiveView = { id, error: true }; render(); }
+      });
+    UI.interestArchiveView.loading = 'pending';
   }
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
@@ -7241,6 +7419,25 @@ function edFindOpen() {
 
 /* ------------------------------- click delegation ------------------------ */
 
+// Sheet rows are buttons: keyboard users open them the same way.
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const row = ev.target.closest?.('[data-action="interest-open"]');
+  if (!row || ev.target !== row) return;
+  ev.preventDefault();
+  UI.modal = { kind: 'interest-row', id: row.dataset.id };
+  render();
+});
+
+// The interest endpoints answer with the whole updated row; swapping it into
+// the cache keeps the open detail view alive instead of blanking it on a
+// refetch.
+function replaceInterestRow(row) {
+  if (!row || !UI.interest?.rows) return;
+  const i = UI.interest.rows.findIndex((r) => r.id === row.id);
+  if (i >= 0) UI.interest.rows[i] = row;
+}
+
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el) return;
@@ -7537,43 +7734,34 @@ document.addEventListener('click', async (ev) => {
     case 'interest-refresh': {
       stop();
       UI.interest = undefined; // the route loader refetches
-      UI.interestSummary = undefined;
-      UI.interestFile = null;
+      UI.interestArchives = undefined;
       render();
       break;
     }
-    case 'interest-file': {
+    case 'interest-open': {
+      // The file link inside the row keeps its own job.
+      if (ev.target.closest('[data-stop]')) return;
       stop();
-      UI.interestFile = UI.interestFile === el.dataset.id ? null : el.dataset.id;
+      UI.modal = { kind: 'interest-row', id: el.dataset.id };
       render();
       break;
     }
-    case 'interest-flag': {
+    case 'interest-sort': {
       stop();
-      const id = el.dataset.id;
-      const next = el.dataset.flag !== '1';
-      api(`/interest/${id}`, { method: 'PATCH', body: JSON.stringify({ flag: next }) })
-        .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); })
-        .catch((e) => { toast(`Could not ${next ? 'flag' : 'unflag'}: ${e.message}`); });
+      const key = el.dataset.key;
+      const cur = UI.interestSort || { key: 'ts', dir: 'desc' };
+      // Text reads best ascending first; dates and counts start at the top.
+      const firstDir = key === 'name' || key === 'subteam' ? 'asc' : 'desc';
+      UI.interestSort = cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir };
+      render();
       break;
     }
-    case 'interest-note': {
+    case 'interest-comment-remove': {
       stop();
-      const id = el.dataset.id;
-      const current = el.dataset.note || '';
-      UI.modal = {
-        kind: 'confirm',
-        title: current ? 'Edit note' : 'Add a note',
-        text: `Pinned to <b>${MD.esc(el.dataset.name || 'this person')}</b> wherever the list appears, the CSV included. Leave it empty to remove the note.`,
-        confirm: 'Save note',
-        field: { label: 'Note', value: current, placeholder: 'e.g. Strong CAD portfolio, invite to coffee chat', maxlength: 280 },
-      };
-      UI.modal.onGo = (value) => {
-        api(`/interest/${id}`, { method: 'PATCH', body: JSON.stringify({ note: String(value ?? '') }) })
-          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Note saved'); })
-          .catch((e) => { toast(`Could not save the note: ${e.message}`); });
-      };
-      render();
+      const { id, cid } = el.dataset;
+      api(`/interest/${id}/comments/${cid}`, { method: 'DELETE' })
+        .then((out) => { replaceInterestRow(out.row); render(); })
+        .catch((e) => { toast(`Could not delete the comment: ${e.message}`); });
       break;
     }
     case 'interest-remove': {
@@ -7582,36 +7770,64 @@ document.addEventListener('click', async (ev) => {
       UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
       UI.modal.onGo = () => {
         api(`/interest/${id}`, { method: 'DELETE' })
-          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Removed from the interest list'); })
+          .then(() => { UI.interest = undefined; render(); toast('Removed from the interest list'); })
           .catch((e) => { toast(`Could not remove: ${e.message}`); });
       };
       render();
       break;
     }
-    case 'interest-clear': {
+    case 'interest-archive': {
       stop();
       const n = (UI.interest?.rows || []).length;
-      // The record leaves before the data does: opening this modal snapshots
-      // the CSV automatically, so there is always an export from just before
-      // any clear.
-      const snap = document.createElement('a');
-      snap.href = '/api/interest.csv';
-      snap.download = '';
-      document.body.appendChild(snap);
-      snap.click();
-      snap.remove();
+      const year = new Date().getFullYear();
+      const season = new Date().getMonth() >= 6 ? 'Fall' : 'Spring';
       UI.modal = {
         kind: 'confirm',
-        title: 'Clear the interest list?',
-        text: `All <b>${n}</b> submissions, notes, and files are permanently erased. A CSV snapshot just downloaded; keep it somewhere safe.`,
-        confirm: 'Clear list',
+        title: 'Archive the interest list?',
+        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files and comments come along.`,
+        confirm: 'Archive list',
+        field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
+      };
+      UI.modal.onGo = (value) => {
+        const name = String(value ?? '').trim();
+        if (!name) { toast('An archive needs a name'); return; }
+        api('/interest/archive', { method: 'POST', body: JSON.stringify({ name }) })
+          .then(() => { UI.interest = undefined; UI.interestArchives = undefined; render(); toast(`Archived as “${name}”`); })
+          .catch((e) => { toast(`Could not archive: ${e.message}`); });
+      };
+      render();
+      break;
+    }
+    case 'interest-archive-open': {
+      stop();
+      UI.interestArchiveView = { id: el.dataset.id, loading: true };
+      UI.interestQuery = '';
+      render();
+      break;
+    }
+    case 'interest-archive-back': {
+      stop();
+      UI.interestArchiveView = null;
+      UI.interestQuery = '';
+      render();
+      break;
+    }
+    case 'interest-archive-remove': {
+      stop();
+      const id = el.dataset.id;
+      const name = el.dataset.name || 'this archive';
+      UI.modal = {
+        kind: 'confirm',
+        title: 'Delete this archive?',
+        text: `<b>${MD.esc(name)}</b> and its attachments are erased for good. Download its CSV first if you want a record.`,
+        confirm: 'Delete archive',
         danger: true,
-        typed: 'clear interest list',
+        typed: 'delete archive',
       };
       UI.modal.onGo = () => {
-        api('/interest/clear', { method: 'POST', body: '{}' })
-          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Interest list cleared'); })
-          .catch((e) => { toast(`Could not clear: ${e.message}`); });
+        api(`/interest/archives/${id}`, { method: 'DELETE' })
+          .then(() => { UI.interestArchiveView = null; UI.interestArchives = undefined; render(); toast('Archive deleted'); })
+          .catch((e) => { toast(`Could not delete: ${e.message}`); });
       };
       render();
       break;
@@ -7652,6 +7868,17 @@ document.addEventListener('submit', (ev) => {
   if (!form) return;
   ev.preventDefault();
   const act = form.dataset.action;
+
+  if (act === 'interest-comment-form') {
+    const input = form.querySelector('[data-m="interest-comment"]');
+    const text = (input?.value || '').trim();
+    if (!text) return;
+    input.value = '';
+    api(`/interest/${form.dataset.id}/comments`, { method: 'POST', body: JSON.stringify({ text }) })
+      .then((out) => { replaceInterestRow(out.row); render(); })
+      .catch((e) => { toast(`Could not add the comment: ${e.message}`); });
+    return;
+  }
 
   if (act === 'email-settings-form') {
     UI.emailFromCustom = false;
@@ -7706,6 +7933,13 @@ document.addEventListener('input', (ev) => {
   if (t.matches('[data-m="modal-typed"]')) {
     const go = document.querySelector('.modal [data-action="confirm-go"]');
     if (go) go.disabled = t.value.trim() !== t.dataset.phrase;
+    return;
+  }
+
+  // Filtering the interest sheet redraws only its rows, for the same reason.
+  if (t.matches('[data-m="interest-q"]')) {
+    UI.interestQuery = t.value;
+    renderInterestRows();
     return;
   }
 

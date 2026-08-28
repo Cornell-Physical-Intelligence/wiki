@@ -330,6 +330,25 @@ function edFindOpen() {
 
 /* ------------------------------- click delegation ------------------------ */
 
+// Sheet rows are buttons: keyboard users open them the same way.
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const row = ev.target.closest?.('[data-action="interest-open"]');
+  if (!row || ev.target !== row) return;
+  ev.preventDefault();
+  UI.modal = { kind: 'interest-row', id: row.dataset.id };
+  render();
+});
+
+// The interest endpoints answer with the whole updated row; swapping it into
+// the cache keeps the open detail view alive instead of blanking it on a
+// refetch.
+function replaceInterestRow(row) {
+  if (!row || !UI.interest?.rows) return;
+  const i = UI.interest.rows.findIndex((r) => r.id === row.id);
+  if (i >= 0) UI.interest.rows[i] = row;
+}
+
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el) return;
@@ -626,43 +645,34 @@ document.addEventListener('click', async (ev) => {
     case 'interest-refresh': {
       stop();
       UI.interest = undefined; // the route loader refetches
-      UI.interestSummary = undefined;
-      UI.interestFile = null;
+      UI.interestArchives = undefined;
       render();
       break;
     }
-    case 'interest-file': {
+    case 'interest-open': {
+      // The file link inside the row keeps its own job.
+      if (ev.target.closest('[data-stop]')) return;
       stop();
-      UI.interestFile = UI.interestFile === el.dataset.id ? null : el.dataset.id;
+      UI.modal = { kind: 'interest-row', id: el.dataset.id };
       render();
       break;
     }
-    case 'interest-flag': {
+    case 'interest-sort': {
       stop();
-      const id = el.dataset.id;
-      const next = el.dataset.flag !== '1';
-      api(`/interest/${id}`, { method: 'PATCH', body: JSON.stringify({ flag: next }) })
-        .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); })
-        .catch((e) => { toast(`Could not ${next ? 'flag' : 'unflag'}: ${e.message}`); });
+      const key = el.dataset.key;
+      const cur = UI.interestSort || { key: 'ts', dir: 'desc' };
+      // Text reads best ascending first; dates and counts start at the top.
+      const firstDir = key === 'name' || key === 'subteam' ? 'asc' : 'desc';
+      UI.interestSort = cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir };
+      render();
       break;
     }
-    case 'interest-note': {
+    case 'interest-comment-remove': {
       stop();
-      const id = el.dataset.id;
-      const current = el.dataset.note || '';
-      UI.modal = {
-        kind: 'confirm',
-        title: current ? 'Edit note' : 'Add a note',
-        text: `Pinned to <b>${MD.esc(el.dataset.name || 'this person')}</b> wherever the list appears, the CSV included. Leave it empty to remove the note.`,
-        confirm: 'Save note',
-        field: { label: 'Note', value: current, placeholder: 'e.g. Strong CAD portfolio, invite to coffee chat', maxlength: 280 },
-      };
-      UI.modal.onGo = (value) => {
-        api(`/interest/${id}`, { method: 'PATCH', body: JSON.stringify({ note: String(value ?? '') }) })
-          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Note saved'); })
-          .catch((e) => { toast(`Could not save the note: ${e.message}`); });
-      };
-      render();
+      const { id, cid } = el.dataset;
+      api(`/interest/${id}/comments/${cid}`, { method: 'DELETE' })
+        .then((out) => { replaceInterestRow(out.row); render(); })
+        .catch((e) => { toast(`Could not delete the comment: ${e.message}`); });
       break;
     }
     case 'interest-remove': {
@@ -671,36 +681,64 @@ document.addEventListener('click', async (ev) => {
       UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
       UI.modal.onGo = () => {
         api(`/interest/${id}`, { method: 'DELETE' })
-          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Removed from the interest list'); })
+          .then(() => { UI.interest = undefined; render(); toast('Removed from the interest list'); })
           .catch((e) => { toast(`Could not remove: ${e.message}`); });
       };
       render();
       break;
     }
-    case 'interest-clear': {
+    case 'interest-archive': {
       stop();
       const n = (UI.interest?.rows || []).length;
-      // The record leaves before the data does: opening this modal snapshots
-      // the CSV automatically, so there is always an export from just before
-      // any clear.
-      const snap = document.createElement('a');
-      snap.href = '/api/interest.csv';
-      snap.download = '';
-      document.body.appendChild(snap);
-      snap.click();
-      snap.remove();
+      const year = new Date().getFullYear();
+      const season = new Date().getMonth() >= 6 ? 'Fall' : 'Spring';
       UI.modal = {
         kind: 'confirm',
-        title: 'Clear the interest list?',
-        text: `All <b>${n}</b> submissions, notes, and files are permanently erased. A CSV snapshot just downloaded; keep it somewhere safe.`,
-        confirm: 'Clear list',
+        title: 'Archive the interest list?',
+        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files and comments come along.`,
+        confirm: 'Archive list',
+        field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
+      };
+      UI.modal.onGo = (value) => {
+        const name = String(value ?? '').trim();
+        if (!name) { toast('An archive needs a name'); return; }
+        api('/interest/archive', { method: 'POST', body: JSON.stringify({ name }) })
+          .then(() => { UI.interest = undefined; UI.interestArchives = undefined; render(); toast(`Archived as “${name}”`); })
+          .catch((e) => { toast(`Could not archive: ${e.message}`); });
+      };
+      render();
+      break;
+    }
+    case 'interest-archive-open': {
+      stop();
+      UI.interestArchiveView = { id: el.dataset.id, loading: true };
+      UI.interestQuery = '';
+      render();
+      break;
+    }
+    case 'interest-archive-back': {
+      stop();
+      UI.interestArchiveView = null;
+      UI.interestQuery = '';
+      render();
+      break;
+    }
+    case 'interest-archive-remove': {
+      stop();
+      const id = el.dataset.id;
+      const name = el.dataset.name || 'this archive';
+      UI.modal = {
+        kind: 'confirm',
+        title: 'Delete this archive?',
+        text: `<b>${MD.esc(name)}</b> and its attachments are erased for good. Download its CSV first if you want a record.`,
+        confirm: 'Delete archive',
         danger: true,
-        typed: 'clear interest list',
+        typed: 'delete archive',
       };
       UI.modal.onGo = () => {
-        api('/interest/clear', { method: 'POST', body: '{}' })
-          .then(() => { UI.interest = undefined; UI.interestSummary = undefined; render(); toast('Interest list cleared'); })
-          .catch((e) => { toast(`Could not clear: ${e.message}`); });
+        api(`/interest/archives/${id}`, { method: 'DELETE' })
+          .then(() => { UI.interestArchiveView = null; UI.interestArchives = undefined; render(); toast('Archive deleted'); })
+          .catch((e) => { toast(`Could not delete: ${e.message}`); });
       };
       render();
       break;
@@ -741,6 +779,17 @@ document.addEventListener('submit', (ev) => {
   if (!form) return;
   ev.preventDefault();
   const act = form.dataset.action;
+
+  if (act === 'interest-comment-form') {
+    const input = form.querySelector('[data-m="interest-comment"]');
+    const text = (input?.value || '').trim();
+    if (!text) return;
+    input.value = '';
+    api(`/interest/${form.dataset.id}/comments`, { method: 'POST', body: JSON.stringify({ text }) })
+      .then((out) => { replaceInterestRow(out.row); render(); })
+      .catch((e) => { toast(`Could not add the comment: ${e.message}`); });
+    return;
+  }
 
   if (act === 'email-settings-form') {
     UI.emailFromCustom = false;
@@ -795,6 +844,13 @@ document.addEventListener('input', (ev) => {
   if (t.matches('[data-m="modal-typed"]')) {
     const go = document.querySelector('.modal [data-action="confirm-go"]');
     if (go) go.disabled = t.value.trim() !== t.dataset.phrase;
+    return;
+  }
+
+  // Filtering the interest sheet redraws only its rows, for the same reason.
+  if (t.matches('[data-m="interest-q"]')) {
+    UI.interestQuery = t.value;
+    renderInterestRows();
     return;
   }
 
