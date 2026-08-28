@@ -828,94 +828,137 @@ a.rev:hover { background: var(--hover); }
 .roster { border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; }
 .roster__scroll { overflow-x: auto; }
 
-/* ------------------------------ interest list -----------------------------
-   A wide sheet: fixed layout so it always fits its column, one line per cell
-   with ellipsis, and uniform rows. Anything longer opens in the row's detail
-   view rather than stretching the table. */
+/* ------------------------------ interest sheet ----------------------------
+   One bounded component: toolbar, table, and footer share a single inner
+   rail (14px), and the card's outer edge sits on the page rail. Nothing in
+   here is a pixel off anything else, at any row count. */
 
 .page-wrap--wide { grid-template-columns: minmax(0, 1080px); }
 .page-col--wide { width: min(1080px, 100%); }
 .admin-block__grow { flex: 1; }
 
-.interest-tools { margin: 14px 0 10px; }
-.interest-search { width: 100%; max-width: 420px; }
+.sheet {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+  margin: 4px 0 28px;
+}
 
-.roster--interest table { table-layout: fixed; width: 100%; min-width: 860px; }
-.roster--interest th:nth-child(1) { width: 24%; }
-.roster--interest th:nth-child(2) { width: 108px; }
-.roster--interest th:nth-child(4) { width: 23%; }
-.roster--interest th:nth-child(5) { width: 32px; padding-left: 0; padding-right: 0; }
-.roster--interest th:nth-child(6) { width: 104px; }
-.roster--interest td {
-  height: 52px;
-  padding-top: 6px;
-  padding-bottom: 6px;
+.sheet__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.sheet__search { flex: 1 1 auto; min-width: 0; max-width: 320px; height: 30px; }
+.sheet__actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+.sheet__actions .btn { height: 30px; text-decoration: none; }
+.btn--icon { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.btn--icon svg { width: 13px; height: 13px; flex: none; }
+
+.sheet__scroll { overflow-x: auto; }
+.sheet table { table-layout: fixed; width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13.5px; }
+
+.sheet th {
+  font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  font-weight: 400; color: var(--faint); text-align: left;
+  padding: 0 14px; height: 34px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--hover);
+}
+.sheet th:nth-child(1) { width: 30%; }
+.sheet th:nth-child(2) { width: 132px; }
+.sheet th:nth-child(4) { width: 104px; }
+
+.sheet__sort {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+}
+.sheet__sort--static { cursor: default; }
+.sheet__sort:not(.sheet__sort--static):hover, .sheet__sort.on { color: var(--fg); }
+/* Always reserved, so toggling a sort never shifts a header. */
+.sheet__caret { display: inline-block; width: 8px; font-size: 9px; line-height: 1; }
+
+.sheet td {
+  height: 56px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--hairline);
   vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.roster--interest tbody tr { cursor: pointer; }
-.roster--interest tbody tr:hover td { background: var(--hover); }
-.roster--interest tbody tr:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+.sheet tbody tr:last-child td { border-bottom: none; }
+.sheet tbody tr { cursor: pointer; }
+.sheet tbody tr:hover td { background: var(--hover); }
+.sheet tbody tr:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+.sheet__empty td { color: var(--muted); cursor: default; text-align: center; }
+.sheet__empty:hover td { background: none; }
 
+.sheet__foot {
+  padding: 0 14px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--hairline);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Person cell: two fixed lines, so every row is exactly as tall as the next. */
 .interest-person { display: block; min-width: 0; }
-.interest-person b { display: flex; align-items: center; gap: 5px; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.interest-person .mail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.interest-person b { display: block; font-size: 13.5px; font-weight: 600; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.interest-person .mail { display: block; font-size: 12px; line-height: 16px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Warnings are a symbol, not a sentence: the words live in the tooltip. */
-.interest-warn { display: inline-flex; flex: none; color: var(--bad); }
-.interest-warn svg { width: 13px; height: 13px; }
+/* Outside addresses read red instead of costing a column. */
+.interest-outside { color: var(--bad); }
+.interest-person .mail.interest-outside { color: var(--bad); }
 
-.interest-commentcell { color: var(--muted); font-size: 12.5px; }
-.interest-badge { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); font-weight: 600; }
-.interest-badge svg { width: 12px; height: 12px; }
-.interest-lastcomment { color: var(--muted); }
+.interest-when { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12.5px; }
 
-.interest-filecol svg { width: 14px; height: 14px; color: var(--faint); vertical-align: middle; }
-.interest-filecell { text-align: center; }
-.interest-fileicon { display: inline-flex; color: var(--muted); }
-.interest-fileicon:hover { color: var(--fg); }
-.interest-fileicon svg { width: 15px; height: 15px; }
-.interest-when { font-size: 12.5px; color: var(--muted); }
+.sheet__archivedtag { font-size: 0.5em; font-weight: 400; color: var(--faint); white-space: nowrap; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.sheet__heading { font-size: 15px; font-weight: 600; margin: 26px 0 0; }
+.sheet__note { font-size: 13.5px; color: var(--muted); margin: 10px 0 24px; }
+.sheet__back { background: none; border: 0; padding: 0; margin: 0 0 14px; cursor: pointer; font: inherit; font-size: 13px; color: var(--muted); }
+.sheet__back:hover { color: var(--fg); }
 
-.sort-th {
-  display: inline-flex; align-items: center; gap: 4px;
+/* Archive shelf: same card, one row per cycle, identical inner rail. */
+.sheet--list { padding: 0; }
+.sheet__archive {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px; height: 52px;
+  border-bottom: 1px solid var(--hairline);
+}
+.sheet__archive:last-child { border-bottom: none; }
+.sheet__archivename {
   background: none; border: 0; padding: 0; cursor: pointer;
-  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--fg);
+  text-decoration: underline; text-underline-offset: 2px;
 }
-.sort-th:hover, .sort-th.on { color: var(--fg); }
-.sort-arrow { font-size: 10px; }
+.sheet__archivemeta { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.interest-foot { font-size: 12.5px; color: var(--muted); margin: 6px 2px 24px; }
-.interest-back { margin: 0 0 6px; }
-
-.interest-archives { margin-top: 8px; }
-.interest-archivelist { list-style: none; margin: 4px 0 0; padding: 0; }
-.interest-archivelist li {
-  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-  padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px;
-}
-.interest-archivelist li:last-child { border-bottom: none; }
-.interest-archivelist .faint { flex: 1; font-size: 12.5px; }
-
-/* Row detail: where the full text lives. */
-.interest-detail { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 18px; font-size: 13.5px; }
-.interest-detail dt { color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+/* Row detail: where the full text, the file, and the thread live. */
+.interest-detail { display: grid; grid-template-columns: 92px 1fr; gap: 8px 16px; margin: 0 0 20px; font-size: 13.5px; align-items: baseline; }
+.interest-detail dt { font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .interest-detail dd { margin: 0; overflow-wrap: anywhere; }
-.interest-subhead { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
-.interest-subhead .count { font-weight: 400; color: var(--faint); }
-.interest-project { margin: 0 0 18px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.interest-thread { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; max-height: 260px; overflow-y: auto; }
-.interest-comment { border-left: 2px solid var(--hairline); padding-left: 10px; }
-.interest-comment__meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-.interest-comment__meta b { color: var(--fg); font-size: 12.5px; }
-.interest-comment__x { margin-left: auto; opacity: 0; }
+.interest-download { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
+.interest-subhead { margin: 0 0 8px; font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 400; color: var(--faint); }
+.interest-subhead .count { color: var(--faint); }
+.interest-project { margin: 0 0 22px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.interest-thread { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; max-height: 240px; overflow-y: auto; }
+.interest-comment { border-left: 2px solid var(--hairline); padding-left: 12px; }
+.interest-comment__meta { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
+.interest-comment__meta b { color: var(--fg); font-size: 12.5px; font-weight: 600; }
+.interest-comment__x { margin-left: auto; opacity: 0; align-self: center; }
 .interest-comment:hover .interest-comment__x, .interest-comment__x:focus-visible { opacity: 1; }
 .interest-comment__x svg { width: 12px; height: 12px; }
-.interest-comment p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.interest-add { display: flex; gap: 8px; }
-.interest-add .text-input { flex: 1; }
+.interest-comment p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.interest-add { display: flex; gap: 8px; align-items: center; }
+.interest-add .text-input { flex: 1; height: 32px; }
+.interest-add .btn { height: 32px; }
 
 .modal-typed { display: block; margin-top: 14px; font-size: 13px; color: var(--muted); }
 .modal-typed .text-input { margin-top: 6px; width: 100%; }
