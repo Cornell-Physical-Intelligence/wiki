@@ -106,6 +106,25 @@ const liveFavicon = Buffer.from(await favicon.arrayBuffer());
 const master = readFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url));
 assert(liveFavicon.equals(master), 'live favicon bytes do not match the source asset');
 
+// A shared wiki link previews as the club's card, served from this domain.
+const card = await request(`${ORIGIN}/og-cupi.png`);
+assert(card.status === 200, `preview card returned HTTP ${card.status}`);
+assert(
+  card.headers.get('content-type')?.includes('image/png'),
+  'preview card did not return a PNG content type',
+);
+assert(
+  Buffer.from(await card.arrayBuffer()).equals(
+    readFileSync(new URL('../src/client/og-cupi.png', import.meta.url)),
+  ),
+  'live preview card bytes do not match the source asset',
+);
+assert(
+  homeHtml.includes(`<meta property="og:image" content="${WIKI_URL}/og-cupi.png">`) &&
+    homeHtml.includes('<meta name="twitter:card" content="summary_large_image">'),
+  'live wiki shell does not advertise the full-size preview card',
+);
+
 // Privacy gate: the state API must refuse anonymous readers.
 const state = await request(`${ORIGIN}/api/state`);
 assert(

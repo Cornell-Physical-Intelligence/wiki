@@ -29,6 +29,17 @@ assert(
   'production shell is missing its canonical URL',
 );
 assert(page.includes(`<meta property="og:url" content="${WIKI_URL}/">`), 'production shell is missing og:url');
+// Shared links must preview as the club's card, not as a favicon.
+assert(
+  page.includes(`<meta property="og:image" content="${WIKI_URL}/og-cupi.png">`) &&
+    page.includes('<meta property="og:image:width" content="1200">') &&
+    page.includes('<meta property="og:image:height" content="630">') &&
+    page.includes('<meta name="twitter:card" content="summary_large_image">'),
+  'production shell does not advertise the full-size link preview card',
+);
+const shippedCard = readFileSync(new URL('../public/og-cupi.png', import.meta.url));
+const cardSource = readFileSync(new URL('../src/client/og-cupi.png', import.meta.url));
+assert(shippedCard.equals(cardSource), 'shipped preview card does not match the source asset');
 
 const icons = page.match(/<link rel="icon"[^>]+>/g) ?? [];
 assert(

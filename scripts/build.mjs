@@ -14,6 +14,10 @@ const html = fullPage({ remote: true });
 writeFileSync(out('index.html'), html);
 
 copyFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url), out('favicon-cupi.png'));
+// The link-preview card, the same one the main site shares. Its source lives in
+// that repo at asset-masters/og-card.html; this is a copy so the wiki serves its
+// own preview even when shared on its own.
+copyFileSync(new URL('../src/client/og-cupi.png', import.meta.url), out('og-cupi.png'));
 // The welcome email references this PNG — email clients can't be trusted with webp.
 copyFileSync(new URL('../src/client/welcome-crab.png', import.meta.url), out('welcome-crab.png'));
 

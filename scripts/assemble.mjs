@@ -100,8 +100,11 @@ function headFor(remote) {
 <meta property="og:title" content="${WIKI_TITLE}">
 <meta property="og:description" content="${WIKI_DESCRIPTION}">
 <meta property="og:url" content="${WIKI_URL}/">
-<meta property="og:image" content="${WIKI_URL}/favicon-cupi.png">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="${WIKI_URL}/og-cupi.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The CUPI crab drawing above the name Cornell Physical Intelligence">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="192x192" href="/favicon-cupi.png">
 <link rel="icon" type="image/png" sizes="32x32" href="${FAVICON}">
 <link rel="apple-touch-icon" href="/favicon-cupi.png">
