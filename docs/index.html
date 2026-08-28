@@ -959,17 +959,6 @@ a.rev:hover { background: var(--hover); }
 .interest-subhead { margin: 0 0 8px; font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 400; color: var(--faint); }
 .interest-subhead .count { color: var(--faint); }
 .interest-project { margin: 0 0 22px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.interest-thread { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; max-height: 240px; overflow-y: auto; }
-.interest-comment { border-left: 2px solid var(--hairline); padding-left: 12px; }
-.interest-comment__meta { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
-.interest-comment__meta b { color: var(--fg); font-size: 12.5px; font-weight: 600; }
-.interest-comment__x { margin-left: auto; opacity: 0; align-self: center; }
-.interest-comment:hover .interest-comment__x, .interest-comment__x:focus-visible { opacity: 1; }
-.interest-comment__x svg { width: 12px; height: 12px; }
-.interest-comment p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.interest-add { display: flex; gap: 8px; align-items: center; }
-.interest-add .text-input { flex: 1; height: 32px; }
-.interest-add .btn { height: 32px; }
 
 .modal-typed { display: block; margin-top: 14px; font-size: 13px; color: var(--muted); }
 .modal-typed .text-input { margin-top: 6px; width: 100%; }
@@ -6148,10 +6137,7 @@ function viewActivity() {
    any page can link it with [Interest list](#/interest). */
 
 const INTEREST_ICONS = {
-  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>',
-  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-  paperclip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.4 8.6a2 2 0 0 0 2.8 2.8L18.8 9a4 4 0 1 0-5.6-5.7l-8.4 8.6a6 6 0 1 0 8.5 8.5l8.4-8.6"/></svg>',
 };
 
 // 8/28/26 — short, sortable-looking, and unambiguous next to a full title.
@@ -6164,13 +6150,12 @@ function interestVisible() {
   const rows = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
   const q = (UI.interestQuery || '').trim().toLowerCase();
   const filtered = q
-    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam} ${r.project} ${(r.comments || []).map((c) => c.text).join(' ')}`.toLowerCase().includes(q))
+    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam} ${r.project}`.toLowerCase().includes(q))
     : rows;
   const { key, dir } = UI.interestSort || { key: 'ts', dir: 'desc' };
   const val = (r) => {
     if (key === 'name') return r.name.toLowerCase();
     if (key === 'subteam') return (r.subteam || '~').toLowerCase(); // blanks sort last
-    if (key === 'comments') return (r.comments || []).length;
     return r.ts;
   };
   const sorted = [...filtered].sort((a, b) => {
@@ -6234,7 +6219,7 @@ function viewInterest() {
     if (av.error || !av.archive) return shell(back + '<p class="sheet__note">Could not open that archive.</p>');
     const a = av.archive;
     const ahead = `${back}<div class="plain-head"><h1>${MD.esc(a.name)} <span class="sheet__archivedtag">[archived ${interestDate(a.ts)}]</span></h1>
-      <p>A snapshot of the interest list, kept as it stood. Read-only: comments and removals apply to the live list.</p></div>`;
+      <p>A snapshot of the interest list, kept as it stood. Read-only: removals apply to the live list.</p></div>`;
     const actions = `<a class="btn btn--sm btn--icon" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>Download CSV${INTEREST_ICONS.download}</a>
       <button class="btn btn--sm btn--danger" data-action="interest-archive-remove" data-id="${MD.esc(a.id)}" data-name="${MD.esc(a.name)}">Delete archive…</button>`;
     return shell(ahead + interestSheet(interestVisible(), { archived: true, actions }));
@@ -6253,7 +6238,7 @@ function viewInterest() {
       </div>`).join('')}
     </div>` : '';
   const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
-    <p>People who filled the form on the site's Apply page. Open a row for the whole answer, its file, and its comments. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>`;
+    <p>People who filled the form on the site's Apply page. Open a row for the whole answer and its file. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>`;
   if (st.loading) return shell(head + '<p class="sheet__note">Loading…</p>');
   if (st.error) return shell(head + `<p class="sheet__note">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
   if (!rows.length) return shell(head + '<p class="sheet__note">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>' + archivesBlock);
@@ -6552,14 +6537,12 @@ function viewModal() {
       <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;
   } else if (m.kind === 'interest-row') {
-    // The row's full text, its file, and the comment thread anyone on the
-    // list can add to. Nothing is truncated here — this is where the sheet's
-    // one-line cells send you.
+    // The row's full text and its file. Nothing is truncated here — this is
+    // where the sheet's one-line cells send you.
     const archived = Boolean(UI.interestArchiveView);
     const source = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
     const r = source.find((x) => x.id === m.id);
     if (r) {
-      const comments = r.comments || [];
       inner = `<div class="modal modal--wide" role="dialog" aria-label="Submission">
         <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
         <div class="modal__body">
@@ -6571,18 +6554,6 @@ function viewModal() {
           </dl>
           <h4 class="interest-subhead">Coolest project they've done</h4>
           <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
-          <h4 class="interest-subhead">Comments${comments.length ? ` <span class="count">${comments.length}</span>` : ''}</h4>
-          <div class="interest-thread">
-            ${comments.length ? comments.map((c) => `<div class="interest-comment">
-              <div class="interest-comment__meta"><b>${MD.esc(c.byName || c.by)}</b><span class="mono">${relTime(c.ts)}</span>
-                ${archived ? '' : `<button class="icon-btn interest-comment__x" data-action="interest-comment-remove" data-id="${r.id}" data-cid="${c.id}" aria-label="Delete comment" title="Delete comment">${I.x}</button>`}</div>
-              <p>${MD.esc(c.text)}</p>
-            </div>`).join('') : `<p class="faint" style="margin:0 0 4px">${archived ? 'No comments were left on this one.' : 'No comments yet. Anyone reading this list can leave one.'}</p>`}
-          </div>
-          ${archived ? '' : `<form class="interest-add" data-action="interest-comment-form" data-id="${r.id}">
-            <input class="text-input" data-m="interest-comment" placeholder="Add a comment about this person…" maxlength="1000" autocomplete="off" spellcheck="true">
-            <button class="btn btn--primary" type="submit">Comment</button>
-          </form>`}
         </div>
         <div class="modal__foot modal__foot--split">
           ${archived ? '' : `<button class="btn btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove from list</button>`}
@@ -7470,15 +7441,6 @@ document.addEventListener('keydown', (ev) => {
   render();
 });
 
-// The interest endpoints answer with the whole updated row; swapping it into
-// the cache keeps the open detail view alive instead of blanking it on a
-// refetch.
-function replaceInterestRow(row) {
-  if (!row || !UI.interest?.rows) return;
-  const i = UI.interest.rows.findIndex((r) => r.id === row.id);
-  if (i >= 0) UI.interest.rows[i] = row;
-}
-
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el) return;
@@ -7791,18 +7753,20 @@ document.addEventListener('click', async (ev) => {
       stop();
       const key = el.dataset.key;
       const cur = UI.interestSort || { key: 'ts', dir: 'desc' };
-      // Text reads best ascending first; dates and counts start at the top.
+      // Text reads best ascending first; dates start at the newest.
       const firstDir = key === 'name' || key === 'subteam' ? 'asc' : 'desc';
       UI.interestSort = cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir };
-      render();
-      break;
-    }
-    case 'interest-comment-remove': {
-      stop();
-      const { id, cid } = el.dataset;
-      api(`/interest/${id}/comments/${cid}`, { method: 'DELETE' })
-        .then((out) => { replaceInterestRow(out.row); render(); })
-        .catch((e) => { toast(`Could not delete the comment: ${e.message}`); });
+      // Headers and rows update in place: sorting must never flash the page
+      // or drop focus from the header you just clicked.
+      const { key: sk, dir } = UI.interestSort;
+      for (const btn of $('.sheet__sort[data-key]')) {
+        const on = btn.dataset.key === sk;
+        btn.classList.toggle('on', on);
+        btn.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+        const caret = btn.querySelector('.sheet__caret');
+        if (caret) caret.textContent = on ? (dir === 'asc' ? '↑' : '↓') : '';
+      }
+      renderInterestRows();
       break;
     }
     case 'interest-remove': {
@@ -7825,7 +7789,7 @@ document.addEventListener('click', async (ev) => {
       UI.modal = {
         kind: 'confirm',
         title: 'Archive the interest list?',
-        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files and comments come along.`,
+        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files come along.`,
         confirm: 'Archive list',
         field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
       };
@@ -7909,17 +7873,6 @@ document.addEventListener('submit', (ev) => {
   if (!form) return;
   ev.preventDefault();
   const act = form.dataset.action;
-
-  if (act === 'interest-comment-form') {
-    const input = form.querySelector('[data-m="interest-comment"]');
-    const text = (input?.value || '').trim();
-    if (!text) return;
-    input.value = '';
-    api(`/interest/${form.dataset.id}/comments`, { method: 'POST', body: JSON.stringify({ text }) })
-      .then((out) => { replaceInterestRow(out.row); render(); })
-      .catch((e) => { toast(`Could not add the comment: ${e.message}`); });
-    return;
-  }
 
   if (act === 'email-settings-form') {
     UI.emailFromCustom = false;

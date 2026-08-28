@@ -447,10 +447,7 @@ function viewActivity() {
    any page can link it with [Interest list](#/interest). */
 
 const INTEREST_ICONS = {
-  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>',
-  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-  paperclip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.4 8.6a2 2 0 0 0 2.8 2.8L18.8 9a4 4 0 1 0-5.6-5.7l-8.4 8.6a6 6 0 1 0 8.5 8.5l8.4-8.6"/></svg>',
 };
 
 // 8/28/26 — short, sortable-looking, and unambiguous next to a full title.
@@ -463,13 +460,12 @@ function interestVisible() {
   const rows = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
   const q = (UI.interestQuery || '').trim().toLowerCase();
   const filtered = q
-    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam} ${r.project} ${(r.comments || []).map((c) => c.text).join(' ')}`.toLowerCase().includes(q))
+    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam} ${r.project}`.toLowerCase().includes(q))
     : rows;
   const { key, dir } = UI.interestSort || { key: 'ts', dir: 'desc' };
   const val = (r) => {
     if (key === 'name') return r.name.toLowerCase();
     if (key === 'subteam') return (r.subteam || '~').toLowerCase(); // blanks sort last
-    if (key === 'comments') return (r.comments || []).length;
     return r.ts;
   };
   const sorted = [...filtered].sort((a, b) => {
@@ -533,7 +529,7 @@ function viewInterest() {
     if (av.error || !av.archive) return shell(back + '<p class="sheet__note">Could not open that archive.</p>');
     const a = av.archive;
     const ahead = `${back}<div class="plain-head"><h1>${MD.esc(a.name)} <span class="sheet__archivedtag">[archived ${interestDate(a.ts)}]</span></h1>
-      <p>A snapshot of the interest list, kept as it stood. Read-only: comments and removals apply to the live list.</p></div>`;
+      <p>A snapshot of the interest list, kept as it stood. Read-only: removals apply to the live list.</p></div>`;
     const actions = `<a class="btn btn--sm btn--icon" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>Download CSV${INTEREST_ICONS.download}</a>
       <button class="btn btn--sm btn--danger" data-action="interest-archive-remove" data-id="${MD.esc(a.id)}" data-name="${MD.esc(a.name)}">Delete archive…</button>`;
     return shell(ahead + interestSheet(interestVisible(), { archived: true, actions }));
@@ -552,7 +548,7 @@ function viewInterest() {
       </div>`).join('')}
     </div>` : '';
   const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
-    <p>People who filled the form on the site's Apply page. Open a row for the whole answer, its file, and its comments. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>`;
+    <p>People who filled the form on the site's Apply page. Open a row for the whole answer and its file. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>`;
   if (st.loading) return shell(head + '<p class="sheet__note">Loading…</p>');
   if (st.error) return shell(head + `<p class="sheet__note">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
   if (!rows.length) return shell(head + '<p class="sheet__note">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>' + archivesBlock);
@@ -851,14 +847,12 @@ function viewModal() {
       <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;
   } else if (m.kind === 'interest-row') {
-    // The row's full text, its file, and the comment thread anyone on the
-    // list can add to. Nothing is truncated here — this is where the sheet's
-    // one-line cells send you.
+    // The row's full text and its file. Nothing is truncated here — this is
+    // where the sheet's one-line cells send you.
     const archived = Boolean(UI.interestArchiveView);
     const source = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
     const r = source.find((x) => x.id === m.id);
     if (r) {
-      const comments = r.comments || [];
       inner = `<div class="modal modal--wide" role="dialog" aria-label="Submission">
         <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
         <div class="modal__body">
@@ -870,18 +864,6 @@ function viewModal() {
           </dl>
           <h4 class="interest-subhead">Coolest project they've done</h4>
           <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
-          <h4 class="interest-subhead">Comments${comments.length ? ` <span class="count">${comments.length}</span>` : ''}</h4>
-          <div class="interest-thread">
-            ${comments.length ? comments.map((c) => `<div class="interest-comment">
-              <div class="interest-comment__meta"><b>${MD.esc(c.byName || c.by)}</b><span class="mono">${relTime(c.ts)}</span>
-                ${archived ? '' : `<button class="icon-btn interest-comment__x" data-action="interest-comment-remove" data-id="${r.id}" data-cid="${c.id}" aria-label="Delete comment" title="Delete comment">${I.x}</button>`}</div>
-              <p>${MD.esc(c.text)}</p>
-            </div>`).join('') : `<p class="faint" style="margin:0 0 4px">${archived ? 'No comments were left on this one.' : 'No comments yet. Anyone reading this list can leave one.'}</p>`}
-          </div>
-          ${archived ? '' : `<form class="interest-add" data-action="interest-comment-form" data-id="${r.id}">
-            <input class="text-input" data-m="interest-comment" placeholder="Add a comment about this person…" maxlength="1000" autocomplete="off" spellcheck="true">
-            <button class="btn btn--primary" type="submit">Comment</button>
-          </form>`}
         </div>
         <div class="modal__foot modal__foot--split">
           ${archived ? '' : `<button class="btn btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove from list</button>`}

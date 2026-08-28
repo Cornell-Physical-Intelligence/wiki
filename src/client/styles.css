@@ -948,17 +948,6 @@ a.rev:hover { background: var(--hover); }
 .interest-subhead { margin: 0 0 8px; font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 400; color: var(--faint); }
 .interest-subhead .count { color: var(--faint); }
 .interest-project { margin: 0 0 22px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.interest-thread { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; max-height: 240px; overflow-y: auto; }
-.interest-comment { border-left: 2px solid var(--hairline); padding-left: 12px; }
-.interest-comment__meta { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
-.interest-comment__meta b { color: var(--fg); font-size: 12.5px; font-weight: 600; }
-.interest-comment__x { margin-left: auto; opacity: 0; align-self: center; }
-.interest-comment:hover .interest-comment__x, .interest-comment__x:focus-visible { opacity: 1; }
-.interest-comment__x svg { width: 12px; height: 12px; }
-.interest-comment p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.interest-add { display: flex; gap: 8px; align-items: center; }
-.interest-add .text-input { flex: 1; height: 32px; }
-.interest-add .btn { height: 32px; }
 
 .modal-typed { display: block; margin-top: 14px; font-size: 13px; color: var(--muted); }
 .modal-typed .text-input { margin-top: 6px; width: 100%; }

@@ -340,15 +340,6 @@ document.addEventListener('keydown', (ev) => {
   render();
 });
 
-// The interest endpoints answer with the whole updated row; swapping it into
-// the cache keeps the open detail view alive instead of blanking it on a
-// refetch.
-function replaceInterestRow(row) {
-  if (!row || !UI.interest?.rows) return;
-  const i = UI.interest.rows.findIndex((r) => r.id === row.id);
-  if (i >= 0) UI.interest.rows[i] = row;
-}
-
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el) return;
@@ -661,18 +652,20 @@ document.addEventListener('click', async (ev) => {
       stop();
       const key = el.dataset.key;
       const cur = UI.interestSort || { key: 'ts', dir: 'desc' };
-      // Text reads best ascending first; dates and counts start at the top.
+      // Text reads best ascending first; dates start at the newest.
       const firstDir = key === 'name' || key === 'subteam' ? 'asc' : 'desc';
       UI.interestSort = cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir };
-      render();
-      break;
-    }
-    case 'interest-comment-remove': {
-      stop();
-      const { id, cid } = el.dataset;
-      api(`/interest/${id}/comments/${cid}`, { method: 'DELETE' })
-        .then((out) => { replaceInterestRow(out.row); render(); })
-        .catch((e) => { toast(`Could not delete the comment: ${e.message}`); });
+      // Headers and rows update in place: sorting must never flash the page
+      // or drop focus from the header you just clicked.
+      const { key: sk, dir } = UI.interestSort;
+      for (const btn of $('.sheet__sort[data-key]')) {
+        const on = btn.dataset.key === sk;
+        btn.classList.toggle('on', on);
+        btn.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+        const caret = btn.querySelector('.sheet__caret');
+        if (caret) caret.textContent = on ? (dir === 'asc' ? '↑' : '↓') : '';
+      }
+      renderInterestRows();
       break;
     }
     case 'interest-remove': {
@@ -695,7 +688,7 @@ document.addEventListener('click', async (ev) => {
       UI.modal = {
         kind: 'confirm',
         title: 'Archive the interest list?',
-        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files and comments come along.`,
+        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files come along.`,
         confirm: 'Archive list',
         field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
       };
@@ -779,17 +772,6 @@ document.addEventListener('submit', (ev) => {
   if (!form) return;
   ev.preventDefault();
   const act = form.dataset.action;
-
-  if (act === 'interest-comment-form') {
-    const input = form.querySelector('[data-m="interest-comment"]');
-    const text = (input?.value || '').trim();
-    if (!text) return;
-    input.value = '';
-    api(`/interest/${form.dataset.id}/comments`, { method: 'POST', body: JSON.stringify({ text }) })
-      .then((out) => { replaceInterestRow(out.row); render(); })
-      .catch((e) => { toast(`Could not add the comment: ${e.message}`); });
-    return;
-  }
 
   if (act === 'email-settings-form') {
     UI.emailFromCustom = false;
