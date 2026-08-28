@@ -94,7 +94,6 @@ const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const mdCtx = (extra) => ({
   att: (id) => Store.att(id),
   pageByTitle: (t) => Store.pageByTitle(t),
-  interest: () => (Store.isAdmin() && Array.isArray(Store.s.interest) ? Store.s.interest : null),
   readonly: false,
   ...extra,
 });
@@ -160,7 +159,7 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
@@ -294,6 +293,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'page' && r.params.id === 'welcome' ? 'active' : ''}" href="#/page/welcome">${I.home} Home</a>
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
+      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>

@@ -171,6 +171,10 @@ function renderInline(src, ctx, opts = {}) {
   // Links [text](url) — external only; internal linking is [[...]].
   s = s.replace(/\[([^\]]+)\]\((https?:[^)\s\x00]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noreferrer" class="ext">${t}</a>`);
 
+  // App links [text](#/route): hash routes inside the wiki itself, so pages
+  // can link app screens (the interest list, activity, a section) like pages.
+  s = s.replace(/\[([^\]]+)\]\((#\/[^)\s\x00]+)\)/g, (_, t, u) => `<a href="${u}" class="wikilink">${t}</a>`);
+
   // Wiki links [[Title]] or [[Title|label]] or [[Title#Anchor|label]]
   s = s.replace(/\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g, (_, title, anchor, label) => {
     const t = title.trim();
@@ -213,25 +217,6 @@ const CALLOUT_ICONS = {
   warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.5l9.5 16.5H2.5z"/><path d="M12 10v4m0 3h.01"/></svg>',
   tip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6m-5 3h4M12 3a6 6 0 013.6 10.8c-.7.6-1.1 1.3-1.1 2.2H9.5c0-.9-.4-1.6-1.1-2.2A6 6 0 0112 3z"/></svg>',
 };
-
-// The {{interest}} embed. Null rows means the viewer is not an admin.
-function interestBlock(rows) {
-  const note = (text) => `<div class="callout callout--note">${CALLOUT_ICONS.note}<div><p class="callout__title">Interest list</p><p>${text}</p></div></div>`;
-  if (!rows) return note('The live interest list is visible to admins.');
-  if (!rows.length) return note('No submissions yet. The form on the Apply page feeds this table live.');
-  const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return `<div class="tablewrap tablewrap--interest"><table>
-    <thead><tr><th>Name</th><th>Email</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr>
-      <td>${esc(r.name)}</td>
-      <td>${esc(r.email)}</td>
-      <td>${esc(r.subteam || 'Not sure yet')}</td>
-      <td class="interest-note">${esc(r.project || '')}</td>
-      <td>${r.fileId ? `<a href="/api/interest/file/${esc(r.fileId)}" target="_blank" rel="noreferrer" class="ext">${esc(r.fileName || 'file')}</a>` : ''}</td>
-      <td>${when(r.ts)}</td>
-    </tr>`).join('')}</tbody></table></div>
-  <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list · updates live · <a href="/api/interest.csv" download>Download CSV</a></p>`;
-}
 
 function mdRender(src, ctx) {
   const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
@@ -311,16 +296,6 @@ function mdRender(src, ctx) {
       i++;
       const inner = mdRender(buf.join('\n'), { ...ctx, _nested: true });
       html += `<div class="callout callout--${kind}">${CALLOUT_ICONS[kind]}<div>${title ? `<p class="callout__title">${renderInline(title, ctx)}</p>` : ''}${inner.html}</div></div>`;
-      continue;
-    }
-
-    // Live interest-list embed: {{interest}} on a line of its own. Rows come
-    // from ctx so the engine stays pure; non-admin viewers get a quiet note,
-    // and the table refreshes with the same polling as everything else.
-    if (/^\{\{\s*interest\s*\}\}$/.test(line.trim())) {
-      const rows = typeof ctx.interest === 'function' ? ctx.interest() : null;
-      html += interestBlock(rows);
-      i++;
       continue;
     }
 

@@ -1,5 +1,6 @@
 node_modules/
 public/
 .devdata.json
+.devinterest.json
 .vercel
 .DS_Store

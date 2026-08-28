@@ -441,6 +441,50 @@ function viewActivity() {
 
 /* ------------------------------- admin ----------------------------------- */
 
+/* --------------------- interest list (self-contained) ---------------------
+   The client half of lib/interest.js: its own route, its own endpoint, its
+   own cache (UI.interest). Nothing here touches the shared wiki state, and
+   any page can link it with [Interest list](#/interest). */
+
+function viewInterest() {
+  const shell = (inner) => topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
+    `<div class="content"><div class="page-wrap"><div class="page-col">${inner}</div></div></div>`;
+  if (!Store.isAdmin()) {
+    return shell(`<div class="empty">${I.mail}<b>Only admins can read the interest list</b>
+      <p>Apply-page submissions carry personal info, so they stay with team leads.</p>
+      <a class="btn" href="#/page/welcome" style="text-decoration:none">Back to the wiki</a></div>`);
+  }
+  if (typeof REMOTE === 'undefined') {
+    return shell(`<div class="empty">${I.mail}<b>Live on the deployed wiki</b>
+      <p>This preview has no server. The real wiki lists Apply-page submissions here, with CSV download.</p></div>`);
+  }
+  const st = UI.interest || { loading: true };
+  const rows = st.rows || [];
+  const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
+    <p>People who filled the form on the site's Apply page. Newest first; resubmits update in place. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>
+    <div class="admin-block__head"><h2>Submissions</h2><span class="count">${rows.length}</span><span class="admin-block__grow"></span>
+      <button class="btn btn--sm" data-action="interest-refresh">Refresh</button>
+      ${rows.length ? `<a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
+      <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
+    </div>`;
+  if (st.loading) return shell(head + '<p class="admin-block__sub">Loading…</p>');
+  if (st.error) return shell(head + `<p class="admin-block__sub">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
+  if (!rows.length) return shell(head + '<p class="admin-block__sub">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>');
+  const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return shell(head + `<div class="roster"><div class="roster__scroll"><table>
+    <thead><tr><th>Person</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
+    ${rows.map((r) => `<tr>
+      <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' · not cornell.edu'}</span></span></span></td>
+      <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
+      <td class="interest-note">${MD.esc(r.project || '')}</td>
+      <td>${r.fileId ? `<a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noreferrer">${MD.esc(r.fileName || 'file')}</a>` : ''}</td>
+      <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}${r.updated && r.updated !== r.ts ? ` · upd ${when(r.updated)}` : ''}</span></td>
+      <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
+    </tr>`).join('')}
+    </tbody></table></div></div>
+    <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list</p>`);
+}
+
 function viewAdmin() {
   if (!Store.isAdmin()) {
     return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
@@ -498,29 +542,6 @@ function viewAdmin() {
           </tr>`).join('')}
           </tbody></table></div></div>
       </section>
-      ${(() => {
-        const interest = Store.s.interest || [];
-        const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `<section class="admin-block">
-        <div class="admin-block__head"><h2>Interest list</h2><span class="count">${interest.length}</span>
-          ${interest.length ? `<span class="admin-block__grow"></span>
-          <a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
-          <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
-        </div>
-        <p class="admin-block__sub">The Apply page on the site feeds this table live. Paste <code>{{interest}}</code> into any wiki page to embed it; the CSV reflects this exact moment.</p>
-        ${interest.length ? `<div class="roster"><div class="roster__scroll"><table>
-          <thead><tr><th>Person</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
-          ${interest.map((r) => `<tr>
-            <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' · not cornell.edu'}</span></span></span></td>
-            <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
-            <td class="interest-note">${MD.esc(r.project || '')}</td>
-            <td>${r.fileId ? `<a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noreferrer">${MD.esc(r.fileName || 'file')}</a>` : ''}</td>
-            <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}${r.updated && r.updated !== r.ts ? ` · upd ${when(r.updated)}` : ''}</span></td>
-            <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
-          </tr>`).join('')}
-          </tbody></table></div></div>` : '<p class="admin-block__sub">No submissions yet.</p>'}
-      </section>`;
-      })()}
       <section class="admin-block">
         <div class="admin-block__head"><h2>Email</h2></div>
         ${(() => {
@@ -888,6 +909,7 @@ function render() {
   else if (r.name === 'history') view = viewHistory(r.params.id);
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();
+  else if (r.name === 'interest') view = viewInterest();
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'new') {
@@ -933,6 +955,14 @@ function render() {
       UI.resendDomains = 'pending';
       api('/resend/domains').then((out) => { UI.resendDomains = out.domains; render(); }).catch(() => { UI.resendDomains = null; });
     }
+  }
+  // The interest component loads from its own endpoint the first time its
+  // screen opens; Refresh clears the cache to refetch.
+  if (typeof REMOTE !== 'undefined' && r.name === 'interest' && UI.interest === undefined && Store.isAdmin()) {
+    UI.interest = { loading: true };
+    api('/interest')
+      .then((out) => { UI.interest = { rows: out.rows || [] }; render(); })
+      .catch((e) => { UI.interest = { error: e.message || 'load failed' }; render(); });
   }
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {

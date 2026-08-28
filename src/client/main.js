@@ -622,20 +622,34 @@ document.addEventListener('click', async (ev) => {
       break;
     }
 
-    /* ---- interest list ---- */
+    /* ---- interest list (self-contained component; talks to its own API) ---- */
+    case 'interest-refresh': {
+      stop();
+      UI.interest = undefined; // the route loader refetches
+      render();
+      break;
+    }
     case 'interest-remove': {
       stop();
       const id = el.dataset.id;
       UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
-      UI.modal.onGo = () => { Store.deleteInterest(id); render(); toast('Removed from the interest list'); };
+      UI.modal.onGo = () => {
+        api(`/interest/${id}`, { method: 'DELETE' })
+          .then(() => { UI.interest = undefined; render(); toast('Removed from the interest list'); })
+          .catch((e) => { toast(`Could not remove: ${e.message}`); });
+      };
       render();
       break;
     }
     case 'interest-clear': {
       stop();
-      const n = (Store.s.interest || []).length;
+      const n = (UI.interest?.rows || []).length;
       UI.modal = { kind: 'confirm', title: 'Clear the interest list?', text: `All <b>${n}</b> submissions and their files are permanently erased. Download the CSV first if you want a record.`, confirm: 'Clear list', danger: true };
-      UI.modal.onGo = () => { Store.purgeInterest(); render(); toast('Interest list cleared'); };
+      UI.modal.onGo = () => {
+        api('/interest/clear', { method: 'POST', body: '{}' })
+          .then(() => { UI.interest = undefined; render(); toast('Interest list cleared'); })
+          .catch((e) => { toast(`Could not clear: ${e.message}`); });
+      };
       render();
       break;
     }

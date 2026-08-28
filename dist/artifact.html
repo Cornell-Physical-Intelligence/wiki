@@ -3935,6 +3935,10 @@ function renderInline(src, ctx, opts = {}) {
   // Links [text](url) — external only; internal linking is [[...]].
   s = s.replace(/\[([^\]]+)\]\((https?:[^)\s\x00]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noreferrer" class="ext">${t}</a>`);
 
+  // App links [text](#/route): hash routes inside the wiki itself, so pages
+  // can link app screens (the interest list, activity, a section) like pages.
+  s = s.replace(/\[([^\]]+)\]\((#\/[^)\s\x00]+)\)/g, (_, t, u) => `<a href="${u}" class="wikilink">${t}</a>`);
+
   // Wiki links [[Title]] or [[Title|label]] or [[Title#Anchor|label]]
   s = s.replace(/\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g, (_, title, anchor, label) => {
     const t = title.trim();
@@ -3977,25 +3981,6 @@ const CALLOUT_ICONS = {
   warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.5l9.5 16.5H2.5z"/><path d="M12 10v4m0 3h.01"/></svg>',
   tip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18h6m-5 3h4M12 3a6 6 0 013.6 10.8c-.7.6-1.1 1.3-1.1 2.2H9.5c0-.9-.4-1.6-1.1-2.2A6 6 0 0112 3z"/></svg>',
 };
-
-// The {{interest}} embed. Null rows means the viewer is not an admin.
-function interestBlock(rows) {
-  const note = (text) => `<div class="callout callout--note">${CALLOUT_ICONS.note}<div><p class="callout__title">Interest list</p><p>${text}</p></div></div>`;
-  if (!rows) return note('The live interest list is visible to admins.');
-  if (!rows.length) return note('No submissions yet. The form on the Apply page feeds this table live.');
-  const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return `<div class="tablewrap tablewrap--interest"><table>
-    <thead><tr><th>Name</th><th>Email</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr>
-      <td>${esc(r.name)}</td>
-      <td>${esc(r.email)}</td>
-      <td>${esc(r.subteam || 'Not sure yet')}</td>
-      <td class="interest-note">${esc(r.project || '')}</td>
-      <td>${r.fileId ? `<a href="/api/interest/file/${esc(r.fileId)}" target="_blank" rel="noreferrer" class="ext">${esc(r.fileName || 'file')}</a>` : ''}</td>
-      <td>${when(r.ts)}</td>
-    </tr>`).join('')}</tbody></table></div>
-  <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list · updates live · <a href="/api/interest.csv" download>Download CSV</a></p>`;
-}
 
 function mdRender(src, ctx) {
   const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
@@ -4075,16 +4060,6 @@ function mdRender(src, ctx) {
       i++;
       const inner = mdRender(buf.join('\n'), { ...ctx, _nested: true });
       html += `<div class="callout callout--${kind}">${CALLOUT_ICONS[kind]}<div>${title ? `<p class="callout__title">${renderInline(title, ctx)}</p>` : ''}${inner.html}</div></div>`;
-      continue;
-    }
-
-    // Live interest-list embed: {{interest}} on a line of its own. Rows come
-    // from ctx so the engine stays pure; non-admin viewers get a quiet note,
-    // and the table refreshes with the same polling as everything else.
-    if (/^\{\{\s*interest\s*\}\}$/.test(line.trim())) {
-      const rows = typeof ctx.interest === 'function' ? ctx.interest() : null;
-      html += interestBlock(rows);
-      i++;
       continue;
     }
 
@@ -4697,17 +4672,6 @@ const Store = {
     if (u) { u.role = role; Store.log({ kind: 'role', by: Store.me().email, who: email, role }); Store.persist(); }
   },
 
-  deleteInterest(id) {
-    const list = Store.s.interest || [];
-    const i = list.findIndex((r) => r.id === id);
-    if (i >= 0) { list.splice(i, 1); Store.persist(); }
-  },
-
-  purgeInterest() {
-    Store.s.interest = [];
-    Store.persist();
-  },
-
   removeUser(email) {
     const i = Store.s.users.findIndex((u) => u.email === email);
     if (i >= 0) {
@@ -4935,7 +4899,6 @@ const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const mdCtx = (extra) => ({
   att: (id) => Store.att(id),
   pageByTitle: (t) => Store.pageByTitle(t),
-  interest: () => (Store.isAdmin() && Array.isArray(Store.s.interest) ? Store.s.interest : null),
   readonly: false,
   ...extra,
 });
@@ -5001,7 +4964,7 @@ function route() {
   const name = seg[0] || (me ? 'page' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
@@ -5135,6 +5098,7 @@ function viewSidebar() {
       <a class="navlink ${r.name === 'page' && r.params.id === 'welcome' ? 'active' : ''}" href="#/page/welcome">${I.home} Home</a>
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
+      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
@@ -6039,6 +6003,50 @@ function viewActivity() {
 
 /* ------------------------------- admin ----------------------------------- */
 
+/* --------------------- interest list (self-contained) ---------------------
+   The client half of lib/interest.js: its own route, its own endpoint, its
+   own cache (UI.interest). Nothing here touches the shared wiki state, and
+   any page can link it with [Interest list](#/interest). */
+
+function viewInterest() {
+  const shell = (inner) => topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
+    `<div class="content"><div class="page-wrap"><div class="page-col">${inner}</div></div></div>`;
+  if (!Store.isAdmin()) {
+    return shell(`<div class="empty">${I.mail}<b>Only admins can read the interest list</b>
+      <p>Apply-page submissions carry personal info, so they stay with team leads.</p>
+      <a class="btn" href="#/page/welcome" style="text-decoration:none">Back to the wiki</a></div>`);
+  }
+  if (typeof REMOTE === 'undefined') {
+    return shell(`<div class="empty">${I.mail}<b>Live on the deployed wiki</b>
+      <p>This preview has no server. The real wiki lists Apply-page submissions here, with CSV download.</p></div>`);
+  }
+  const st = UI.interest || { loading: true };
+  const rows = st.rows || [];
+  const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
+    <p>People who filled the form on the site's Apply page. Newest first; resubmits update in place. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>
+    <div class="admin-block__head"><h2>Submissions</h2><span class="count">${rows.length}</span><span class="admin-block__grow"></span>
+      <button class="btn btn--sm" data-action="interest-refresh">Refresh</button>
+      ${rows.length ? `<a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
+      <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
+    </div>`;
+  if (st.loading) return shell(head + '<p class="admin-block__sub">Loading…</p>');
+  if (st.error) return shell(head + `<p class="admin-block__sub">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
+  if (!rows.length) return shell(head + '<p class="admin-block__sub">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>');
+  const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return shell(head + `<div class="roster"><div class="roster__scroll"><table>
+    <thead><tr><th>Person</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
+    ${rows.map((r) => `<tr>
+      <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' · not cornell.edu'}</span></span></span></td>
+      <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
+      <td class="interest-note">${MD.esc(r.project || '')}</td>
+      <td>${r.fileId ? `<a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noreferrer">${MD.esc(r.fileName || 'file')}</a>` : ''}</td>
+      <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}${r.updated && r.updated !== r.ts ? ` · upd ${when(r.updated)}` : ''}</span></td>
+      <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
+    </tr>`).join('')}
+    </tbody></table></div></div>
+    <p class="interest-foot">${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the list</p>`);
+}
+
 function viewAdmin() {
   if (!Store.isAdmin()) {
     return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
@@ -6096,29 +6104,6 @@ function viewAdmin() {
           </tr>`).join('')}
           </tbody></table></div></div>
       </section>
-      ${(() => {
-        const interest = Store.s.interest || [];
-        const when = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `<section class="admin-block">
-        <div class="admin-block__head"><h2>Interest list</h2><span class="count">${interest.length}</span>
-          ${interest.length ? `<span class="admin-block__grow"></span>
-          <a class="btn btn--sm" href="/api/interest.csv" download>Download CSV</a>
-          <button class="btn btn--sm btn--danger" data-action="interest-clear">Clear list…</button>` : ''}
-        </div>
-        <p class="admin-block__sub">The Apply page on the site feeds this table live. Paste <code>{{interest}}</code> into any wiki page to embed it; the CSV reflects this exact moment.</p>
-        ${interest.length ? `<div class="roster"><div class="roster__scroll"><table>
-          <thead><tr><th>Person</th><th>Subteam</th><th>Coolest project</th><th>File</th><th>When</th><th></th></tr></thead><tbody>
-          ${interest.map((r) => `<tr>
-            <td><span class="who"><span class="avatar" style="background:var(--hover);color:var(--muted)">${Store.initials(r.email)}</span><span><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}${r.cornell ? '' : ' · not cornell.edu'}</span></span></span></td>
-            <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
-            <td class="interest-note">${MD.esc(r.project || '')}</td>
-            <td>${r.fileId ? `<a class="ext" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noreferrer">${MD.esc(r.fileName || 'file')}</a>` : ''}</td>
-            <td><span class="mono" title="${new Date(r.ts).toLocaleString()}">${when(r.ts)}${r.updated && r.updated !== r.ts ? ` · upd ${when(r.updated)}` : ''}</span></td>
-            <td><span class="actions actions--show"><button class="btn btn--sm btn--danger" data-action="interest-remove" data-id="${r.id}" data-email="${MD.esc(r.email)}">Remove</button></span></td>
-          </tr>`).join('')}
-          </tbody></table></div></div>` : '<p class="admin-block__sub">No submissions yet.</p>'}
-      </section>`;
-      })()}
       <section class="admin-block">
         <div class="admin-block__head"><h2>Email</h2></div>
         ${(() => {
@@ -6486,6 +6471,7 @@ function render() {
   else if (r.name === 'history') view = viewHistory(r.params.id);
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();
+  else if (r.name === 'interest') view = viewInterest();
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'new') {
@@ -6531,6 +6517,14 @@ function render() {
       UI.resendDomains = 'pending';
       api('/resend/domains').then((out) => { UI.resendDomains = out.domains; render(); }).catch(() => { UI.resendDomains = null; });
     }
+  }
+  // The interest component loads from its own endpoint the first time its
+  // screen opens; Refresh clears the cache to refetch.
+  if (typeof REMOTE !== 'undefined' && r.name === 'interest' && UI.interest === undefined && Store.isAdmin()) {
+    UI.interest = { loading: true };
+    api('/interest')
+      .then((out) => { UI.interest = { rows: out.rows || [] }; render(); })
+      .catch((e) => { UI.interest = { error: e.message || 'load failed' }; render(); });
   }
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
@@ -7446,20 +7440,34 @@ document.addEventListener('click', async (ev) => {
       break;
     }
 
-    /* ---- interest list ---- */
+    /* ---- interest list (self-contained component; talks to its own API) ---- */
+    case 'interest-refresh': {
+      stop();
+      UI.interest = undefined; // the route loader refetches
+      render();
+      break;
+    }
     case 'interest-remove': {
       stop();
       const id = el.dataset.id;
       UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
-      UI.modal.onGo = () => { Store.deleteInterest(id); render(); toast('Removed from the interest list'); };
+      UI.modal.onGo = () => {
+        api(`/interest/${id}`, { method: 'DELETE' })
+          .then(() => { UI.interest = undefined; render(); toast('Removed from the interest list'); })
+          .catch((e) => { toast(`Could not remove: ${e.message}`); });
+      };
       render();
       break;
     }
     case 'interest-clear': {
       stop();
-      const n = (Store.s.interest || []).length;
+      const n = (UI.interest?.rows || []).length;
       UI.modal = { kind: 'confirm', title: 'Clear the interest list?', text: `All <b>${n}</b> submissions and their files are permanently erased. Download the CSV first if you want a record.`, confirm: 'Clear list', danger: true };
-      UI.modal.onGo = () => { Store.purgeInterest(); render(); toast('Interest list cleared'); };
+      UI.modal.onGo = () => {
+        api('/interest/clear', { method: 'POST', body: '{}' })
+          .then(() => { UI.interest = undefined; render(); toast('Interest list cleared'); })
+          .catch((e) => { toast(`Could not clear: ${e.message}`); });
+      };
       render();
       break;
     }

@@ -445,17 +445,6 @@ const Store = {
     if (u) { u.role = role; Store.log({ kind: 'role', by: Store.me().email, who: email, role }); Store.persist(); }
   },
 
-  deleteInterest(id) {
-    const list = Store.s.interest || [];
-    const i = list.findIndex((r) => r.id === id);
-    if (i >= 0) { list.splice(i, 1); Store.persist(); }
-  },
-
-  purgeInterest() {
-    Store.s.interest = [];
-    Store.persist();
-  },
-
   removeUser(email) {
     const i = Store.s.users.findIndex((u) => u.email === email);
     if (i >= 0) {
