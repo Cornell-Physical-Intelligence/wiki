@@ -199,7 +199,7 @@ function requestEditorClose() {
   if (!e.dirty) {
     const pid = e.pageId;
     UI.editor = null;
-    nav(pid ? '#/page/' + pid : '#/page/welcome');
+    nav(pid ? '#/page/' + pid : '#/home');
     route(); render();
     return;
   }
@@ -355,7 +355,7 @@ document.addEventListener('click', async (ev) => {
       const email = el.dataset.email;
       const res = Store.login(email);
       UI.chooser = false;
-      if (res.ok) { UI.loginError = null; hydrateDrafts(); nav('#/page/welcome'); route(); render(); toast(`Signed in as ${res.user.name}`); }
+      if (res.ok) { UI.loginError = null; hydrateDrafts(); nav('#/home'); route(); render(); toast(`Signed in as ${res.user.name}`); }
       else { nav('#/denied?email=' + encodeURIComponent(email)); }
       break;
     }
@@ -385,7 +385,7 @@ document.addEventListener('click', async (ev) => {
       ...(typeof REMOTE === 'undefined' ? [
         { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'This is the CUPI wiki preview. Everything works, but data lives in this browser only and sign-in is simulated. The production deployment adds Google OAuth (cornell.edu only), shared storage, real emails, and live Onshape/Altium embeds.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
         '-',
-        { icon: I.history, label: 'Restore sample content', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Restore sample content?', text: 'Every page, member, and attachment returns to the sample content this preview ships with. Anything you changed in this browser is erased.', confirm: 'Restore', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/page/welcome'); route(); render(); toast('Sample content restored'); }; render(); } },
+        { icon: I.history, label: 'Restore sample content', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Restore sample content?', text: 'Every page, member, and attachment returns to the sample content this preview ships with. Anything you changed in this browser is erased.', confirm: 'Restore', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/home'); route(); render(); toast('Sample content restored'); }; render(); } },
       ] : ['-']),
       { icon: I.x, label: 'Sign out', run: () => { Store.logout(); UI.editor = null; hydrateDrafts(); nav('#/login'); route(); render(); } },
     ], el); break;
@@ -458,7 +458,7 @@ document.addEventListener('click', async (ev) => {
         '-',
         { icon: I.trash, label: 'Move to Trash', danger: true, run: () => {
           UI.modal = { kind: 'confirm', title: 'Move to Trash?', text: `“${MD.esc(Store.page(id).title)}” will sit in Trash for 30 days before it's gone for good.`, confirm: 'Move to Trash', danger: true };
-          UI.modal.onGo = () => { Store.deletePage(id); nav('#/page/welcome'); route(); render(); toast('Moved to Trash', { label: 'Undo', run: () => { Store.restorePage(id); render(); } }); };
+          UI.modal.onGo = () => { Store.deletePage(id); nav('#/home'); route(); render(); toast('Moved to Trash', { label: 'Undo', run: () => { Store.restorePage(id); render(); } }); };
           render();
         } },
       ], el);
@@ -598,8 +598,8 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'ed-cancel': stop(); requestEditorClose(); break;
-    case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); toast('Draft kept. It will be waiting when you come back'); } break;
-    case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/page/welcome'); route(); render(); } break;
+    case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/home'); route(); render(); toast('Draft kept. It will be waiting when you come back'); } break;
+    case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/home'); route(); render(); } break;
     case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } break;
     case 'ed-save': stop(); edSave(); break;
     case 'ed-ac': stop(); edAcceptAc(el.dataset.title); break;

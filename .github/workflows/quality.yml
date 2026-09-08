@@ -18,5 +18,6 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
+      - run: npm run test:search
       - name: Verify the committed preview build is current
         run: git diff --exit-code -- docs

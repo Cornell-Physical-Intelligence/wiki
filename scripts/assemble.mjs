@@ -59,7 +59,8 @@ const STRUCTURED_DATA = JSON.stringify({
 export function styles() {
   return `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${b64('playfair.woff2')}) format('woff2');}
 @font-face{font-family:'Questrial';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,${b64('questrial.woff2')}) format('woff2');}
-${read('styles.css')}`;
+${read('styles.css')}
+${read('search.css')}`;
 }
 
 // Binary assets are injected ahead of the app code as constants.
@@ -77,6 +78,7 @@ const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
     read('ui.js'),
     read('ui2.js'),
     read('ui3.js'),
+    read('search.js'),
     ...(remote ? [readFileSync(new URL('../src/remote.js', import.meta.url), 'utf8')] : []),
     read('main.js'),
   ].join('\n');

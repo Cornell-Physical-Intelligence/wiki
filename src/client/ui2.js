@@ -422,7 +422,7 @@ function viewActivity() {
     if (!groups.length || groups[groups.length - 1].day !== day) groups.push({ day, items: [] });
     groups[groups.length - 1].items.push(a);
   }
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Activity</span>`) + `
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Activity</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Everything, newest first</span><h1>Activity</h1></div>
     <div class="feed">
@@ -564,12 +564,12 @@ function interestFootText(shown) {
 }
 
 function viewInterest() {
-  const shell = (inner) => topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
+  const shell = (inner) => topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
     `<div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">${inner}</div></div></div>`;
   if (!Store.isAdmin()) {
     return shell(`<div class="empty">${I.mail}<b>Only admins can read the interest list</b>
       <p>Apply-page submissions carry personal info, so they stay with team leads.</p>
-      <a class="btn" href="#/page/welcome" style="text-decoration:none">Back to the wiki</a></div>`);
+      <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a></div>`);
   }
   if (typeof REMOTE === 'undefined') {
     return shell(`<div class="empty">${I.mail}<b>Live on the deployed wiki</b>
@@ -653,18 +653,18 @@ function interestSheet(visible, { archived = false, actions = '' } = {}) {
 
 function viewAdmin() {
   if (!Store.isAdmin()) {
-    return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
+    return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
     <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
       ${I.users}<b>Only admins can manage members</b>
       <p>Ask a team lead if you need someone added to the roster.</p>
-      <a class="btn" href="#/page/welcome" style="text-decoration:none">Back to the wiki</a>
+      <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a>
     </div></div></div></div>`;
   }
   const users = Store.s.users;
   const active = users.filter((u) => u.status === 'active');
   const invited = users.filter((u) => u.status === 'invited');
   const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove', 'rename'].includes(a.kind)).slice(0, 14);
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>
     <p>Everyone below can sign in with their <b>cornell.edu</b> Google account. Nobody else can.</p></div>
@@ -797,7 +797,7 @@ function welcomeEmailHtml(u) {
 
 function viewTrash() {
   const items = [...Store.s.trash].sort((a, b) => b.deletedAt - a.deletedAt);
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Trash</span>`) + `
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Trash</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Deleted pages</span><h1>Trash</h1><p>Pages stay here for 30 days, then they're gone for good.</p></div>
     ${items.length ? `<div class="history">${items.map((p) => `<div class="rev">
@@ -1115,6 +1115,7 @@ function render() {
     return;
   }
   if (UI.editor) view = viewEditor();
+  else if (r.name === 'home') view = topbar('<span class="crumbs__here">Home</span>') + `<div class="content search-home-content">${viewSearchHome()}</div>`;
   else if (r.name === 'page') view = viewPage(r.params.id || 'welcome');
   else if (r.name === 'section') view = viewSection(r.params.id);
   else if (r.name === 'history') view = viewHistory(r.params.id);
@@ -1141,7 +1142,7 @@ function render() {
     }
     view = viewEditor();
   }
-  else view = viewPage('welcome');
+  else view = topbar('<span class="crumbs__here">Home</span>') + `<div class="content search-home-content">${viewSearchHome()}</div>`;
 
   app.innerHTML = `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
     ${viewSidebar()}
@@ -1159,6 +1160,7 @@ function render() {
 
   // Mount hooks.
   if (r.name === 'interest' && $('.sheet')) renderInterestSelection();
+  mountSearchHome();
   $$('.cad-embed').forEach(mountCadViewer);
   { const vt = $('.login .vt-title'); if (vt) mountHeroTitle(vt); }
   if (typeof REMOTE !== 'undefined' && r.name === 'admin' && !UI.editor && UI.resendDomains === undefined && Store.isAdmin()) {

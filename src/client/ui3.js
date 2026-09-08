@@ -56,7 +56,7 @@ function viewHealth() {
   const { broken, orphans, stale } = Store.health();
   const attMb = (Store.attTotal() / 1048576).toFixed(1);
   const rows = (list, empty, row) => list.length ? list.map(row).join('') : `<div class="audit__row"><span class="audit__what" style="color:var(--faint)">${empty}</span></div>`;
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Wiki health</span>`) + `
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Wiki health</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><h1>Wiki health</h1></div>
     <div class="admin-grid">

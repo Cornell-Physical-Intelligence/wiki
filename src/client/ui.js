@@ -156,11 +156,11 @@ function nav(hash) { location.hash = hash; }
 function route() {
   const { seg, params } = parseHash();
   const me = Store.me();
-  const name = seg[0] || (me ? 'page' : 'login');
+  const name = seg[0] || (me ? 'home' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
-  if (me && name === 'login') { UI.route = { name: 'page', params: { id: 'welcome' } }; return; }
-  const KNOWN = ['page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
-  if (!KNOWN.includes(name)) { UI.route = { name: 'page', params: { id: 'welcome' } }; nav('#/page/welcome'); return; }
+  if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
+  const KNOWN = ['home', 'page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
+  if (!KNOWN.includes(name)) { UI.route = { name: 'home', params: {} }; nav('#/home'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
 
@@ -248,8 +248,7 @@ function viewChooser() {
 // Flat by design: one row per page, grouped by section. Nesting was tried
 // and removed — it hid pages and confused navigation.
 function treeRow(p, cur, prefs) {
-  // The Home navlink already marks Welcome; don't double-highlight it here.
-  const active = p.id === cur && cur !== 'welcome';
+  const active = p.id === cur;
   return `<div class="tree-item">
     <a class="tree-item__row ${active ? 'active' : ''}" href="#/page/${p.id}">
       ${typeof draftStash !== 'undefined' && draftStash.has(p.id)
@@ -284,13 +283,13 @@ function viewSidebar() {
   const r = UI.route;
   return `<aside class="sidebar">
     <div class="sidebar__head">
-      <a class="sidebar__brand" href="#/page/welcome"><img class="sidebar__logo" src="${CUPI_LOGO}" alt="" draggable="false">CUPI <span>Wiki</span></a>
+      <a class="sidebar__brand" href="#/home"><img class="sidebar__logo" src="${CUPI_LOGO}" alt="" draggable="false">CUPI <span>Wiki</span></a>
     </div>
     <button class="sidebar__search" data-action="palette">
       ${I.search} <span>Search…</span> <span class="kbd">⌘K</span>
     </button>
     <nav class="sidebar__nav">
-      <a class="navlink ${r.name === 'page' && r.params.id === 'welcome' ? 'active' : ''}" href="#/page/welcome">${I.home} Home</a>
+      <a class="navlink ${r.name === 'home' ? 'active' : ''}" href="#/home">${I.home} Home</a>
       <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
       ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
@@ -327,7 +326,7 @@ function topbar(crumbHtml, right) {
 
 function crumbsFor(p) {
   const sec = SECTIONS.find((s) => s.id === p.section);
-  return `<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span>` +
+  return `<a href="#/home">Wiki</a><span class="crumbs__sep">/</span>` +
     (sec ? `<a href="#/section/${sec.id}">${sec.name}</a><span class="crumbs__sep">/</span>` : '') +
     `<span class="crumbs__here">${MD.esc(p.title)}</span>`;
 }
@@ -389,7 +388,7 @@ function viewPage(id) {
 }
 
 function viewMissing(id) {
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Not found</span>`) + `
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Not found</span>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
     ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist. It may have been moved to Trash.</p>
     <button class="btn" data-action="new-page">${I.plus} New page</button>
@@ -400,7 +399,7 @@ function viewSection(secId) {
   const sec = SECTIONS.find((s) => s.id === secId);
   if (!sec) return viewMissing(secId);
   const pages = Store.inSection(secId);
-  return topbar(`<a href="#/page/welcome">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">${sec.name}</span>`,
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">${sec.name}</span>`,
     `<button class="btn" data-action="new-page" data-sec="${secId}">${I.plus} New page</button>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><span class="eyebrow">Section</span><h1>${sec.name}</h1></div>

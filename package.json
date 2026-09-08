@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:interest": "node scripts/test-interest.mjs",
+    "test:search": "node scripts/test-search.mjs",
     "build": "node scripts/build.mjs",
     "build:preview": "node scripts/build-preview.mjs",
     "verify:seo": "node scripts/verify-seo.mjs",
