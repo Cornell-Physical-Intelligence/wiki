@@ -633,6 +633,45 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- interest list (self-contained component; talks to its own API) ---- */
+    case 'interest-select': {
+      ev.stopPropagation(); // Keep the checkbox's native click/Space behavior.
+      const selected = interestSelection();
+      if (el.checked) selected.add(el.dataset.id); else selected.delete(el.dataset.id);
+      renderInterestSelection();
+      break;
+    }
+    case 'interest-select-visible': {
+      ev.stopPropagation();
+      const selected = interestSelection();
+      for (const row of interestVisible()) {
+        if (el.checked) selected.add(row.id); else selected.delete(row.id);
+      }
+      renderInterestSelection();
+      break;
+    }
+    case 'interest-clear-selection': {
+      stop();
+      interestSelection().clear();
+      renderInterestSelection();
+      break;
+    }
+    case 'interest-copy-emails': {
+      stop();
+      const emails = interestSelectedEmails();
+      if (!emails.length) return;
+      const csv = interestEmailsCsv(emails);
+      try {
+        await navigator.clipboard.writeText(csv);
+        toast(`Copied ${emails.length} ${emails.length === 1 ? 'email' : 'emails'} as CSV`);
+      } catch {
+        UI.modal = { kind: 'interest-email-copy', csv };
+        render();
+        const text = $('.modal textarea');
+        text?.focus();
+        text?.select();
+      }
+      break;
+    }
     case 'interest-refresh': {
       stop();
       UI.interest = undefined; // the route loader refetches
@@ -653,15 +692,15 @@ document.addEventListener('click', async (ev) => {
       const key = el.dataset.key;
       const cur = UI.interestSort || { key: 'ts', dir: 'desc' };
       // Text reads best ascending first; dates start at the newest.
-      const firstDir = key === 'name' || key === 'subteam' ? 'asc' : 'desc';
+      const firstDir = key === 'ts' ? 'desc' : 'asc';
       UI.interestSort = cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir };
       // Headers and rows update in place: sorting must never flash the page
       // or drop focus from the header you just clicked.
       const { key: sk, dir } = UI.interestSort;
-      for (const btn of $('.sheet__sort[data-key]')) {
+      for (const btn of $$('.sheet__sort[data-key]')) {
         const on = btn.dataset.key === sk;
         btn.classList.toggle('on', on);
-        btn.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+        btn.closest('th').setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
         const caret = btn.querySelector('.sheet__caret');
         if (caret) caret.textContent = on ? (dir === 'asc' ? '↑' : '↓') : '';
       }

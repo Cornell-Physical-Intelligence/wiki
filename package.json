@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test:interest": "node scripts/test-interest.mjs",
     "build": "node scripts/build.mjs",
     "build:preview": "node scripts/build-preview.mjs",
     "verify:seo": "node scripts/verify-seo.mjs",

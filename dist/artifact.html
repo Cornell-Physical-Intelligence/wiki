@@ -851,19 +851,23 @@ a.rev:hover { background: var(--hover); }
 
 .sheet__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--hairline);
 }
-.sheet__search { flex: 1 1 auto; min-width: 0; max-width: 320px; height: 30px; }
-.sheet__actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
-.sheet__actions .btn { height: 30px; text-decoration: none; }
+.sheet__search { flex: 1 1 240px; min-width: 0; max-width: 360px; height: 40px; }
+.sheet__actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sheet__actions .btn { min-height: 40px; text-decoration: none; }
+.sheet__selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--hairline); }
+.sheet__selection [role="status"] { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sheet__actions .btn:disabled { opacity: .45; cursor: default; }
 .btn--icon { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .btn--icon svg { width: 13px; height: 13px; flex: none; }
 
 .sheet__scroll { overflow-x: auto; }
-.sheet table { table-layout: fixed; width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13.5px; }
+.sheet table { table-layout: fixed; width: 100%; min-width: 850px; border-collapse: collapse; font-size: 13.5px; }
 
 .sheet th {
   font-family: var(--font-label); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -872,12 +876,20 @@ a.rev:hover { background: var(--hover); }
   border-bottom: 1px solid var(--hairline);
   background: var(--hover);
 }
-.sheet th:nth-child(1) { width: 30%; }
-.sheet th:nth-child(2) { width: 132px; }
-.sheet th:nth-child(4) { width: 104px; }
+.sheet th:nth-child(1) { width: 52px; }
+.sheet th:nth-child(2) { width: 26%; }
+.sheet th:nth-child(3) { width: 120px; }
+.sheet th:nth-child(4) { width: 132px; }
+.sheet th:nth-child(6) { width: 104px; }
+.sheet .sheet__check-cell { padding: 0 6px; }
+.sheet__check { display: grid; place-items: center; width: 40px; min-height: 44px; cursor: pointer; }
+.sheet__check input { width: 16px; height: 16px; margin: 0; accent-color: var(--fg); cursor: pointer; }
+.sheet__check:has(input:focus-visible) { outline: 2px solid var(--fg); outline-offset: -2px; border-radius: 6px; }
+.sheet tbody tr.is-selected td { background: var(--hover); }
 
 .sheet__sort {
   display: inline-flex; align-items: center; gap: 4px;
+  min-height: 40px;
   background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
   font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
 }
@@ -913,7 +925,8 @@ a.rev:hover { background: var(--hover); }
 }
 
 /* Person cell: two fixed lines, so every row is exactly as tall as the next. */
-.interest-person { display: block; min-width: 0; }
+.interest-person { display: block; min-width: 0; width: 100%; min-height: 44px; padding: 4px 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 4px; }
+.interest-person:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .interest-person b { display: block; font-size: 13.5px; font-weight: 600; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .interest-person .mail { display: block; font-size: 12px; line-height: 16px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -6135,21 +6148,71 @@ const INTEREST_ICONS = {
 const interestDate = (ts) =>
   new Date(ts).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
 
+const interestSource = () => UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
+const interestYears = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'];
+
+// Selections belong to one list and survive filtering, sorting, and refresh.
+// Prune stale IDs so removed submissions can never be copied accidentally.
+function interestSelection() {
+  const scope = UI.interestArchiveView?.id || 'live';
+  if (UI.interestSelectionScope !== scope) {
+    UI.interestSelectionScope = scope;
+    UI.interestSelected = new Set();
+  }
+  const ids = new Set(interestSource().map((r) => r.id));
+  for (const id of UI.interestSelected) if (!ids.has(id)) UI.interestSelected.delete(id);
+  return UI.interestSelected;
+}
+
+function interestSelectedEmails() {
+  const selected = interestSelection();
+  return [...new Set(interestSource().filter((r) => selected.has(r.id))
+    .map((r) => String(r.email || '').trim()).filter(Boolean))];
+}
+
+function interestEmailsCsv(emails) {
+  return emails.map((email) => /[",\r\n]/.test(email) ? '"' + email.replace(/"/g, '""') + '"' : email).join(',');
+}
+
+function renderInterestSelection() {
+  const selected = interestSelection();
+  const visible = interestVisible();
+  const visibleSelected = visible.filter((r) => selected.has(r.id)).length;
+  const all = $('[data-action="interest-select-visible"]');
+  if (all) {
+    all.checked = visible.length > 0 && visibleSelected === visible.length;
+    all.indeterminate = visibleSelected > 0 && visibleSelected < visible.length;
+    all.disabled = !visible.length;
+  }
+  for (const input of $$('[data-action="interest-select"]')) {
+    input.checked = selected.has(input.dataset.id);
+    input.closest('tr').classList.toggle('is-selected', input.checked);
+  }
+  const count = $('[data-interest-selection-count]');
+  const hidden = selected.size - visibleSelected;
+  if (count) count.textContent = `${selected.size} selected${hidden ? ` · ${hidden} hidden by filter` : ''}`;
+  for (const button of $$('[data-action="interest-copy-emails"], [data-action="interest-clear-selection"]')) {
+    button.disabled = !selected.size;
+  }
+}
+
 // Filter and sort live in the UI only: the endpoint always returns the whole
 // list, so a huge roster stays one fetch and every view of it is instant.
 function interestVisible() {
-  const rows = UI.interestArchiveView?.archive?.rows || UI.interest?.rows || [];
+  const rows = interestSource();
   const q = (UI.interestQuery || '').trim().toLowerCase();
   const filtered = q
-    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam} ${r.project}`.toLowerCase().includes(q))
+    ? rows.filter((r) => `${r.name} ${r.email} ${r.subteam || ''} ${r.project || ''} ${r.year || 'Not provided'}`.toLowerCase().includes(q))
     : rows;
   const { key, dir } = UI.interestSort || { key: 'ts', dir: 'desc' };
   const val = (r) => {
     if (key === 'name') return r.name.toLowerCase();
     if (key === 'subteam') return (r.subteam || '~').toLowerCase(); // blanks sort last
+    if (key === 'year') return interestYears.indexOf(r.year);
     return r.ts;
   };
   const sorted = [...filtered].sort((a, b) => {
+    if (key === 'year' && Boolean(a.year) !== Boolean(b.year)) return a.year ? -1 : 1;
     const x = val(a);
     const y = val(b);
     if (x === y) return b.ts - a.ts;
@@ -6158,14 +6221,17 @@ function interestVisible() {
   return sorted;
 }
 
-// Four columns, one line each, every cell clipping to the same rhythm. The
+// Compact columns, every cell clipping to the same rhythm. The
 // full answer, the file, and the thread live in the row's detail view.
 function interestRowsHtml(rows) {
   if (!rows.length) {
-    return `<tr class="sheet__empty"><td colspan="4">Nothing matches that filter.</td></tr>`;
+    return `<tr class="sheet__empty"><td colspan="6">Nothing matches that filter.</td></tr>`;
   }
-  return rows.map((r) => `<tr data-action="interest-open" data-id="${r.id}" tabindex="0" role="button" aria-label="Open ${MD.esc(r.name)}">
-      <td><span class="interest-person"><b>${MD.esc(r.name)}</b><span class="mail ${r.cornell ? '' : 'interest-outside'}" ${r.cornell ? '' : 'title="Not a cornell.edu address"'}>${MD.esc(r.email)}</span></span></td>
+  const selected = interestSelection();
+  return rows.map((r) => `<tr data-action="interest-open" data-id="${MD.esc(r.id)}" class="${selected.has(r.id) ? 'is-selected' : ''}">
+      <td class="sheet__check-cell" data-stop><label class="sheet__check"><input type="checkbox" data-action="interest-select" data-id="${MD.esc(r.id)}" aria-label="Select ${MD.esc(r.name)} (${MD.esc(r.email)})" ${selected.has(r.id) ? 'checked' : ''}></label></td>
+      <td><button class="interest-person" data-action="interest-open" data-id="${MD.esc(r.id)}" aria-label="Open ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail ${r.cornell ? '' : 'interest-outside'}" ${r.cornell ? '' : 'title="Not a cornell.edu address"'}>${MD.esc(r.email)}</span></button></td>
+      <td>${r.year ? MD.esc(r.year) : '<span class="faint">Not provided</span>'}</td>
       <td>${MD.esc(r.subteam || 'Not sure yet')}</td>
       <td title="${MD.esc(r.project || '')}">${r.project ? MD.esc(r.project) : '<span class="faint">—</span>'}</td>
       <td class="interest-when" title="${new Date(r.ts).toLocaleString()}">${interestDate(r.ts)}</td>
@@ -6180,6 +6246,7 @@ function renderInterestRows() {
   body.innerHTML = interestRowsHtml(rows);
   const foot = $('.sheet__foot');
   if (foot) foot.textContent = interestFootText(rows.length);
+  renderInterestSelection();
 }
 
 function interestFootText(shown) {
@@ -6229,7 +6296,7 @@ function viewInterest() {
       </div>`).join('')}
     </div>` : '';
   const head = `<div class="plain-head"><span class="eyebrow">Recruiting</span><h1>Interest list</h1>
-    <p>People who filled the form on the site's Apply page. Open a row for the whole answer and its file. Link this screen from any doc as <code>[Interest list](#/interest)</code>.</p></div>`;
+    <p>People who filled the form on the site's Apply page. Open a person to read their answers, or select people to copy their emails.</p></div>`;
   if (st.loading) return shell(head + '<p class="sheet__note">Loading…</p>');
   if (st.error) return shell(head + `<p class="sheet__note">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
   if (!rows.length) return shell(head + '<p class="sheet__note">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>' + archivesBlock);
@@ -6244,18 +6311,30 @@ function viewInterest() {
 // so nothing in the component is a pixel off anything else.
 function interestSheet(visible, { archived = false, actions = '' } = {}) {
   const sort = UI.interestSort || { key: 'ts', dir: 'desc' };
+  const selected = interestSelection();
+  const visibleSelected = visible.filter((r) => selected.has(r.id)).length;
+  const hidden = selected.size - visibleSelected;
   // The caret slot is always there, so sorting never nudges a header.
   const th = (key, label) =>
-    `<th><button class="sheet__sort ${sort.key === key ? 'on' : ''}" data-action="interest-sort" data-key="${key}" aria-sort="${sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${label}<span class="sheet__caret">${sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}</span></button></th>`;
+    `<th aria-sort="${sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="sheet__sort ${sort.key === key ? 'on' : ''}" data-action="interest-sort" data-key="${key}">${label}<span class="sheet__caret">${sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}</span></button></th>`;
 
   return `<div class="sheet ${archived ? 'sheet--archived' : ''}">
     <div class="sheet__bar">
-      <input class="text-input sheet__search" data-m="interest-q" type="search" placeholder="Filter by name, email, subteam, or project" value="${MD.esc(UI.interestQuery || '')}" aria-label="Filter submissions" autocomplete="off" spellcheck="false">
+      <input class="text-input sheet__search" data-m="interest-q" type="search" placeholder="Search people, year, subteam, projects…" value="${MD.esc(UI.interestQuery || '')}" aria-label="Filter submissions by name, email, year, subteam, or project" autocomplete="off" spellcheck="false">
       <div class="sheet__actions">${actions}</div>
+    </div>
+    <div class="sheet__selection">
+      <span data-interest-selection-count role="status">${selected.size} selected${hidden ? ` · ${hidden} hidden by filter` : ''}</span>
+      <div class="sheet__actions">
+        <button class="btn btn--sm" data-action="interest-clear-selection" ${selected.size ? '' : 'disabled'}>Clear selection</button>
+        <button class="btn btn--sm btn--primary" data-action="interest-copy-emails" ${selected.size ? '' : 'disabled'}>Copy emails (CSV)</button>
+      </div>
     </div>
     <div class="sheet__scroll"><table>
       <thead><tr>
+        <th class="sheet__check-cell"><label class="sheet__check"><input type="checkbox" data-action="interest-select-visible" aria-label="Select all visible people" ${visible.length && visibleSelected === visible.length ? 'checked' : ''} ${visible.length ? '' : 'disabled'}></label></th>
         ${th('name', 'Person')}
+        ${th('year', 'Year')}
         ${th('subteam', 'Subteam')}
         <th><span class="sheet__sort sheet__sort--static">Coolest project</span></th>
         ${th('ts', 'When')}
@@ -6540,6 +6619,7 @@ function viewModal() {
           <dl class="interest-detail">
             <dt>Email</dt><dd class="${r.cornell ? '' : 'interest-outside'}" ${r.cornell ? '' : 'title="Not a cornell.edu address"'}>${MD.esc(r.email)}</dd>
             <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Not sure yet')}</dd>
+            <dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>
             <dt>Submitted</dt><dd>${new Date(r.ts).toLocaleString()}${r.updated && r.updated !== r.ts ? ` <span class="faint">· updated ${new Date(r.updated).toLocaleString()}</span>` : ''}</dd>
             ${r.fileId ? `<dt>File</dt><dd><a class="interest-download" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}">${MD.esc(r.fileName || 'file')}</a> <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
           </dl>
@@ -6553,6 +6633,13 @@ function viewModal() {
         </div>
       </div>`;
     }
+  } else if (m.kind === 'interest-email-copy') {
+    inner = `<div class="modal" role="dialog" aria-label="Copy selected emails">
+      <div class="modal__head"><h3>Selected emails</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body"><p>Clipboard access was blocked. Select and copy this comma-separated list.</p>
+        <textarea class="text-input" rows="6" readonly aria-label="Selected emails as CSV">${MD.esc(m.csv)}</textarea>
+      </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
+    </div>`;
   } else if (m.kind === 'confirm') {
     // Optional extras: a free-text field handed to onGo, and a GitHub-style
     // type-to-confirm phrase that keeps the danger button locked until it
@@ -6765,6 +6852,7 @@ function render() {
   { const sb = $('.sidebar__scroll'); if (sb) sb.scrollTop = sidebarScroll; }
 
   // Mount hooks.
+  if (r.name === 'interest' && $('.sheet')) renderInterestSelection();
   $$('.cad-embed').forEach(mountCadViewer);
   { const vt = $('.login .vt-title'); if (vt) mountHeroTitle(vt); }
   if (typeof REMOTE !== 'undefined' && r.name === 'admin' && !UI.editor && UI.resendDomains === undefined && Store.isAdmin()) {
@@ -7725,6 +7813,45 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- interest list (self-contained component; talks to its own API) ---- */
+    case 'interest-select': {
+      ev.stopPropagation(); // Keep the checkbox's native click/Space behavior.
+      const selected = interestSelection();
+      if (el.checked) selected.add(el.dataset.id); else selected.delete(el.dataset.id);
+      renderInterestSelection();
+      break;
+    }
+    case 'interest-select-visible': {
+      ev.stopPropagation();
+      const selected = interestSelection();
+      for (const row of interestVisible()) {
+        if (el.checked) selected.add(row.id); else selected.delete(row.id);
+      }
+      renderInterestSelection();
+      break;
+    }
+    case 'interest-clear-selection': {
+      stop();
+      interestSelection().clear();
+      renderInterestSelection();
+      break;
+    }
+    case 'interest-copy-emails': {
+      stop();
+      const emails = interestSelectedEmails();
+      if (!emails.length) return;
+      const csv = interestEmailsCsv(emails);
+      try {
+        await navigator.clipboard.writeText(csv);
+        toast(`Copied ${emails.length} ${emails.length === 1 ? 'email' : 'emails'} as CSV`);
+      } catch {
+        UI.modal = { kind: 'interest-email-copy', csv };
+        render();
+        const text = $('.modal textarea');
+        text?.focus();
+        text?.select();
+      }
+      break;
+    }
     case 'interest-refresh': {
       stop();
       UI.interest = undefined; // the route loader refetches
@@ -7745,15 +7872,15 @@ document.addEventListener('click', async (ev) => {
       const key = el.dataset.key;
       const cur = UI.interestSort || { key: 'ts', dir: 'desc' };
       // Text reads best ascending first; dates start at the newest.
-      const firstDir = key === 'name' || key === 'subteam' ? 'asc' : 'desc';
+      const firstDir = key === 'ts' ? 'desc' : 'asc';
       UI.interestSort = cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir };
       // Headers and rows update in place: sorting must never flash the page
       // or drop focus from the header you just clicked.
       const { key: sk, dir } = UI.interestSort;
-      for (const btn of $('.sheet__sort[data-key]')) {
+      for (const btn of $$('.sheet__sort[data-key]')) {
         const on = btn.dataset.key === sk;
         btn.classList.toggle('on', on);
-        btn.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+        btn.closest('th').setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
         const caret = btn.querySelector('.sheet__caret');
         if (caret) caret.textContent = on ? (dir === 'asc' ? '↑' : '↓') : '';
       }
