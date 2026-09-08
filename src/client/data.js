@@ -1059,6 +1059,7 @@ const SECTIONS = [
   { id: 'mechanical', name: 'Mechanical' },
   { id: 'electrical', name: 'Electrical' },
   { id: 'software', name: 'Software' },
+  { id: 'creative', name: 'Creative' },
   { id: 'operations', name: 'Operations' },
 ];
 
