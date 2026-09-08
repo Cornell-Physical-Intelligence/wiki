@@ -123,6 +123,24 @@ assert.ok(run('viewSearchHome()').includes('value="replay"'), 'query survives re
 results('csv');
 assert.equal(run('searchHomeState().q'), 'replay', 'modal queries do not overwrite home state');
 assert.equal(run('searchHomeState().filters.section'), 'software', 'home filters survive navigation and modal use');
+run('UI.searchHome.sel = 3');
+assert.equal(run("searchSetFilter('home', 'project', 'hex')"), true);
+assert.equal(run('searchHomeState().q'), 'replay', 'custom filter selection preserves the query');
+assert.equal(run('searchHomeState().filters.section'), 'software', 'custom filter selection preserves other filters');
+assert.equal(run('searchHomeState().sel'), 0, 'a filter change resets result selection');
+assert.ok(Array.from(run('searchResults(searchHomeState()).items')).every((item) => item.projects.includes('hex')));
+assert.equal(run("searchSetFilter('home', 'project', 'missing-project')"), false, 'unknown choices cannot corrupt filter state');
+assert.equal(run('searchHomeState().filters.project'), 'hex');
+const customFilters = run('searchFilterHtml(searchHomeState())');
+assert.ok(!customFilters.includes('<select'), 'filters never invoke a platform-native menu');
+assert.equal((customFilters.match(/aria-haspopup="menu"/g) || []).length, 4);
+assert.ok(customFilters.includes('data-search-filter="project" data-value="hex"'), 'the custom trigger exposes its current value');
+const choices = run("searchFilterMenuHtml(searchFilterChoices(searchFilterGroups().find(group => group.id === 'project')), 'hex')");
+assert.equal((choices.match(/aria-checked="true"/g) || []).length, 1, 'exactly one menu option is selected');
+assert.ok(choices.includes('role="menuitemradio"'), 'exclusive choice semantics are exposed');
+assert.equal(run("searchSetFilter('home', 'project', '')"), true);
+assert.equal(run('searchHomeState().filters.project'), '', 'All projects clears only that filter');
+assert.equal(run('searchHomeState().q'), 'replay');
 context.Store.me = () => ({ email: 'another@example.com', role: 'member' });
 assert.equal(run('searchHomeState().q'), '', 'another member does not inherit the previous search');
 
@@ -142,22 +160,62 @@ context.document.activeElement = null;
 run('viewSearchHome(); mountSearchHome()');
 assert.equal(focusCount, 1, 'initial home rendering never autofocuses');
 
-// Preserve native control behavior; the legacy handler otherwise turns these
-// keys into result navigation even when the select or reset button owns focus.
+// A custom dropdown owns keys before the palette. This is significant because
+// the legacy palette handler otherwise also acts on arrows, Enter, and Escape.
 context.$ = (selector) => selector === '.search-palette' ? {} : null;
-context.UI.palette = { q: '', sel: 0, filters: {}, count: 2 };
+context.UI.palette = { q: 'preserved', sel: 1, filters: {}, count: 2 };
 let prevented = false, stopped = false;
 const key = (tag, value) => ({
-  key: value, target: { matches: () => tag === 'input' },
+  key: value, target: { matches: () => tag === 'input', closest: () => null },
   preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; },
 });
-listeners.keydown[0](key('select', 'ArrowDown'));
-assert.equal(prevented, false, 'native select arrows are preserved');
-assert.equal(stopped, true, 'legacy arrow handler cannot take over a select');
+const menuHost = { isConnected: true };
+let picked = -1, filterClosed = 0;
+const menuButtons = ['All projects', 'Hexapod', 'Scout'].map((label, index) => ({
+  focus() { context.document.activeElement = this; }, scrollIntoView() {}, click() { picked = index; },
+}));
+context.menuHost = menuHost;
+context.fakeFilterClose = () => { filterClosed++; run('searchFilterMenu = null'); };
+context.$$ = (selector, host) => selector === '[data-search-choice]' && host === menuHost ? menuButtons : [];
+run("searchFilterMenu = { host: menuHost, close: fakeFilterClose, choices: [{label:'All projects'}, {label:'Hexapod'}, {label:'Scout'}], typed: '', typedAt: 0 }");
+context.document.activeElement = menuButtons[0];
+listeners.keydown[0](key('button', 'ArrowDown'));
+assert.equal(context.document.activeElement, menuButtons[1], 'arrow keys move within the dropdown');
+assert.equal(context.UI.palette.sel, 1, 'dropdown navigation cannot move palette selection');
+assert.equal(prevented, true);
+assert.equal(stopped, true);
+listeners.keydown[0](key('button', 's'));
+assert.equal(context.document.activeElement, menuButtons[2], 'typeahead reaches a choice in a long menu');
+listeners.keydown[0](key('button', 'Enter'));
+assert.equal(picked, 2, 'Enter chooses the focused dropdown option');
+listeners.keydown[0](key('button', 'Escape'));
+assert.equal(filterClosed, 1);
+assert.ok(context.UI.palette, 'first Escape closes the dropdown and leaves search open');
+
+// Clicking an expanded trigger closes it on pointerdown; its subsequent click
+// must not accidentally reopen it after mountMenu's outside-click handler ran.
+const trigger = {};
+context.fakeTrigger = trigger;
+run('searchFilterMenu = { host: menuHost, anchor: fakeTrigger, close: fakeFilterClose }');
+const click = { target: { closest: () => trigger }, preventDefault() {}, stopImmediatePropagation() {} };
+listeners.pointerdown[0](click);
+listeners.click[0](click);
+assert.equal(filterClosed, 2, 'the expanded trigger toggles closed once');
+assert.equal(run('searchFilterMenu'), null);
+
+// mountMenu may close itself on outside pointerdown; its focus restoration
+// must clear the custom trigger's expanded state as well.
+const triggerAttrs = {};
+context.detachedMenu = { isConnected: false };
+context.cleanupTrigger = { setAttribute(name, value) { triggerAttrs[name] = value; }, removeAttribute(name) { delete triggerAttrs[name]; } };
+run('searchFilterMenu = { host: detachedMenu, anchor: cleanupTrigger }');
+listeners.focusin[0]({ target: {} });
+assert.equal(triggerAttrs['aria-expanded'], 'false');
+assert.equal(run('searchFilterMenu'), null, 'outside-close cannot leave an orphan menu reference');
 prevented = false; stopped = false;
 listeners.keydown[0](key('button', 'Enter'));
 assert.equal(prevented, false, 'native button activation is preserved');
 assert.equal(stopped, true);
 context.Store.me = () => null;
 assert.equal(run('paletteResults().items.length'), 0, 'logged-out searches expose no cached pages');
-console.log('PASS: relevance, partial and typo matches, filenames, visibility, filters, escaping, fresh data, compact home, independent search state, keyboard semantics');
+console.log('PASS: search relevance and visibility, custom filter values and menu lifecycle, keyboard ownership, compact home, independent state and caret restoration');

@@ -165,6 +165,8 @@ const WikiSearch = (() => {
 
 let searchReturnFocus = null;
 let searchHomeFocus = null;
+let searchFilterMenu = null;
+let searchFilterDismissedTrigger = null;
 
 function searchHomeState() {
   const user = Store.me()?.email || '';
@@ -207,15 +209,81 @@ function searchResults(state) {
 
 function paletteResults() { return searchResults(UI.palette); }
 
-function searchFilterHtml(state) {
-  const filters = state.filters || {};
-  const groups = [
+function searchFilterGroups() {
+  return [
     { id: 'project', label: 'All projects', options: WikiSearch.projectRoots(Store.s.pages).map((page) => ({ id: page.id, label: page.title })) },
     { id: 'type', label: 'Any document', options: WikiSearch.types },
     { id: 'status', label: 'Any review status', options: WikiSearch.statuses },
     { id: 'section', label: 'All sections', options: SECTIONS.map((section) => ({ id: section.id, label: section.name })) },
   ];
-  return groups.map((group) => `<label class="search-filter ${filters[group.id] ? 'is-set' : ''}"><span class="search-sr">Filter by ${group.id === 'status' ? 'review status' : group.id}</span><select data-search-filter="${group.id}" aria-label="Filter by ${group.id === 'status' ? 'review status' : group.id}"><option value="">${group.label}</option>${group.options.map((option) => `<option value="${MD.esc(option.id)}" ${filters[group.id] === option.id ? 'selected' : ''}>${MD.esc(option.label)}</option>`).join('')}</select>${I.chev}</label>`).join('');
+}
+
+function searchFilterLabel(group, value) { return group.options.find((option) => option.id === value)?.label || group.label; }
+function searchFilterName(id) { return 'Filter by ' + (id === 'status' ? 'review status' : id); }
+
+function searchFilterHtml(state) {
+  const filters = state.filters || {};
+  return searchFilterGroups().map((group) => `<button type="button" class="search-filter ${filters[group.id] ? 'is-set' : ''}" data-search-filter="${group.id}" data-value="${MD.esc(filters[group.id] || '')}" aria-label="${searchFilterName(group.id)}" aria-haspopup="menu" aria-expanded="false"><span data-search-filter-label>${MD.esc(searchFilterLabel(group, filters[group.id]))}</span>${I.chev}</button>`).join('');
+}
+
+function searchSetFilter(mode, id, value) {
+  const group = searchFilterGroups().find((item) => item.id === id);
+  if (!group || (value !== '' && !group.options.some((option) => option.id === value))) return false;
+  const state = searchState(mode);
+  if (!state) return false;
+  state.filters ||= {};
+  state.filters[id] = value;
+  state.sel = 0;
+  searchRefreshFilters(mode);
+  return true;
+}
+
+function searchFilterChoices(group) { return [{ id: '', label: group.label }, ...group.options]; }
+function searchFilterMenuHtml(choices, value) {
+  return choices.map((option, index) => `<button type="button" role="menuitemradio" aria-checked="${option.id === value}" data-search-choice="${index}" tabindex="-1"><span class="search-filter-check" aria-hidden="true">${option.id === value ? I.check : ''}</span><span class="search-filter-option-label">${MD.esc(option.label)}</span></button>`).join('');
+}
+
+function searchOpenFilter(anchor) {
+  const mode = anchor.closest('[data-search-mode]')?.dataset.searchMode;
+  const group = searchFilterGroups().find((item) => item.id === anchor.dataset.searchFilter);
+  if (!mode || !group) return;
+  if (searchFilterMenu?.anchor === anchor && searchFilterMenu.host.isConnected) { searchFilterMenu.close(); return; }
+  window.__closeMenu?.();
+  const state = searchState(mode), value = state.filters[group.id] || '', choices = searchFilterChoices(group);
+  const host = document.createElement('div');
+  host.id = searchPrefix(mode) + '-filter-menu';
+  host.className = 'menu search-filter-menu';
+  host.setAttribute('role', 'menu');
+  host.setAttribute('aria-label', searchFilterName(group.id));
+  host.innerHTML = searchFilterMenuHtml(choices, value);
+  UI.menu = { searchFilter: group.id };
+  const baseClose = mountMenu(host, anchor);
+  const close = () => {
+    if (searchFilterMenu?.host === host) searchFilterMenu = null;
+    anchor.setAttribute('aria-expanded', 'false');
+    anchor.removeAttribute('aria-controls');
+    baseClose();
+  };
+  searchFilterMenu = { host, anchor, choices, close, typed: '', typedAt: 0 };
+  window.__closeMenu = close;
+  anchor.setAttribute('aria-expanded', 'true');
+  anchor.setAttribute('aria-controls', host.id);
+  // mountMenu supplies the established surface and lifecycle. Keep its popup
+  // inside the viewport even when a long list opens near the screen edge.
+  host.style.left = Math.max(8, Math.min(anchor.getBoundingClientRect().left, innerWidth - host.offsetWidth - 8)) + 'px';
+  host.style.top = Math.max(8, Math.min(parseFloat(host.style.top) || 8, innerHeight - host.offsetHeight - 8)) + 'px';
+  const selected = choices.findIndex((option) => option.id === value);
+  const selectedButton = $$('[data-search-choice]', host)[Math.max(0, selected)];
+  selectedButton?.focus();
+  selectedButton?.scrollIntoView({ block: 'nearest' });
+  host.addEventListener('click', (event) => {
+    const choice = event.target.closest('[data-search-choice]');
+    if (!choice) return;
+    const option = choices[Number(choice.dataset.searchChoice)];
+    if (!option) return;
+    close();
+    searchSetFilter(mode, group.id, option.id);
+  });
 }
 
 function searchControlsHtml(state) {
@@ -235,7 +303,7 @@ function searchListHtml(state, mode = 'modal') {
   const description = query ? (partial ? 'Partial matches' : 'Search results') : (filtered ? 'Matching pages' : 'Recent pages');
   const status = total ? `${total} ${total === 1 ? 'page' : 'pages'}${total > items.length ? ` · showing ${items.length}` : ''}` : 'No matches';
   state.announcement = `${status}. ${description}.`;
-  if (!items.length && !query && !filtered) return `<p class="search-helper">Try a title, a topic, or an attachment name.</p><div id="${prefix}-results" role="listbox" aria-label="Wiki search results"></div>`;
+  if (!items.length && !query && !filtered) return `<div id="${prefix}-results" role="listbox" aria-label="Wiki search results"></div>`;
   return `<div class="search-results-head"><span>${description}</span><span>${status}</span></div>
     ${partial ? '<p class="search-partial">No page matches every word. These match part of your search.</p>' : ''}
     <div id="${prefix}-results" role="listbox" aria-label="Wiki search results">${items.map((item, index) => {
@@ -250,14 +318,14 @@ function searchListHtml(state, mode = 'modal') {
       ${item.approximate ? '<span class="search-result-hint">Close spelling match</span>' : ''}</span>
       ${compact ? `<span class="search-recent-section">${MD.esc(SECTIONS.find((section) => section.id === item.page.section)?.name || '')}</span>` : ''}<span class="search-result-enter" aria-hidden="true">↵</span></${element}>`;
     }).join('')}</div>
-    ${!items.length ? `<div class="search-empty"><span class="search-empty-icon" aria-hidden="true">${I.search}</span><strong>${query ? `No pages found for “${MD.esc(query)}”` : 'No pages match these filters'}</strong><p>${filtered ? 'Try removing a filter, or use a broader search.' : 'Try a title, a topic, or a few words from a page.'}</p><div class="search-empty-actions">${filtered ? '<button class="btn btn--sm" data-search-reset="filters">Clear filters</button>' : ''}${query ? '<button class="btn btn--sm" data-search-reset="query">Clear search</button>' : ''}</div></div>` : ''}`;
+    ${!items.length ? `<div class="search-empty"><span class="search-empty-icon" aria-hidden="true">${I.search}</span><strong>${query ? `No pages found for “${MD.esc(query)}”` : 'No pages match these filters'}</strong><div class="search-empty-actions">${filtered ? '<button class="btn btn--sm" data-search-reset="filters">Clear filters</button>' : ''}${query ? '<button class="btn btn--sm" data-search-reset="query">Clear search</button>' : ''}</div></div>` : ''}`;
 }
 
 function paletteListHtml() { return searchListHtml(UI.palette); }
 
 function searchInputHtml(state, mode) {
   const prefix = searchPrefix(mode);
-  return `${I.search}<input type="text" placeholder="Search pages, topics, and files…" value="${MD.esc(state.q)}" spellcheck="false" autocomplete="off" aria-label="Search wiki" aria-describedby="${prefix}-scope" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="${prefix}-results" ${state.count ? `aria-activedescendant="${prefix}-result-${state.sel}"` : ''}>`;
+  return `${I.search}<input type="text" placeholder="Search…" value="${MD.esc(state.q)}" spellcheck="false" autocomplete="off" aria-label="Search wiki" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="${prefix}-results" ${state.count ? `aria-activedescendant="${prefix}-result-${state.sel}"` : ''}>`;
 }
 
 function viewSearchHome() {
@@ -265,7 +333,7 @@ function viewSearchHome() {
   searchHomeFocus = !UI.modal && !UI.editor && !UI.palette && active?.matches?.('.search-home input')
     ? { start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection } : null;
   const state = searchHomeState(), list = searchListHtml(state, 'home');
-  return `<section class="search-home search-surface" data-search-mode="home" aria-labelledby="wiki-search-home-title"><header class="search-home-heading"><h1 id="wiki-search-home-title">Search the wiki</h1><p id="wiki-search-home-scope">Find pages by title, text, tags, or attachment name.</p></header><div class="search-home-input">${searchInputHtml(state, 'home')}</div>${searchControlsHtml(state)}<div class="search-list">${list}</div><span class="search-sr" data-search-announcement role="status" aria-live="polite" aria-atomic="true">${MD.esc(state.announcement)}</span></section>`;
+  return `<section class="search-home search-surface" data-search-mode="home" aria-labelledby="wiki-search-home-title"><header class="search-home-heading"><h1 id="wiki-search-home-title">Search the wiki</h1></header><div class="search-home-input">${searchInputHtml(state, 'home')}</div>${searchControlsHtml(state)}<div class="search-list">${list}</div><span class="search-sr" data-search-announcement role="status" aria-live="polite" aria-atomic="true">${MD.esc(state.announcement)}</span></section>`;
 }
 
 function mountSearchHome() {
@@ -286,7 +354,7 @@ function viewPalette() {
   if (!UI.palette) return '';
   const list = paletteListHtml();
   return `<div class="palette-veil search-veil" data-action="palette-close"><div class="palette search-palette search-surface" data-search-mode="modal" role="dialog" aria-modal="true" aria-labelledby="wiki-search-title">
-    <div class="search-palette-caption"><span id="wiki-search-title">Search the wiki</span><span id="wiki-search-scope">Pages · tags · attachment names</span></div>
+    <div class="search-palette-caption"><span id="wiki-search-title">Search the wiki</span></div>
     <div class="palette__head">${searchInputHtml(UI.palette, 'modal')}<button class="search-close" data-search-close aria-label="Close search">${I.x}</button></div>
     ${searchControlsHtml(UI.palette)}<div class="palette__list search-list">${list}</div>
     <span class="search-sr" data-search-announcement role="status" aria-live="polite" aria-atomic="true">${MD.esc(UI.palette.announcement)}</span>
@@ -341,9 +409,13 @@ function searchRefreshFilters(mode = 'modal') {
   const state = searchState(mode), surface = searchSurface(mode);
   if (!state || !surface) return;
   state.sel = 0;
-  $$('[data-search-filter]', surface).forEach((select) => {
-    select.value = state.filters[select.dataset.searchFilter] || '';
-    select.closest('.search-filter').classList.toggle('is-set', !!select.value);
+  const groups = searchFilterGroups();
+  $$('[data-search-filter]', surface).forEach((button) => {
+    const group = groups.find((item) => item.id === button.dataset.searchFilter);
+    const value = state.filters[group.id] || '';
+    button.dataset.value = value;
+    button.classList.toggle('is-set', !!value);
+    $('[data-search-filter-label]', button).textContent = searchFilterLabel(group, value);
   });
   renderSearchList(mode);
 }
@@ -362,20 +434,39 @@ document.addEventListener('toggle', (event) => {
   if (mode) searchState(mode).filtersOpen = event.target.open;
 }, true);
 
-document.addEventListener('change', (event) => {
-  const select = event.target.closest?.('[data-search-filter]');
-  const mode = select?.closest('[data-search-mode]')?.dataset.searchMode;
-  if (!mode) return;
-  const state = searchState(mode);
-  state.filters ||= {};
-  state.filters[select.dataset.searchFilter] = select.value;
-  searchRefreshFilters(mode);
+// mountMenu's outside-click close restores focus itself. Also close when focus
+// moves out by another route, and clear our reference after its own cleanup.
+document.addEventListener('focusin', (event) => {
+  const menu = searchFilterMenu;
+  if (!menu) return;
+  if (!menu.host.isConnected) {
+    searchFilterMenu = null;
+    menu.anchor.setAttribute('aria-expanded', 'false');
+    menu.anchor.removeAttribute('aria-controls');
+  } else if (!menu.host.contains(event.target) && event.target !== menu.anchor) {
+    const target = event.target;
+    menu.close();
+    target.focus?.({ preventScroll: true });
+  }
 });
+
+document.addEventListener('pointerdown', (event) => {
+  const trigger = event.target.closest?.('[data-search-filter]');
+  if (searchFilterMenu?.anchor === trigger && searchFilterMenu?.host.isConnected) {
+    searchFilterMenu.close();
+    searchFilterDismissedTrigger = trigger;
+  }
+}, true);
 
 document.addEventListener('click', (event) => {
   if (UI.palette && event.target.classList?.contains('search-veil')) {
     event.preventDefault(); event.stopImmediatePropagation(); searchClose(); return;
   }
+  const trigger = event.target.closest?.('[data-search-filter]');
+  const dismissed = searchFilterDismissedTrigger;
+  searchFilterDismissedTrigger = null;
+  if (trigger && trigger === dismissed) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+  if (trigger) { event.preventDefault(); event.stopImmediatePropagation(); searchOpenFilter(trigger); return; }
   const target = event.target.closest?.('[data-search-close], [data-search-reset]');
   const mode = target?.closest('[data-search-mode]')?.dataset.searchMode;
   if (!mode) return;
@@ -391,10 +482,47 @@ document.addEventListener('click', (event) => {
   $('input', searchSurface(mode))?.focus();
 }, true);
 
-// The older palette handler assumes every arrow and Enter belongs to results.
-// Capture those keys here so filters and links retain their native behavior.
+// A filter menu owns navigation before the palette. Closing it with Escape
+// returns to its trigger; a second Escape can close the search dialog.
 document.addEventListener('keydown', (event) => {
   if (UI.modal || UI.editor) return;
+  const menu = searchFilterMenu?.host.isConnected ? searchFilterMenu : null;
+  const trigger = event.target.closest?.('[data-search-filter]');
+  if (!menu && trigger && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+    event.preventDefault(); event.stopImmediatePropagation(); searchOpenFilter(trigger); return;
+  }
+  if (menu) {
+    if (event.key === 'Escape') {
+      event.preventDefault(); event.stopImmediatePropagation(); menu.close(); return;
+    }
+    if (event.key === 'Tab') menu.close();
+    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') menu.close();
+    else {
+      const buttons = $$('[data-search-choice]', menu.host);
+      const current = buttons.indexOf(document.activeElement);
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 :
+          ((current < 0 ? 0 : current) + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length;
+        buttons[next]?.focus(); buttons[next]?.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault(); event.stopImmediatePropagation(); buttons[current]?.click();
+      } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        const letter = event.key.toLowerCase(), now = Date.now();
+        menu.typed = now - menu.typedAt < 700 && menu.typed !== letter ? menu.typed + letter : letter;
+        menu.typedAt = now;
+        const start = menu.typed.length === 1 ? current + 1 : Math.max(0, current);
+        for (let offset = 0; offset < buttons.length; offset++) {
+          const index = (start + offset) % buttons.length;
+          if (WikiSearch.normalize(menu.choices[index].label).startsWith(menu.typed)) {
+            buttons[index]?.focus(); buttons[index]?.scrollIntoView({ block: 'nearest' }); break;
+          }
+        }
+      }
+      return;
+    }
+  } else if (UI.menu) return;
   const dialog = UI.palette && $('.search-palette');
   const home = !dialog && $('.search-home');
   const surface = dialog || home;
@@ -411,7 +539,7 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault(); event.stopImmediatePropagation(); searchClose(); return;
   }
   if (event.key === 'Tab' && dialog) {
-    const focusable = $$('input, select, summary, button:not([tabindex="-1"])', dialog).filter((element) => !element.disabled && !element.hidden && element.offsetParent !== null);
+    const focusable = $$('input, summary, button:not([tabindex="-1"])', dialog).filter((element) => !element.disabled && !element.hidden && element.offsetParent !== null);
     if (!focusable.length) return;
     const first = focusable[0], last = focusable[focusable.length - 1];
     if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
