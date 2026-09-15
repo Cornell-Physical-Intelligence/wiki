@@ -24,6 +24,7 @@ jobs:
           npm run test:interest
           node scripts/test-intake-journal.mjs
           node scripts/test-db-transfer.mjs
+          node scripts/test-multipart-upload.mjs
           node scripts/test-snapshot.mjs
           node scripts/test-remote-sync.mjs
           node scripts/test-overlay-keyboard.mjs

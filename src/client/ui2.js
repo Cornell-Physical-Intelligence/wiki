@@ -662,8 +662,8 @@ function viewInterest() {
     <h2 class="sheet__heading">Archives</h2>
     <div class="sheet sheet--list">
       ${archives.map((a) => `<div class="sheet__archive">
-        <button class="sheet__archivename" data-action="interest-archive-open" data-id="${MD.esc(a.id)}">${MD.esc(a.name)}</button>
-        <span class="sheet__archivemeta">${a.count} ${a.count === 1 ? 'person' : 'people'} · archived ${interestDate(a.ts)}</span>
+        <button class="sheet__archivename" data-action="interest-archive-open" data-id="${MD.esc(a.id)}"><span class="sheet__archivetitle">${MD.esc(a.name)}</span>
+          <span class="sheet__archivemeta">${a.count} ${a.count === 1 ? 'person' : 'people'} · archived ${interestDate(a.ts)}</span></button>
         <a class="btn btn--sm btn--icon" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>CSV${INTEREST_ICONS.download}</a>
       </div>`).join('')}
     </div>` : '';
@@ -693,7 +693,7 @@ function interestSheet(visible, { archived = false, actions = '' } = {}) {
     `<th aria-sort="${sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="sheet__sort ${sort.key === key ? 'on' : ''}" data-action="interest-sort" data-key="${key}">${label}<span class="sheet__caret">${sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}</span></button></th>`;
 
   return `<div class="sheet ${archived ? 'sheet--archived' : ''}">
-    <div class="sheet__bar">
+    <div class="sheet__bar ${archived ? '' : 'sheet__bar--live'}">
       <input class="text-input sheet__search" data-m="interest-q" type="search" placeholder="Search people, year, subteam, projects…" value="${MD.esc(UI.interestQuery || '')}" aria-label="Filter submissions by name, email, year, subteam, or project" autocomplete="off" spellcheck="false">
       <div class="sheet__actions">${actions}</div>
     </div>

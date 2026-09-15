@@ -857,6 +857,7 @@ a.rev:hover { background: var(--hover); }
   background: var(--bg);
   overflow: hidden;
   margin: 4px 0 28px;
+  container-type: inline-size;
 }
 
 .sheet__bar {
@@ -867,9 +868,17 @@ a.rev:hover { background: var(--hover); }
   padding: 10px 14px;
   border-bottom: 1px solid var(--hairline);
 }
-.sheet__search { flex: 1 1 240px; min-width: 0; max-width: 360px; height: 40px; }
+.sheet__search { flex: 1 1 240px; min-width: 0; height: 40px; }
 .sheet__actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sheet__actions .btn { min-height: 40px; text-decoration: none; }
+@container (max-width: 48em) {
+  .sheet__bar--live { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .sheet__bar--live > .sheet__actions { margin-left: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+}
+@container (max-width: 32em) {
+  .sheet__bar { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .sheet__bar > .sheet__actions { margin-left: 0; display: grid; grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .sheet__selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--hairline); }
 .sheet__selection [role="status"] { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sheet__actions .btn:disabled { opacity: .45; cursor: default; }
@@ -956,15 +965,18 @@ a.rev:hover { background: var(--hover); }
 .sheet--list { padding: 0; }
 .sheet__archive {
   display: flex; align-items: center; gap: 12px;
-  padding: 0 14px; height: 52px;
+  padding: 0 14px; min-height: 52px;
   border-bottom: 1px solid var(--hairline);
 }
 .sheet__archive:last-child { border-bottom: none; }
 .sheet__archivename {
-  background: none; border: 0; padding: 0; cursor: pointer;
+  display: flex; flex: 1; min-width: 0; min-height: 52px; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px;
+  background: none; border: 0; padding: 8px 0; cursor: pointer; text-align: left;
   font: inherit; font-size: 13.5px; font-weight: 600; color: var(--fg);
-  text-decoration: underline; text-underline-offset: 2px;
 }
+.sheet__archivetitle { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.sheet__archivename .sheet__archivemeta { flex: none; font-weight: 400; }
+.sheet__archive > .btn { flex: none; min-height: 40px; }
 .sheet__archivemeta { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Row detail: where the full text, the file, and the thread live. */
@@ -6532,8 +6544,8 @@ function viewInterest() {
     <h2 class="sheet__heading">Archives</h2>
     <div class="sheet sheet--list">
       ${archives.map((a) => `<div class="sheet__archive">
-        <button class="sheet__archivename" data-action="interest-archive-open" data-id="${MD.esc(a.id)}">${MD.esc(a.name)}</button>
-        <span class="sheet__archivemeta">${a.count} ${a.count === 1 ? 'person' : 'people'} · archived ${interestDate(a.ts)}</span>
+        <button class="sheet__archivename" data-action="interest-archive-open" data-id="${MD.esc(a.id)}"><span class="sheet__archivetitle">${MD.esc(a.name)}</span>
+          <span class="sheet__archivemeta">${a.count} ${a.count === 1 ? 'person' : 'people'} · archived ${interestDate(a.ts)}</span></button>
         <a class="btn btn--sm btn--icon" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>CSV${INTEREST_ICONS.download}</a>
       </div>`).join('')}
     </div>` : '';
@@ -6563,7 +6575,7 @@ function interestSheet(visible, { archived = false, actions = '' } = {}) {
     `<th aria-sort="${sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button class="sheet__sort ${sort.key === key ? 'on' : ''}" data-action="interest-sort" data-key="${key}">${label}<span class="sheet__caret">${sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}</span></button></th>`;
 
   return `<div class="sheet ${archived ? 'sheet--archived' : ''}">
-    <div class="sheet__bar">
+    <div class="sheet__bar ${archived ? '' : 'sheet__bar--live'}">
       <input class="text-input sheet__search" data-m="interest-q" type="search" placeholder="Search people, year, subteam, projects…" value="${MD.esc(UI.interestQuery || '')}" aria-label="Filter submissions by name, email, year, subteam, or project" autocomplete="off" spellcheck="false">
       <div class="sheet__actions">${actions}</div>
     </div>

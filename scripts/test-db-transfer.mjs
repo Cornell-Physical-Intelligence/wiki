@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { isDeepStrictEqual } from 'node:util';
 
 if (!process.env.TRANSFER_TEST_ROOT) {
   const dir = await mkdtemp(join(tmpdir(), 'cupi-transfer-test-'));
@@ -38,10 +39,13 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   const state = seedState();
   state.users.push({ email: member, name: 'Member', role: 'member', status: 'active' });
   state.pages[1].body = 'Synthetic long page.\n'.repeat(60000);
-  state.prefs = { [admin]: { starred: ['welcome'] }, [member]: { starred: ['onboarding'] } };
+  state.prefs = {
+    [admin]: { starred: ['welcome'] },
+    [member]: { starred: ['onboarding'], collapsed: ['software'], navHidden: false, spellcheck: true, 'open-projects': true },
+  };
   const db = globalThis.quotaFixture = {
     state, version: 7, snapshot: null, snapshotVersion: null, pools: 0, ready: false, calls: [], bytes: 0,
-    afterMember: null, conflict: null,
+    prefs: new Map(), afterMember: null, beforePrefsWrite: null, conflict: null,
     async query(text, values) {
       this.calls.push(text);
       if (this.failQuota) throw new Error('Server error (HTTP status 402): {"message":"Your project has exceeded the data transfer quota. Upgrade your plan to increase limits.","neon:retryable":true}');
@@ -62,6 +66,35 @@ if (!process.env.TRANSFER_TEST_ROOT) {
         assert.match(text, /THEN NULL ELSE state END AS state/);
         const current = this.snapshotVersion === this.version && this.snapshot !== null;
         return reply([{ version: this.version, snapshot64: current ? this.snapshot : null, state: current ? null : this.state }]);
+      }
+      if (text.startsWith('SELECT w.version,')) {
+        assert.match(text, /LEFT JOIN wiki_user_prefs p ON p.email = \? WHERE w.id = 1/);
+        assert.match(text, /CASE WHEN COALESCE\(p.version, 0\) <> \? OR w.version <> \?/);
+        assert.match(text, /THEN COALESCE\(p.prefs, w.state->'prefs'->\?, '\{\}'::jsonb\) ELSE NULL END AS prefs/);
+        assert.match(text, /WHERE value->>'email' = \? LIMIT 1/);
+        assert.equal(values[0], values[3]); assert.equal(values[0], values[4], 'preference projection only joins the authenticated member');
+        const own = this.prefs.get(values[0]) || { version: 0, prefs: this.state.prefs?.[values[0]] || {} };
+        const out = reply([{
+          version: this.version, member: this.state.users.find((u) => u.email === values[0]) || null,
+          prefs_version: own.version, prefs: own.version !== values[1] || this.version !== values[2] ? own.prefs : null,
+        }]);
+        const callback = this.afterMember; this.afterMember = null; callback?.();
+        return out;
+      }
+      if (text.startsWith('WITH authorized AS MATERIALIZED')) {
+        assert.match(text, /FOR SHARE/);
+        assert.match(text, /u->>'email' = \? AND u->>'status' = 'active'/);
+        assert.match(text, /ON CONFLICT \(email\) DO UPDATE SET\s+prefs = wiki_user_prefs.prefs \|\| \?::jsonb/);
+        assert.match(text, /WHEN wiki_user_prefs.prefs = wiki_user_prefs.prefs \|\| \?::jsonb THEN 0 ELSE 1 END/);
+        assert.equal(values[0], values[1]); assert.equal(values[0], values[2]);
+        for (const value of values.slice(3)) assert.equal(value, values[3], 'the same sanitized patch is used for merge and change detection');
+        const callback = this.beforePrefsWrite; this.beforePrefsWrite = null; callback?.();
+        if (!this.state.users.some((u) => u.email === values[0] && u.status === 'active')) return reply();
+        const own = this.prefs.get(values[0]) || { version: 0, prefs: this.state.prefs?.[values[0]] || {} };
+        const next = { ...own.prefs, ...JSON.parse(values[3]) };
+        const version = own.version + (isDeepStrictEqual(own.prefs, next) ? 0 : 1);
+        this.prefs.set(values[0], { prefs: next, version });
+        return reply([{ version: this.version, prefs_version: version, prefs: next }]);
       }
       if (text.startsWith('SELECT version,')) {
         assert.match(text, /jsonb_array_elements\(COALESCE\(state->'users', '\[\]'::jsonb\)\)/);
@@ -103,6 +136,7 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   const reset = () => { db.calls = []; db.bytes = 0; };
   const fullReads = () => db.calls.filter((q) => q === 'SELECT state, version FROM wiki_state WHERE id = 1' || q.includes('AS snapshot64')).length;
   const writes = () => db.calls.filter((q) => q.startsWith('UPDATE wiki_state SET state =')).length;
+  const preferenceWrites = () => db.calls.filter((q) => q.startsWith('WITH authorized AS MATERIALIZED')).length;
   const backfills = () => db.calls.filter((q) => q.startsWith('UPDATE wiki_state SET snapshot =')).length;
   async function request(path, email = admin, body) {
     const headers = { host: 'wiki.cornellphysicalintelligence.com' };
@@ -115,19 +149,21 @@ if (!process.env.TRANSFER_TEST_ROOT) {
 
   for (const path of ['/me', '/state', '/att/att-sample']) assert.equal((await request(path, null)).status, 401);
   assert.equal(db.calls.length, 0, 'signed-out requests must not contact Postgres');
-  const cold = await Promise.all([request('/me'), request('/state?since=7')]);
+  const cold = await Promise.all([request('/me'), request('/state?since=7&prefsSince=0')]);
   assert.deepEqual(cold.map((r) => r.status), [200, 200]);
   assert.equal(db.pools, 1);
-  assert.equal(db.calls.filter((q) => q.startsWith('CREATE TABLE')).length, 3);
+  assert.equal(db.calls.filter((q) => q.startsWith('CREATE TABLE')).length, 4);
   assert.equal(fullReads(), 0, '/me and unchanged cold polls must not read full wiki state');
   assert.ok(db.bytes < 2000, 'auth and unchanged polls transfer only small records');
-  assert.deepEqual(cold[1].data, { version: 7, unchanged: true });
+  assert.deepEqual(cold[1].data, { version: 7, unchanged: true, prefsVersion: 0 });
 
   reset();
   const initial = await request('/state');
   assert.equal(initial.status, 200);
   assert.equal(fullReads(), 1, 'initial load reads one full state, including on a cold instance');
   assert.deepEqual(Object.keys(initial.data.state.prefs), [admin]);
+  assert.deepEqual(initial.data.state.prefs[admin], state.prefs[admin], 'members retain legacy preferences before any separate preference row exists');
+  assert.equal(initial.data.prefsVersion, 0);
   assert.equal(initial.data.state.pages[1].body, state.pages[1].body);
   assert.ok(db.bytes > 1000000, 'fixture must be large enough to expose full-state amplification');
   assert.equal(backfills(), 1);
@@ -143,7 +179,7 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   assert.ok(db.bytes < 15000, 'stored compression reduces this synthetic full-state transfer by over 98%');
 
   reset();
-  assert.equal((await request('/state?since=7')).data.unchanged, true);
+  assert.deepEqual((await request('/state?since=7&prefsSince=0')).data, { version: 7, unchanged: true, prefsVersion: 0 });
   assert.equal(db.calls.length, 1);
   assert.equal(fullReads(), 0);
   assert.ok(db.bytes < 1000);
@@ -164,70 +200,169 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   assert.equal(withSettings.data.state.settings.email.keySet, true, 'legacy writes invalidate a stale compressed copy');
 
   reset();
-  const saved = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { watched: ['welcome'] } } });
-  assert.equal(saved.status, 200);
-  assert.equal(fullReads(), 1, 'normal mutations read one state, without a redundant auth read');
-  assert.equal(writes(), 1);
-  assert.deepEqual(db.state.prefs[member].watched, ['welcome']);
-  assert.equal(db.snapshotVersion, db.version);
-  assert.deepEqual(await decodeSnapshot(db.snapshot), db.state);
-  assert.deepEqual(saved.data, { ok: true, version: db.version }, 'preference saves acknowledge without returning wiki history');
-  assert.ok(Buffer.byteLength(JSON.stringify(saved.data)) < 100, 'preference response stays small even with a megabyte of wiki history');
-
-  reset();
-  const beforeNoop = { version: db.version, state: structuredClone(db.state), snapshot: db.snapshot };
-  const unchangedPrefs = await request('/mutate', member, {
-    op: 'setPrefs', args: { prefs: { watched: ['welcome'], unknown: 'ignored', recents: 'not an array', editorMode: 123 } },
+  const sharedBeforePrefs = { version: db.version, state: structuredClone(db.state), snapshot: db.snapshot };
+  const saved = await request('/mutate', member, {
+    op: 'setPrefs', args: { email: admin, prefs: { watched: ['welcome'], navHidden: true, spellcheck: false, 'open-projects': 0 } },
   });
-  assert.deepEqual(unchangedPrefs.data, { ok: true, version: beforeNoop.version });
-  assert.equal(fullReads(), 1, 'no-op preference saves still authorize against the current state');
-  assert.equal(writes(), 0, 'equivalent sanitized preferences do not rewrite the state');
-  assert.equal(db.version, beforeNoop.version, 'no-op preferences do not force other members to reload');
-  assert.deepEqual(db.state, beforeNoop.state, 'ignored fields do not alter preferences or any other member');
-  assert.equal(db.snapshot, beforeNoop.snapshot, 'no-op preferences preserve the existing snapshot');
+  assert.equal(saved.status, 200);
+  assert.equal(fullReads(), 0, 'preference saves never fetch wiki bodies or history');
+  assert.equal(writes(), 0, 'preference saves never rewrite shared wiki state');
+  assert.equal(preferenceWrites(), 1);
+  assert.equal(db.version, sharedBeforePrefs.version, 'personal settings do not change the shared content version');
+  assert.deepEqual(db.state, sharedBeforePrefs.state, 'legacy preferences and every other member remain unchanged in canonical JSONB');
+  assert.equal(db.snapshot, sharedBeforePrefs.snapshot);
+  assert.deepEqual(db.prefs.get(member), {
+    version: 1,
+    prefs: { starred: ['onboarding'], collapsed: ['software'], watched: ['welcome'], navHidden: true, spellcheck: false, 'open-projects': false },
+  }, 'first separate save preserves all legacy settings and sanitizes new values');
+  assert.equal(db.prefs.has(admin), false, 'a submitted email cannot redirect another member’s preference write');
+  assert.deepEqual(saved.data, { ok: true, version: db.version, prefsVersion: 1, prefs: db.prefs.get(member).prefs });
+  assert.ok(Buffer.byteLength(JSON.stringify(saved.data)) < 1000, 'canonical preference acknowledgment stays small with a megabyte of history');
+  assert.ok(db.bytes < 2000, 'the database returns only member/preference records for a preference save');
 
   reset();
+  const ownBeforeNoop = structuredClone(db.prefs.get(member));
+  const unchangedPrefs = await request('/mutate', member, {
+    op: 'setPrefs', args: { prefs: { watched: ['welcome'], unknown: 'ignored', recents: 'not an array', editorMode: 123, navHidden: 'false', spellcheck: 'true' } },
+  });
+  assert.deepEqual(unchangedPrefs.data, { ok: true, version: db.version, prefsVersion: ownBeforeNoop.version, prefs: ownBeforeNoop.prefs });
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0);
+  assert.deepEqual(db.prefs.get(member), ownBeforeNoop, 'equivalent sanitized preferences keep their own version stable');
+  assert.deepEqual(db.state, sharedBeforePrefs.state); assert.equal(db.snapshot, sharedBeforePrefs.snapshot);
+  assert.equal(db.version, sharedBeforePrefs.version);
+
+  reset();
+  const legacyNoop = await request('/mutate', admin, { op: 'setPrefs', args: { prefs: { starred: ['welcome'] } } });
+  assert.deepEqual(legacyNoop.data, { ok: true, version: db.version, prefsVersion: 0, prefs: state.prefs[admin] });
+  assert.deepEqual(db.prefs.get(admin), { version: 0, prefs: state.prefs[admin] }, 'a legacy no-op creates no spurious preference version');
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0); assert.equal(db.version, sharedBeforePrefs.version);
+
+  reset();
+  const prefsOnly = await request('/state?since=' + db.version + '&prefsSince=0', member);
+  assert.deepEqual(prefsOnly.data, { version: db.version, unchanged: true, prefsVersion: 1, prefs: db.prefs.get(member).prefs });
+  assert.equal(db.calls.length, 1); assert.equal(fullReads(), 0);
+  assert.equal(prefsOnly.data.state, undefined); assert.equal(prefsOnly.data.files, undefined);
+  assert.ok(db.bytes < 1000, 'a preference-only poll does not transfer the shared state or attachment list');
+  const otherMember = await request('/state?since=' + db.version + '&prefsSince=0', admin);
+  assert.deepEqual(otherMember.data, { version: db.version, unchanged: true, prefsVersion: 0 }, 'one member’s settings do not invalidate another member’s poll');
+  const caughtUp = await request('/state?since=' + db.version + '&prefsSince=1', member);
+  assert.deepEqual(caughtUp.data, { version: db.version, unchanged: true, prefsVersion: 1 });
+  const legacyClientPoll = await request('/state?since=' + db.version, member);
+  assert.deepEqual(legacyClientPoll.data.prefs, db.prefs.get(member).prefs, 'clients without a preference cursor still receive their own preferences');
+  assert.equal(fullReads(), 0);
+
+  reset();
+  const privateOverlay = await request('/state', member);
+  assert.deepEqual(privateOverlay.data.state.prefs, { [member]: db.prefs.get(member).prefs }, 'full loads overlay only the authenticated member’s separate preferences');
+  assert.deepEqual(db.state.prefs, sharedBeforePrefs.state.prefs, 'private overlay never mutates stored legacy state');
+  assert.equal(privateOverlay.data.prefsVersion, 1);
+
+  reset();
+  const beforePartialVersion = db.prefs.get(member).version;
+  const partial = await Promise.all([
+    request('/mutate', member, { op: 'setPrefs', args: { prefs: { starred: ['welcome'] } } }),
+    request('/mutate', member, { op: 'setPrefs', args: { prefs: { collapsed: ['projects'] } } }),
+  ]);
+  assert.deepEqual(partial.map((r) => r.status), [200, 200]);
+  assert.deepEqual(partial.map((r) => r.data.prefsVersion).sort(), [beforePartialVersion + 1, beforePartialVersion + 2]);
+  assert.deepEqual(db.prefs.get(member).prefs.starred, ['welcome']);
+  assert.deepEqual(db.prefs.get(member).prefs.collapsed, ['projects']);
+  assert.deepEqual(db.prefs.get(member).prefs.watched, ['welcome'], 'overlapping partial saves preserve unrelated fields');
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0); assert.equal(db.version, sharedBeforePrefs.version);
+  assert.equal(preferenceWrites(), 2);
+
+  reset();
+  const beforeIdenticalVersion = db.prefs.get(member).version;
+  const identical = await Promise.all([0, 1].map(() => request('/mutate', member, {
+    op: 'setPrefs', args: { prefs: { watched: ['onboarding'] } },
+  })));
+  assert.deepEqual(identical.map((r) => r.data.prefsVersion), [beforeIdenticalVersion + 1, beforeIdenticalVersion + 1]);
+  assert.equal(db.prefs.get(member).version, beforeIdenticalVersion + 1, 'concurrent identical patches advance the personal version only once');
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0); assert.equal(db.version, sharedBeforePrefs.version);
+
+  reset();
+  const sanitized = await request('/mutate', member, { op: 'setPrefs', args: { prefs: {
+    recents: Array.from({ length: 101 }, (_, i) => i), inboxReadAt: 123, navHidden: false, spellcheck: true,
+  } } });
+  assert.deepEqual(sanitized.data.prefs.recents, Array.from({ length: 100 }, (_, i) => String(i)), 'the acknowledgment returns the canonical truncated values');
+  assert.equal(sanitized.data.prefs.navHidden, false); assert.equal(sanitized.data.prefs.spellcheck, true);
+  assert.equal(sanitized.data.prefs.inboxReadAt, 123);
+  assert.deepEqual(sanitized.data.prefs, db.prefs.get(member).prefs);
+  assert.equal(sanitized.data.state, undefined); assert.equal(sanitized.data.files, undefined);
+  assert.ok(Buffer.byteLength(JSON.stringify(sanitized.data)) < 1000);
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0); assert.equal(db.version, sharedBeforePrefs.version);
+
+  reset();
+  const beforeContentVersion = db.version;
+  const personalBeforeContent = structuredClone(db.prefs.get(member));
   const profile = await request('/mutate', member, { op: 'setProfile', args: { name: 'Updated Member', subteam: 'Robotics' } });
-  assert.equal(profile.status, 200);
+  assert.equal(profile.status, 200); assert.equal(fullReads(), 1); assert.equal(writes(), 1);
   assert.equal(profile.data.state.users.find((u) => u.email === member).name, 'Updated Member');
-  assert.equal(profile.data.state.pages[1].body, state.pages[1].body, 'other mutation callers still receive the complete current wiki');
-  assert.deepEqual(Object.keys(profile.data.state.prefs), [member], 'normal responses keep other members’ preferences private');
-  assert.equal(profile.data.state.settings.email.key, undefined, 'normal responses keep email secrets private');
+  assert.equal(profile.data.state.pages[1].body, state.pages[1].body, 'content mutations still return the complete current wiki');
+  assert.deepEqual(profile.data.state.prefs, { [member]: personalBeforeContent.prefs }, 'content responses overlay private preferences');
+  assert.equal(profile.data.state.settings.email.key, undefined);
+  assert.equal(db.version, beforeContentVersion + 1); assert.equal(db.snapshotVersion, db.version);
+  assert.deepEqual(db.prefs.get(member), personalBeforeContent, 'content writes cannot reset the independent preference row');
+  const contentRefresh = await request('/state?since=' + beforeContentVersion + '&prefsSince=' + personalBeforeContent.version, member);
+  assert.deepEqual(contentRefresh.data.state.prefs, { [member]: personalBeforeContent.prefs }, 'content changes include correct preferences even when the personal version is unchanged');
+
+  reset();
+  const beforeMixedRace = db.version;
+  db.beforePrefsWrite = () => { db.state.activity.unshift({ kind: 'content-during-preferences' }); db.version++; };
+  const mixedRace = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { 'open-operations': true } } });
+  assert.equal(mixedRace.status, 200);
+  assert.equal(mixedRace.data.version, beforeMixedRace + 1, 'preference acknowledgment uses the content version current at its authorized write');
+  assert.equal(db.version, beforeMixedRace + 1, 'only the concurrent content writer advances the shared version');
+  assert.ok(db.state.activity.some((a) => a.kind === 'content-during-preferences'));
+  assert.equal(db.prefs.get(member).prefs['open-operations'], true);
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0);
 
   reset();
   db.conflict = () => db.state.activity.unshift({ kind: 'concurrent-test' });
-  const retried = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { starred: ['welcome'] } } });
-  assert.equal(retried.status, 200);
-  assert.equal(fullReads(), 2);
-  assert.equal(writes(), 2);
-  assert.equal(db.state.activity[0].kind, 'concurrent-test', 'conflict retry preserves another writer');
+  const retried = await request('/mutate', member, { op: 'setProfile', args: { name: 'Retry Member', subteam: 'Robotics' } });
+  assert.equal(retried.status, 200); assert.equal(fullReads(), 2); assert.equal(writes(), 2);
+  assert.ok(db.state.activity.some((a) => a.kind === 'concurrent-test'), 'content conflict retries preserve another writer’s activity');
+  assert.equal(db.state.users.find((u) => u.email === member).name, 'Retry Member');
 
   reset();
-  const beforeSameWrite = db.version;
+  const beforeContentRace = db.version;
   db.conflict = () => {
-    db.state.prefs[member].watched = ['onboarding'];
-    db.state.activity.unshift({ kind: 'same-prefs-concurrent-test' });
+    db.state.users.find((u) => u.email === admin).subteam = 'Concurrent admin change';
+    db.state.activity.unshift({ kind: 'other-member-concurrent-test' });
   };
-  const alreadyApplied = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { watched: ['onboarding'] } } });
-  assert.deepEqual(alreadyApplied.data, { ok: true, version: beforeSameWrite + 1 });
-  assert.equal(fullReads(), 2, 'a conflicting preference save re-reads and reauthorizes');
-  assert.equal(writes(), 1, 'a retry skips writing when the concurrent writer already saved those preferences');
-  assert.equal(db.version, beforeSameWrite + 1, 'only the concurrent write increments the version');
-  assert.deepEqual(db.state.prefs[member].watched, ['onboarding']);
-  assert.equal(db.state.activity[0].kind, 'same-prefs-concurrent-test');
+  const overlappingContent = await request('/mutate', member, { op: 'setProfile', args: { name: 'Current Member', subteam: 'Robotics' } });
+  assert.equal(overlappingContent.status, 200); assert.equal(fullReads(), 2); assert.equal(writes(), 2);
+  assert.equal(db.version, beforeContentRace + 2, 'the concurrent content write and successful retry each advance content version');
+  assert.equal(db.state.users.find((u) => u.email === admin).subteam, 'Concurrent admin change');
+  assert.ok(db.state.activity.some((a) => a.kind === 'other-member-concurrent-test'));
 
   reset();
   db.conflict = () => { db.state.users = db.state.users.filter((u) => u.email !== member); };
-  const revokedOnRetry = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { watched: ['welcome'] } } });
-  assert.equal(revokedOnRetry.status, 401, 'no-op optimization never bypasses authorization on a conflict retry');
-  assert.equal(writes(), 1, 'a revoked member cannot retry its failed write');
-  db.state.users.push({ email: member, name: 'Member', role: 'member', status: 'active' });
-  db.version++; // Restore the synthetic member for the separate auth/read race below.
+  const revokedOnRetry = await request('/mutate', member, { op: 'setProfile', args: { name: 'Revoked attempt', subteam: 'Robotics' } });
+  assert.equal(revokedOnRetry.status, 401, 'content retries reauthorize against the new roster');
+  assert.equal(writes(), 1, 'a revoked member cannot retry its failed content write');
+  db.state.users.push({ email: member, name: 'Member', role: 'member', status: 'active' }); db.version++;
+
+  reset();
+  const ownBeforeRevocation = structuredClone(db.prefs.get(member));
+  db.afterMember = () => { db.state.users = db.state.users.filter((u) => u.email !== member); db.version++; };
+  const revokedPrefs = await request('/mutate', member, { op: 'setPrefs', args: { prefs: ownBeforeRevocation.prefs } });
+  assert.equal(revokedPrefs.status, 401, 'even a no-op preference save rechecks current membership atomically');
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0); assert.equal(preferenceWrites(), 1);
+  assert.deepEqual(db.prefs.get(member), ownBeforeRevocation, 'denied preference writes do not alter the member’s saved row');
+  db.state.users.push({ email: member, name: 'Member', role: 'member', status: 'active' }); db.version++;
+
+  reset();
+  db.beforePrefsWrite = () => { db.state.users.find((u) => u.email === member).status = 'invited'; db.version++; };
+  const inactivePrefs = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { watched: ['welcome'] } } });
+  assert.equal(inactivePrefs.status, 401, 'preference write authorization requires active status, not just a matching email');
+  assert.deepEqual(db.prefs.get(member), ownBeforeRevocation);
+  db.state.users.find((u) => u.email === member).status = 'active'; db.version++;
 
   reset();
   db.afterMember = () => { db.state.users = db.state.users.filter((u) => u.email !== member); db.version++; };
-  assert.equal((await request('/mutate', member, { op: 'setPrefs', args: { prefs: {} } })).status, 401);
-  assert.equal(writes(), 0, 'a member revoked between auth and a write cannot mutate');
+  assert.equal((await request('/mutate', member, { op: 'setProfile', args: { name: 'Denied content', subteam: '' } })).status, 401);
+  assert.equal(writes(), 0, 'a member revoked between preauth and reading content cannot mutate');
 
   reset();
   db.conflict = () => { db.state.users.find((u) => u.email === admin).role = 'member'; };
@@ -274,5 +409,5 @@ if (!process.env.TRANSFER_TEST_ROOT) {
     assert.doesNotMatch(unavailable.data.error, /HTTP status 402|neon:retryable/, 'driver internals are not shown');
   }
 
-  console.log('PASS: small auth/poll queries, compact preference responses, no-op preference writes, compressed reads, versioned backfill, legacy writes, damaged cache fallback, optimistic retries, authorization, and quota errors');
+  console.log('PASS: isolated preference storage/sync, canonical sanitized acknowledgments, legacy/private overlays, no-op and concurrent saves, content CAS/auth races, compressed snapshots, and quota errors');
 }

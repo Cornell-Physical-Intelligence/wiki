@@ -11,6 +11,7 @@ const REMOTE = { email: null, name: null, role: null, version: 0, pending: 0 };
 let savedPrefs = null;
 let prefsInFlight = false;
 let prefsVersion = 0;
+let independentPrefsVersion = false;
 let prefsQueued = false;
 let prefsFailures = 0;
 let prefsRetryAfter = 0;
@@ -22,6 +23,21 @@ function noteLocalPrefs(fingerprint) {
   observedPrefs = fingerprint;
 }
 
+function responsePrefsVersion(payload) {
+  if (Number.isFinite(payload.prefsVersion)) {
+    if (!independentPrefsVersion) {
+      // A rollout can switch this open tab from a shared revision to a small
+      // per-user revision. Those counters cannot be compared to one another.
+      independentPrefsVersion = true;
+      prefsVersion = -1;
+    }
+    return payload.prefsVersion;
+  }
+  // Older servers remain usable on initial load. Once separate revisions are
+  // known, a delayed legacy response cannot rewind the newer preferences.
+  return independentPrefsVersion ? null : (payload.version ?? REMOTE.version);
+}
+
 async function api(path, opts) {
   const r = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts });
   const data = await r.json().catch(() => ({}));
@@ -30,29 +46,38 @@ async function api(path, opts) {
 }
 
 function adoptServer(payload) {
-  // Responses from overlapping operations can arrive out of order.
-  if (payload.version !== undefined && payload.version < REMOTE.version) return;
   const localPrefs = REMOTE.email && savedPrefs !== null ? prefsFingerprint(Store.prefs()) : null;
-  const incomingVersion = payload.version ?? REMOTE.version;
-  const keepPrefs = localPrefs !== null && (prefsInFlight || localPrefs !== savedPrefs || incomingVersion < prefsVersion);
-  if (payload.version !== undefined) REMOTE.version = payload.version;
-  if (payload.state) {
+  const hasPrefs = REMOTE.email && (payload.prefs !== undefined || payload.state);
+  const incomingPrefsVersion = hasPrefs ? responsePrefsVersion(payload) : null;
+  const acceptPrefs = hasPrefs && incomingPrefsVersion !== null && incomingPrefsVersion >= prefsVersion;
+  const keepPrefs = localPrefs !== null && (!acceptPrefs || prefsInFlight || localPrefs !== savedPrefs);
+  // Content and preferences can arrive out of order independently. An older
+  // content response may still carry a newer preference revision, and vice versa.
+  const acceptContent = payload.version === undefined || payload.version >= REMOTE.version;
+  let changed = false;
+  if (payload.state && acceptContent) {
     Store.s = payload.state;
     if (!Store.s.prefs) Store.s.prefs = {};
     Store.reindex();
-    // Remember the received preferences so unrelated optimistic operations do
-    // not send an identical setPrefs request after every content mutation.
-    if (REMOTE.email) {
-      const incomingPrefs = prefsFingerprint(Store.prefs());
-      if (incomingVersion >= prefsVersion) { savedPrefs = incomingPrefs; prefsVersion = incomingVersion; }
-      if (keepPrefs) Store.s.prefs[REMOTE.email] = JSON.parse(localPrefs);
-      observedPrefs = prefsFingerprint(Store.prefs());
-      if (!prefsInFlight && !prefsTimer && prefsFingerprint(Store.prefs()) !== savedPrefs) Store.persist();
-    }
+    if (payload.version !== undefined) REMOTE.version = payload.version;
+    changed = true;
   }
-  if (payload.files) {
+  if (REMOTE.email && (hasPrefs || payload.state)) {
+    if (!Store.s.prefs) Store.s.prefs = {};
+    if (acceptPrefs) {
+      Store.s.prefs[REMOTE.email] = payload.prefs ?? payload.state?.prefs?.[REMOTE.email] ?? {};
+      savedPrefs = prefsFingerprint(Store.prefs());
+      prefsVersion = incomingPrefsVersion;
+    }
+    if (keepPrefs) Store.s.prefs[REMOTE.email] = JSON.parse(localPrefs);
+    observedPrefs = prefsFingerprint(Store.prefs());
+    changed ||= observedPrefs !== localPrefs;
+    if (!prefsInFlight && !prefsTimer && observedPrefs !== savedPrefs) Store.persist();
+  }
+  if (payload.files && acceptContent) {
     for (const f of payload.files) Files.mem.set(f.id, { ...f, url: '/api/att/' + f.id });
   }
+  return changed;
 }
 
 /* ------------------------------- boot ------------------------------------- */
@@ -99,9 +124,23 @@ async function flushPrefs() {
   try {
     const out = await api('/mutate', { method: 'POST', body: JSON.stringify({ op: 'setPrefs', args: { prefs: JSON.parse(fingerprint) } }) });
     if ((out.ok !== true && !out.state) || !Number.isFinite(out.version)) throw new Error('Preferences were not confirmed');
-    if (out.version >= prefsVersion) {
+    const acknowledgedVersion = responsePrefsVersion(out);
+    if (acknowledgedVersion === null) throw new Error('Preferences revision was not confirmed');
+    if (acknowledgedVersion >= prefsVersion) {
       savedPrefs = fingerprint;
-      prefsVersion = out.version;
+      prefsVersion = acknowledgedVersion;
+      if (out.prefs && typeof out.prefs === 'object' && !Array.isArray(out.prefs)) {
+        const current = prefsFingerprint(Store.prefs());
+        // Read the server's sanitized values through the normal Store defaults
+        // before remembering what was actually saved (e.g. the 100-star cap).
+        Store.s.prefs[REMOTE.email] = out.prefs;
+        savedPrefs = prefsFingerprint(Store.prefs());
+        if (prefsEditVersion !== editVersion || current !== fingerprint) {
+          Store.s.prefs[REMOTE.email] = JSON.parse(current);
+        }
+        observedPrefs = prefsFingerprint(Store.prefs());
+        if (observedPrefs !== current) render();
+      }
     } else if (prefsEditVersion === editVersion && prefsFingerprint(Store.prefs()) === fingerprint) {
       // A newer complete snapshot already includes a subsequent preferences
       // write. Preserve any edits made after this request, otherwise use it.
@@ -278,12 +317,20 @@ async function pollOnce() {
   pollInFlight = true;
   const version = REMOTE.version;
   try {
-    const out = await api('/state?since=' + version);
+    const out = await api('/state?since=' + version + '&prefsSince=' + (independentPrefsVersion ? prefsVersion : -1));
     pollFailures = 0;
     pollAfter = 0;
     // A save or edit may have begun while the request was in flight.
-    if (!out.unchanged && !REMOTE.pending && !UI.editor?.dirty && REMOTE.version === version) {
-      adoptServer(out); render();
+    if (!REMOTE.pending && !UI.editor?.dirty) {
+      let changed = false;
+      if (REMOTE.version === version) changed = adoptServer(out);
+      else if (Number.isFinite(out.prefsVersion)) {
+        // An operation supplied newer content while this poll was in flight;
+        // its separately versioned preferences may still be useful.
+        const prefs = out.prefs ?? out.state?.prefs?.[REMOTE.email];
+        if (prefs !== undefined) changed = adoptServer({ prefsVersion: out.prefsVersion, prefs });
+      }
+      if (changed) render();
     }
   } catch (e) {
     pollFailures++;

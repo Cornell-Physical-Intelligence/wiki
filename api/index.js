@@ -1,8 +1,8 @@
 // The entire backend: auth, state, mutations, attachments. One function.
 // Rewrites in vercel.json send every /api/* request here.
 
-import { getState, getMember, getEmailSettings, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts, StorageNotConfigured } from '../lib/db.js';
-import { applyOp, healWelcomeCrab } from '../lib/ops.js';
+import { getState, getMember, getEmailSettings, savePreferences, updateState, putFile, getFile, deleteFile, listFiles, putPart, finishUpload, StorageNotConfigured } from '../lib/db.js';
+import { applyOp, cleanPreferences, healWelcomeCrab } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
 import { handleInterest } from '../lib/interest.js';
@@ -62,11 +62,11 @@ const redirect = (res, to, cookies = []) => {
 
 // What each member is allowed to see: other people's prefs are nobody's
 // business, and the Resend key never leaves the server in any form.
-function shapeState(state, me) {
+function shapeState(state, me, prefs) {
   const email = state.settings?.email;
   return {
     ...state,
-    prefs: me ? { [me.email]: state.prefs?.[me.email] || {} } : {},
+    prefs: me ? { [me.email]: prefs ?? state.prefs?.[me.email] ?? {} } : {},
     settings: {
       email: {
         from: email?.from || '',
@@ -141,7 +141,12 @@ export default async function handler(req, res) {
     const devAuth = process.env.DEV_FAKE_AUTH; // local dev only
     const email = devAuth || readSession(req.headers.cookie);
     if (!email) return json(res, 401, { error: 'Not signed in' });
-    const { member, version } = await getMember(email);
+    const syncing = ['/state', '/mutate', '/resend/disconnect'].includes(path);
+    const sync = await getMember(email, syncing ? {
+      prefsSince: Number.isFinite(Number(q.prefsSince)) ? Number(q.prefsSince) : -1,
+      since: Number.isFinite(Number(q.since)) ? Number(q.since) : -1,
+    } : null);
+    const { member, version, prefsVersion, prefs } = sync;
     const me = member?.status === 'active' ? member : null;
 
     if (path === '/me') {
@@ -155,7 +160,9 @@ export default async function handler(req, res) {
     /* ------------------------------ state ---------------------------------- */
 
     if (path === '/state') {
-      if (q.since && Number(q.since) === version) return json(res, 200, { version, unchanged: true });
+      if (q.since && Number(q.since) === version) {
+        return json(res, 200, { version, unchanged: true, prefsVersion, ...(prefs !== null ? { prefs } : {}) });
+      }
       let out = await getState();
       // Check the legacy content migration against state we already needed.
       // Cold starts and unchanged polls must not fetch a second full copy.
@@ -167,7 +174,7 @@ export default async function handler(req, res) {
       }
       const currentMe = out.state.users.find((u) => u.email === email && u.status === 'active');
       if (!currentMe) return json(res, 401, { error: 'Not signed in' });
-      return json(res, 200, { version: out.version, state: shapeState(out.state, currentMe), files: await listFiles() });
+      return json(res, 200, { version: out.version, prefsVersion, state: shapeState(out.state, currentMe, prefs), files: await listFiles() });
     }
 
     // Admins can verify the Resend wiring with one click — the real welcome
@@ -324,7 +331,7 @@ export default async function handler(req, res) {
         if (s.settings?.email) delete s.settings.email.oauth;
         return s;
       });
-      return json(res, 200, { version: out.version, state: shapeState(out.state, me) });
+      return json(res, 200, { version: out.version, prefsVersion, state: shapeState(out.state, me, prefs) });
     }
 
     /* ------------------------------ mutations ------------------------------ */
@@ -332,25 +339,23 @@ export default async function handler(req, res) {
     if (path === '/mutate' && req.method === 'POST') {
       const body = await readJson(req, 2 * 1024 * 1024);
       const { op, args } = body;
+      if (op === 'setPrefs') {
+        const saved = await savePreferences(email, cleanPreferences(args?.prefs));
+        if (!saved) return json(res, 401, { error: 'Not signed in' });
+        return json(res, 200, { ok: true, ...saved });
+      }
       let opResult, opError, opStatus = 400;
       const out = await updateState((s) => {
         // Authorize against the same revision that is being changed, including
         // retries after another admin removes a member or changes their role.
         const actor = s.users.find((u) => u.email === email && u.status === 'active');
         if (!actor) { opStatus = 401; opError = 'Not signed in'; return false; }
-        const beforePrefs = op === 'setPrefs' ? JSON.stringify(s.prefs?.[email] || {}) : null;
         const r = applyOp(s, op, args, actor.email, actor.role);
         if (r.error) { opError = r.error; return false; }
         opResult = r.result;
-        // Compare after validation so ignored fields and equivalent values do
-        // not rewrite the wiki or make every other member reload its history.
-        if (op === 'setPrefs' && beforePrefs === JSON.stringify(s.prefs?.[email] || {})) return false;
         return s;
       });
       if (opError) return json(res, opStatus, { error: opError, version: out.version });
-      // The preference caller already has its local values and does not adopt
-      // state from this response. Acknowledge only the durable write/no-op.
-      if (op === 'setPrefs') return json(res, 200, { ok: true, version: out.version });
 
       // Welcome emails go out after the state is durably written — access
       // exists either way, the email is just the pointer.
@@ -376,7 +381,7 @@ export default async function handler(req, res) {
         } catch (e) { /* sweep is best-effort */ }
       }
 
-      return json(res, 200, { version: out.version, state: shapeState(out.state, me), result: opResult, emailed });
+      return json(res, 200, { version: out.version, prefsVersion, state: shapeState(out.state, me, prefs), result: opResult, emailed });
     }
 
     /* ------------------------------ attachments ---------------------------- */
@@ -391,26 +396,21 @@ export default async function handler(req, res) {
       if (!/^up-[a-z0-9]+$/.test(String(body.uploadId || ''))) return json(res, 400, { error: 'Bad upload id' });
       const part = String(body.data || '');
       if (!part || part.length > 3200000) return json(res, 400, { error: 'Bad part' });
-      await putPart(body.uploadId, Number(body.seq) || 0, part);
+      const seq = Number(body.seq);
+      if (!Number.isSafeInteger(seq) || seq < 0) return json(res, 400, { error: 'Bad part number' });
+      await putPart(body.uploadId, seq, part);
       return json(res, 200, { ok: true });
     }
     if (path === '/att/finish' && req.method === 'POST') {
       const body = await readJson(req, 64 * 1024);
       if (!/^up-[a-z0-9]+$/.test(String(body.uploadId || ''))) return json(res, 400, { error: 'Bad upload id' });
-      const parts = await takeParts(body.uploadId);
-      if (!parts.length) return json(res, 400, { error: 'No uploaded parts found' });
-      const data = Buffer.from(parts.join(''), 'base64');
-      if (!data.length) return json(res, 400, { error: 'Empty file' });
-      if (data.length > 25 * 1048576) return json(res, 413, { error: 'File is over the 25 MB cap' });
-      const id = 'att-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-      const f = {
-        id,
+      const f = await finishUpload(body.uploadId, {
         name: String(body.name || 'file').slice(0, 200),
         type: String(body.type || 'application/octet-stream').slice(0, 100),
-        size: data.length, by: me.email, ts: Date.now(), data,
-      };
-      await putFile(f);
-      return json(res, 200, { id, name: f.name, type: f.type, size: f.size, by: f.by, ts: f.ts, url: '/api/att/' + id });
+        by: me.email,
+      });
+      if (f.error) return json(res, f.status, { error: f.error });
+      return json(res, 200, { ...f, url: '/api/att/' + f.id });
     }
 
     if (path === '/att' && req.method === 'POST') {

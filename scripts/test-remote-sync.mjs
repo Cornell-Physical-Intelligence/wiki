@@ -10,7 +10,7 @@ const prefs = (star = '') => ({ starred: star ? [star] : [], recents: [], collap
 const state = (star = '', body = 'Initial content') => ({ users: [], pages: [{ id: 'page', body }], trash: [], activity: [], prefs: { [EMAIL]: prefs(star) } });
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function fixture() {
+function fixture({ independent = false, initialPrefsVersion = 0 } = {}) {
   let now = 1800000000000, timerId = 0, renders = 0;
   const timers = new Map(), calls = [], errors = [], documentEvents = new Map(), windowEvents = new Map();
   const listen = (events) => (type, handler) => events.set(type, [...(events.get(type) || []), handler]);
@@ -38,12 +38,12 @@ function fixture() {
   });
   const run = (code) => vm.runInContext(code, context);
   vm.runInContext(source, context);
-  run(`REMOTE.email = ${JSON.stringify(EMAIL)}; adoptServer(${JSON.stringify({ version: 1, state: state() })});`);
+  run(`REMOTE.email = ${JSON.stringify(EMAIL)}; adoptServer(${JSON.stringify({ version: 1, state: state(), ...(independent ? { prefsVersion: initialPrefsVersion } : {}) })});`);
   return {
     run, calls, timers, context,
     get renders() { return renders; },
     values: () => JSON.parse(run('JSON.stringify(Store.prefs())')),
-    adopt(version, star = '', body = 'Updated content') { run(`adoptServer(${JSON.stringify({ version, state: state(star, body) })})`); },
+    adopt(version, star = '', body = 'Updated content', prefsVersion) { run(`adoptServer(${JSON.stringify({ version, state: state(star, body), ...(prefsVersion !== undefined ? { prefsVersion } : {}) })})`); },
     change(star) { run(`Store.prefs().starred = [${JSON.stringify(star)}]; Store.persist();`); },
     fire(type, surface = 'document') {
       for (const handler of (surface === 'document' ? documentEvents : windowEvents).get(type) || []) handler();
@@ -80,7 +80,7 @@ function fixture() {
   await f.run('pollOnce()'); assert.equal(f.calls.length, 0, 'idle visible tabs stop polling');
   f.fire('pointerdown'); f.fire('focus', 'window'); f.fire('visibilitychange');
   assert.equal(f.calls.length, 1, 'resume triggers one request despite overlapping events');
-  assert.equal(f.calls[0].url, '/api/state?since=1');
+  assert.equal(f.calls[0].url, '/api/state?since=1&prefsSince=-1');
   await f.reply(0, { unchanged: true, version: 1 });
   assert.equal(f.renders, 0);
 }
@@ -123,7 +123,7 @@ for (const during of ['UI.editor = {dirty:true}', 'REMOTE.pending++', `adoptServ
   await f.tick(1200); assert.deepEqual(f.calls[1].body.args.prefs.starred, ['C']);
   await f.reply(1, { ok: true, version: 3 });
   assert.equal(f.timers.size, 0);
-  f.run('pollOnce()'); assert.equal(f.calls[2].url, '/api/state?since=1');
+  f.run('pollOnce()'); assert.equal(f.calls[2].url, '/api/state?since=1&prefsSince=-1');
   await f.reply(2, { version: 3, state: state('C', 'Concurrent content change') });
   assert.equal(f.run('Store.s.pages[0].body'), 'Concurrent content change');
 }
@@ -195,4 +195,118 @@ for (const newerLocal of [false, true]) {
   assert.equal(f.run('REMOTE.version'), 1);
 }
 
-console.log('PASS: hidden/idle/resumed polling, backoff/stale-response guards, prefs deduplication/serialization, adoption races, failures and compact acknowledgments.');
+// Preference-only changes sync between devices without replacing any content.
+{
+  const f = fixture({ independent: true });
+  const pages = f.context.Store.s.pages;
+  f.run('pollOnce()'); assert.equal(f.calls[0].url, '/api/state?since=1&prefsSince=0');
+  await f.reply(0, { unchanged: true, version: 1, prefsVersion: 1, prefs: prefs('Other device') });
+  assert.deepEqual(f.values().starred, ['Other device']);
+  assert.equal(f.context.Store.s.pages, pages, 'prefs-only polls keep the existing content object');
+  assert.equal(f.run('REMOTE.version'), 1); assert.equal(f.run('prefsVersion'), 1);
+  assert.equal(f.renders, 1); assert.equal(f.timers.size, 0, 'received prefs are not echoed back');
+  f.run('pollOnce()'); assert.equal(f.calls[1].url, '/api/state?since=1&prefsSince=1');
+  await f.reply(1, { unchanged: true, version: 1, prefsVersion: 1 });
+  assert.equal(f.renders, 1, 'an unchanged paired-version response causes no render');
+}
+
+// Content and preference revisions are independent, including reversed responses.
+{
+  const f = fixture({ independent: true, initialPrefsVersion: 2 });
+  f.adopt(80, '', 'Content eighty', 2);
+  f.change('B'); await f.tick(1200);
+  await f.reply(0, { ok: true, version: 81, prefsVersion: 3 });
+  assert.equal(f.run('REMOTE.version'), 80, 'a compact ack does not skip concurrent content');
+  assert.equal(f.run('prefsVersion'), 3, 'small own revision is not confused with global 81');
+  f.adopt(81, '', 'Content eighty-one', 2);
+  assert.equal(f.run('Store.s.pages[0].body'), 'Content eighty-one');
+  assert.deepEqual(f.values().starred, ['B'], 'newer content cannot rewind acknowledged preferences');
+  f.adopt(80, 'C', 'Stale content eighty', 4);
+  assert.equal(f.run('Store.s.pages[0].body'), 'Content eighty-one');
+  assert.deepEqual(f.values().starred, ['C'], 'older content response can contain newer preferences');
+  assert.equal(f.timers.size, 0);
+
+  f.run('pollOnce()');
+  f.adopt(82, 'C', 'Current content eighty-two', 4);
+  await f.reply(1, { version: 81, prefsVersion: 5, state: state('D', 'Old poll content') });
+  assert.equal(f.run('Store.s.pages[0].body'), 'Current content eighty-two');
+  assert.deepEqual(f.values().starred, ['D'], 'a poll superseded for content can still update preferences');
+}
+
+// Local debounced/in-flight edits survive a prefs-only update; an older ack
+// yields to newer saved values unless the user edited again during the request.
+for (const newerLocal of [false, true]) {
+  const f = fixture({ independent: true });
+  f.adopt(30, '', 'Unchanged content', 0);
+  f.change('B'); await f.tick(1200);
+  f.run(`adoptServer(${JSON.stringify({ unchanged: true, version: 30, prefsVersion: 2, prefs: prefs('C') })})`);
+  assert.deepEqual(f.values().starred, ['B']);
+  if (newerLocal) { f.change('D'); f.change('B'); }
+  await f.reply(0, { ok: true, version: 30, prefsVersion: 1, prefs: prefs('B') });
+  assert.deepEqual(f.values().starred, [newerLocal ? 'B' : 'C']);
+  if (newerLocal) {
+    await f.tick(1200); assert.deepEqual(f.calls[1].body.args.prefs.starred, ['B']);
+    await f.reply(1, { ok: true, version: 30, prefsVersion: 3 });
+  }
+  assert.equal(f.timers.size, 0);
+}
+
+// The new protocol can appear after a tab has already read a high legacy
+// revision. A late legacy response cannot overwrite separate preferences.
+{
+  const f = fixture();
+  f.adopt(150, 'Legacy', 'Legacy content');
+  f.adopt(150, 'Migrated', 'Current content', 0);
+  assert.equal(f.run('independentPrefsVersion'), true);
+  assert.equal(f.run('prefsVersion'), 0); assert.deepEqual(f.values().starred, ['Migrated']);
+  f.adopt(151, 'Stale legacy prefs', 'Newer content from older server');
+  assert.equal(f.run('Store.s.pages[0].body'), 'Newer content from older server');
+  assert.deepEqual(f.values().starred, ['Migrated']);
+  assert.equal(f.run('prefsVersion'), 0); assert.equal(f.timers.size, 0);
+}
+
+// Canonical acknowledgments reconcile the visible values with server limits
+// and Store defaults, instead of treating unsaved values as confirmed.
+{
+  const f = fixture({ independent: true });
+  const stars = Array.from({ length: 101 }, (_, index) => `page-${index}`);
+  f.run(`Store.prefs().starred = ${JSON.stringify(stars)}; Store.persist();`);
+  await f.tick(1200);
+  assert.equal(f.calls[0].body.args.prefs.starred.length, 101);
+  await f.reply(0, { ok: true, version: 1, prefsVersion: 1, prefs: { starred: stars.slice(0, 100) } });
+  assert.deepEqual(f.values().starred, stars.slice(0, 100));
+  assert.equal(f.values().editorMode, 'split', 'canonical values receive the normal local defaults');
+  assert.equal(f.run('savedPrefs'), f.run('prefsFingerprint(Store.prefs())'));
+  assert.equal(f.renders, 1); assert.equal(f.timers.size, 0, 'sanitized values do not create a save loop');
+  f.run('pollOnce()'); assert.equal(f.calls[1].url, '/api/state?since=1&prefsSince=1');
+  await f.reply(1, { unchanged: true, version: 1, prefsVersion: 1 });
+  assert.equal(f.renders, 1);
+}
+
+// A sanitized reply acknowledges its own values without replacing edits made
+// while it was in flight, including reselecting the original sent value.
+for (const returnToSent of [false, true]) {
+  const f = fixture({ independent: true });
+  f.change('B'); await f.tick(1200);
+  f.change('D');
+  if (returnToSent) f.change('B');
+  await f.reply(0, { ok: true, version: 1, prefsVersion: 1, prefs: prefs('Canonical B') });
+  const expected = returnToSent ? 'B' : 'D';
+  assert.deepEqual(f.values().starred, [expected]);
+  assert.deepEqual(JSON.parse(f.run('savedPrefs')).starred, ['Canonical B']);
+  await f.tick(1200);
+  assert.deepEqual(f.calls[1].body.args.prefs.starred, [expected]);
+  await f.reply(1, { ok: true, version: 1, prefsVersion: 2, prefs: prefs(expected) });
+  assert.equal(f.timers.size, 0); assert.equal(f.run('savedPrefs'), f.run('prefsFingerprint(Store.prefs())'));
+}
+
+// A paired-version prefs-only response never invents possession of content
+// that was not included, even if the server reports a newer global revision.
+{
+  const f = fixture({ independent: true });
+  f.run(`adoptServer(${JSON.stringify({ version: 5, unchanged: true, prefsVersion: 1, prefs: prefs('B') })})`);
+  assert.equal(f.run('REMOTE.version'), 1);
+  assert.deepEqual(f.values().starred, ['B']);
+}
+
+console.log('PASS: hidden/idle/resumed polling, backoff, independent content/preferences versions, legacy fallback, serialization, adoption races and durable acknowledgments.');

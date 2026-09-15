@@ -14,6 +14,17 @@ Internal knowledge base for Cornell Physical Intelligence (CUPI), a Cornell Univ
 
 No framework. The client is one self-contained HTML file (`scripts/build.mjs` assembles it from `src/client/`). The backend is one Vercel serverless function (`api/index.js`): OAuth, HMAC-signed session cookies, a versioned JSONB state document in Postgres with optimistic-concurrency writes, and attachments as `bytea` rows. Clients apply mutations optimistically and the server re-validates every one against the member's role.
 
+### Storage and synchronization
+
+- `wiki_state` holds shared content and revision history. A version-matched compressed snapshot reduces database transfer; canonical JSONB remains available for cache repair.
+- `wiki_user_prefs` holds each member's stars, recent pages, watches, and display settings with a separate version. Saving preferences neither rewrites shared content nor forces other members to download it. Reads and writes return only the signed-in member's preferences; writes check active membership in the same database statement.
+- Existing preferences remain in the legacy state as a fallback until that member first saves. The first save copies and merges them into the new table. Include **both tables** in backups. A backend rollback must retain the new table and its read overlay, or newer personal settings will temporarily be hidden.
+- `/api/state?since=<content version>&prefsSince=<personal version>` checks both versions in one small query. A preferences-only change returns preferences without pages or attachment listings. Older open tabs can still save; reload them to receive cross-device preference changes without waiting for a content change.
+- Hidden tabs and tabs idle for five minutes pause polling. Preference saves are debounced and duplicate values are skipped. Server acknowledgments include the canonical saved values so validation limits cannot leave the client displaying unsaved settings.
+- Multipart page uploads retain their parts until the completed file is verified. A stable file ID makes finish retries reuse the same file after a lost response; cleanup failures do not invalidate a successful upload.
+
+The public Interest form uses a separate private Blob receipt journal before database processing. Its recovery path and browser draft protections are independent of wiki preference synchronization.
+
 ## Deploy (≈10 minutes, one time)
 
 1. **Import to Vercel** — vercel.com → *Add New → Project* → import `Cornell-Physical-Intelligence/wiki`. The defaults work (`vercel.json` carries the build command).
