@@ -19,5 +19,14 @@ jobs:
           node-version: 22
       - run: npm run check
       - run: npm run test:search
+      - name: Verify intake recovery, transfer limits, and keyboard behavior
+        run: |
+          npm run test:interest
+          node scripts/test-intake-journal.mjs
+          node scripts/test-db-transfer.mjs
+          node scripts/test-snapshot.mjs
+          node scripts/test-remote-sync.mjs
+          node scripts/test-overlay-keyboard.mjs
+          node scripts/test-interest-archive-load.mjs
       - name: Verify the committed preview build is current
         run: git diff --exit-code -- docs
