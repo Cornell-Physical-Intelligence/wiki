@@ -77,8 +77,8 @@ function viewEditor() {
       <button class="btn btn--ghost" data-action="ed-cancel">Close</button>
       <button class="btn btn--primary" data-action="ed-save">Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
     )}
-    <div class="editor__toolbar">
-      <div class="editor__tools" role="toolbar" aria-label="Formatting">
+    <div class="editor__toolbar" role="toolbar" aria-label="Formatting and page settings">
+      <div class="editor__tools">
         ${tools.map((t) => t === null ? '<span class="sep"></span>' :
           `<button class="icon-btn" data-action="ed-tool" data-tool="${t[0]}" title="${t[2]}" aria-label="${t[2]}">${t[1]}</button>`).join('')}
       </div>
@@ -733,7 +733,7 @@ function viewAdmin() {
   const invited = users.filter((u) => u.status === 'invited');
   const audit = Store.activity().filter((a) => ['invite', 'join', 'role', 'remove', 'rename'].includes(a.kind)).slice(0, 14);
   return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
-  <div class="content"><div class="page-wrap"><div class="page-col">
+  <div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">
     <div class="plain-head"><span class="eyebrow">Admin</span><h1>Members &amp; access</h1>
     <p>Everyone below can sign in with their <b>cornell.edu</b> Google account. Nobody else can.</p></div>
     <div class="admin-grid">
@@ -761,7 +761,7 @@ function viewAdmin() {
       </section>` : ''}
       <section class="admin-block">
         <div class="admin-block__head"><h2>Members</h2><span class="count">${active.length}</span></div>
-        <div class="roster"><div class="roster__scroll"><table>
+        <div class="roster roster--members"><div class="roster__scroll"><table>
           <thead><tr><th>Member</th><th>Subteam</th><th>Role</th><th>Joined</th><th></th></tr></thead><tbody>
           ${active.map((u) => `<tr>
             <td><span class="who"><span class="avatar">${Store.initials(u.email)}</span><span><b>${MD.esc(u.name)}</b><span class="mail">${u.email}</span></span></span></td>
@@ -1161,6 +1161,7 @@ function render() {
   cadCleanups.forEach((fn) => fn());
   cadCleanups = [];
   window.__closeMenu?.();
+  captureModalFocus();
   document.querySelectorAll('body > .modal-veil').forEach((v) => v.remove());
   killPreview(); // a hover preview must not outlive the page it points into
   const app = $('#app');
@@ -1262,7 +1263,7 @@ function render() {
       .catch(() => { /* the archive shelf is a courtesy */ });
   }
   // Opening one archive pulls its rows once.
-  if (typeof REMOTE !== 'undefined' && UI.interestArchiveView?.loading && UI.interestArchiveView.id) {
+  if (typeof REMOTE !== 'undefined' && UI.interestArchiveView?.loading === true && UI.interestArchiveView.id) {
     const id = UI.interestArchiveView.id;
     api(`/interest/archives/${id}`)
       .then((out) => {
@@ -1289,7 +1290,7 @@ function render() {
     if (ta && !UI.editor._focused) { (UI.editor.isNew && !UI.editor.title ? $('[data-ed="title"]') : ta)?.focus(); UI.editor._focused = true; }
   }
   if (UI.palette) { const inp = $('.palette input'); inp?.focus(); inp?.setSelectionRange(inp.value.length, inp.value.length); }
-  if (UI.modal) $('.modal [data-m], .modal .btn--primary')?.focus?.();
+  if (UI.modal) mountModalFocus();
   if (UI.modal?.kind === 'bug') mountBugDrop();
   if (r.name === 'page' && r.params.anchor) {
     const el = $('#' + CSS.escape(r.params.anchor));

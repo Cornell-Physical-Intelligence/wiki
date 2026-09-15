@@ -305,11 +305,13 @@ function viewSidebar() {
     <div class="sidebar__foot">
       <button class="sidebar__user" data-action="user-menu" aria-label="Account menu">
         <span class="avatar">${Store.initials(me.email)}</span>
-        <span style="min-width:0"><span class="sidebar__user-name">${MD.esc(me.name)}</span><br><span class="sidebar__user-mail">${me.email}</span></span>
+        <span class="sidebar__user-text"><span class="sidebar__user-name" title="${MD.esc(me.name)}">${MD.esc(me.name)}</span><span class="sidebar__user-mail" title="${MD.esc(me.email)}">${MD.esc(me.email)}</span></span>
       </button>
-      ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-      <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
-      <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
+      <div class="sidebar__utilities">
+        ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
+        <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
+        <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
+      </div>
     </div>
   </aside>`;
 }

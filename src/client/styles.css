@@ -448,13 +448,17 @@ label > .dd { width: 100%; }
 
 .sidebar__foot {
   border-top: 1px solid var(--hairline);
-  padding: 10px 12px;
-  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  display: flex; flex-direction: column; gap: 4px; flex: none;
 }
-.sidebar__user { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; border-radius: var(--radius); padding: 4px 6px; margin: -4px -6px; text-align: left; }
+.sidebar__user { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; min-height: 48px; border-radius: var(--radius); padding: 6px; text-align: left; }
 .sidebar__user:hover { background: var(--hover); }
-.sidebar__user-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar__user-mail { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar__user-text { flex: 1; min-width: 0; }
+.sidebar__user-name { display: block; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar__user-mail { display: block; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar__utilities { display: flex; justify-content: flex-end; gap: 8px; width: 100%; }
+.sidebar__utilities .icon-btn { width: 40px; height: 40px; }
+.sidebar__utilities .icon-btn::after { inset: 0; }
 
 /* ---------------------------------------------------------------------------
    Main column + glass topbar
@@ -485,6 +489,7 @@ label > .dd { width: 100%; }
 .content { flex: 1; overflow-y: auto; padding-top: 52px; scroll-padding-top: 68px; }
 
 .page-wrap { display: grid; grid-template-columns: minmax(0, 760px) 200px; gap: 40px; justify-content: center; padding: 0 clamp(20px, 5vw, 56px); }
+.page-wrap:not(.page-wrap--wide):not(:has(> .toc)) { grid-template-columns: minmax(0, 760px); }
 .page-col { width: min(760px, 100%); min-width: 0; padding: clamp(24px, 4vh, 44px) 0 96px; }
 
 .toc {
@@ -654,19 +659,17 @@ label > .dd { width: 100%; }
 .editor { display: flex; flex-direction: column; height: 100%; padding-top: 52px; }
 
 .editor__toolbar {
-  display: flex; align-items: center;
-  padding: 6px clamp(16px, 4vw, 40px);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 2px;
+  padding: 6px clamp(16px, 3vw, 24px);
   border-bottom: 1px solid var(--hairline);
 }
 .editor__tools {
-  display: flex; align-items: center; gap: 1px; flex-wrap: nowrap;
-  flex: 1; min-width: 0;
-  overflow-x: auto; scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  display: contents;
 }
-.editor__toolend { display: flex; align-items: center; gap: 10px; flex: none; padding-left: 10px; }
-.editor__tools .icon-btn { width: 28px; height: 28px; border-radius: 5px; }
+.editor__toolend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.editor__toolbar .icon-btn { width: 40px; height: 40px; border-radius: 5px; }
+.editor__toolbar .icon-btn::after { inset: 0; }
+.editor__toolend .dd { height: 40px; }
 .editor__tools .icon-btn svg { width: 16px; height: 16px; }
 .editor__count {
   font-size: 12px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums;
@@ -981,6 +984,17 @@ a.rev:hover { background: var(--hover); }
 .roster .mono { font-family: var(--font-mono); font-size: 12px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .roster .actions { display: flex; gap: 4px; justify-content: flex-end; opacity: 0; transition-property: opacity; transition-duration: 0.15s; }
 .roster tr:hover .actions, .roster tr:focus-within .actions { opacity: 1; }
+.roster--members table { table-layout: fixed; min-width: 0; }
+.roster--members th:nth-child(1) { width: 32%; }
+.roster--members th:nth-child(2) { width: 17%; }
+.roster--members th:nth-child(3) { width: 13%; }
+.roster--members th:nth-child(4) { width: 16%; }
+.roster--members th:nth-child(5) { width: 22%; }
+.roster--members th, .roster--members td { padding: 10px; overflow-wrap: anywhere; }
+.roster--members .who > span:last-child { min-width: 0; }
+.roster--members .mail, .roster--members .mono { white-space: normal; overflow-wrap: anywhere; }
+.roster--members .actions { flex-wrap: wrap; opacity: 1; }
+.roster--members .actions .btn { min-height: 40px; height: auto; max-width: 100%; white-space: normal; }
 
 .invite-add { display: flex; gap: 8px; }
 .invite-add .text-input { flex: 1; }
@@ -1060,7 +1074,7 @@ a.feed__row:hover { background: var(--hover); }
 }
 .modal--wide { width: min(600px, 100%); }
 .modal__head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 0; }
-.modal__head h3 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+.modal__head h3 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .modal__body { padding: 14px 20px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .modal__body > * { flex: none; }
 .modal__foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--hairline); background: var(--pop); }
@@ -1095,13 +1109,15 @@ a.feed__row:hover { background: var(--hover); }
 @media (max-width: 560px) { .tpl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .menu {
-  position: fixed; z-index: 95; min-width: 200px;
+  position: fixed; z-index: 95; min-width: min(200px, calc(100vw - 20px));
+  max-width: calc(100vw - 20px); max-height: calc(100dvh - 20px); overflow-y: auto;
   background: var(--pop); border: 1px solid var(--hairline); border-radius: var(--radius-bar);
   box-shadow: var(--pop-shadow);
   padding: 5px; display: flex; flex-direction: column;
 }
 .menu button {
   display: flex; align-items: center; gap: 10px;
+  min-height: 40px; overflow-wrap: anywhere;
   padding: 8px 10px; border-radius: var(--radius);
   font-size: 13.5px; text-align: left; color: var(--fg); width: 100%;
 }

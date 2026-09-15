@@ -168,13 +168,72 @@ async function submitBug() {
   }
 }
 
+let modalFocusState = null;
+
+// Renders replace the shell, so keep enough identity to find a dialog's
+// trigger (or active field) again without retaining a detached focus target.
+function focusReference(element) {
+  if (!element || element === document.body) return null;
+  return { element, id: element.id, tag: element.tagName, data: { ...element.dataset },
+    name: element.getAttribute('name'), label: element.getAttribute('aria-label'),
+    text: element.textContent, className: element.className };
+}
+
+function resolveFocus(reference, scope = document) {
+  if (!reference) return null;
+  if (reference.element.isConnected && scope.contains(reference.element)) return reference.element;
+  return [...scope.querySelectorAll('button, a[href], input, textarea, summary, [tabindex]')].find((element) => {
+    if (element.tagName !== reference.tag) return false;
+    if (reference.id) return element.id === reference.id;
+    const entries = Object.entries(reference.data);
+    if (entries.length) return entries.every(([key, value]) => element.dataset[key] === value);
+    if (reference.name) return element.getAttribute('name') === reference.name;
+    if (reference.label) return element.getAttribute('aria-label') === reference.label;
+    return element.className === reference.className && element.textContent === reference.text;
+  }) || null;
+}
+
+function modalFocusables(dialog) {
+  return [...dialog.querySelectorAll('button, input, a[href], textarea, summary, [tabindex], [contenteditable="true"]')]
+    .filter((element) => !element.disabled && element.tabIndex >= 0 && element.offsetParent !== null);
+}
+
+function captureModalFocus() {
+  if (!UI.modal) { modalFocusState = null; return; }
+  const active = document.activeElement;
+  if (modalFocusState?.model !== UI.modal) {
+    const opener = active?.closest?.('.modal') ? modalFocusState?.opener : focusReference(active);
+    modalFocusState = { model: UI.modal, opener, current: null };
+  } else if (active?.closest?.('.modal')) {
+    modalFocusState.current = focusReference(active);
+    modalFocusState.selection = typeof active.selectionStart === 'number'
+      ? [active.selectionStart, active.selectionEnd] : null;
+  }
+}
+
+function mountModalFocus() {
+  const dialog = $('.modal');
+  if (!UI.modal || !dialog) return;
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('tabindex', '-1');
+  const focusables = modalFocusables(dialog);
+  const prior = resolveFocus(modalFocusState?.current, dialog);
+  const target = (focusables.includes(prior) ? prior : null)
+    || focusables.find((element) => element.matches('[data-m], .btn--primary'))
+    || focusables[0] || dialog;
+  target.focus({ preventScroll: true });
+  if (target === prior && modalFocusState?.selection) target.setSelectionRange?.(...modalFocusState.selection);
+}
+
 function closeModal(after) {
+  const opener = modalFocusState?.opener;
   const pendingId = UI.modal?.kind === 'interest-pending' ? UI.modal.id : null;
-  const restorePendingFocus = () => {
+  const restoreFocus = () => {
+    if (!after && !UI.editor && !UI.modal) resolveFocus(opener)?.focus({ preventScroll: true });
     if (pendingId) $$('[data-action="interest-pending-open"]').find((el) => el.dataset.id === pendingId)?.focus();
   };
   const veil = document.querySelector('.modal-veil');
-  if (!veil) { UI.modal = null; after ? after() : render(); restorePendingFocus(); return; }
+  if (!veil) { UI.modal = null; after ? after() : render(); restoreFocus(); return; }
   if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
   setTimeout(() => {
@@ -184,7 +243,7 @@ function closeModal(after) {
     // wipe the native undo stack the editor is built around.
     else if (UI.editor) { veil.remove(); $('[data-ed="body"]')?.focus(); }
     else render();
-    restorePendingFocus();
+    restoreFocus();
   }, 120);
 }
 
@@ -192,9 +251,10 @@ function closeModal(after) {
 function showModal(m) {
   UI.modal = m;
   if (UI.editor && $('#app .editor')) {
+    captureModalFocus();
     document.querySelector('.modal-veil')?.remove();
     document.body.insertAdjacentHTML('beforeend', viewModal());
-    $('.modal [data-m], .modal .btn--primary')?.focus?.();
+    mountModalFocus();
   } else render();
 }
 
@@ -215,29 +275,42 @@ function mountMenu(host, anchor) {
   document.body.appendChild(host);
   const r = anchor.getBoundingClientRect();
   const mw = host.offsetWidth, mh = host.offsetHeight;
-  host.style.left = Math.min(r.left, innerWidth - mw - 10) + 'px';
-  host.style.top = (r.bottom + mh + 10 > innerHeight ? r.top - mh - 6 : r.bottom + 6) + 'px';
-  const close = () => {
+  host.style.left = Math.max(10, Math.min(r.left, innerWidth - mw - 10)) + 'px';
+  const top = r.bottom + mh + 10 > innerHeight ? r.top - mh - 6 : r.bottom + 6;
+  host.style.top = Math.max(10, Math.min(top, innerHeight - mh - 10)) + 'px';
+  anchor.setAttribute('aria-expanded', 'true');
+  let closed = false;
+  const close = (restoreFocus = true) => {
+    if (closed) return;
+    closed = true;
     host.remove(); UI.menu = null;
     document.removeEventListener('pointerdown', onAway, true);
+    document.removeEventListener('focusin', onFocusAway);
+    anchor.setAttribute('aria-expanded', 'false');
     window.__closeMenu = null;
-    if (anchor.isConnected) anchor.focus?.();
+    if (restoreFocus && anchor.isConnected) anchor.focus?.();
   };
   window.__closeMenu = close; // render() and Esc both close through this
   const onAway = (ev) => { if (!host.contains(ev.target)) close(); };
+  const onFocusAway = (ev) => { if (!host.contains(ev.target) && ev.target !== anchor) close(false); };
   document.addEventListener('pointerdown', onAway, true);
+  document.addEventListener('focusin', onFocusAway);
   // Menus are keyboard-first like everything else: focus lands inside,
   // arrows move it, Escape (global) hands it back to the trigger.
   host.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close(); return; }
+    if (ev.key === 'Tab') { close(); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) return;
     ev.preventDefault();
-    const btns = [...host.querySelectorAll('button')];
+    ev.stopPropagation();
+    const btns = [...host.querySelectorAll('button')].filter((button) => !button.disabled);
     const cur = btns.indexOf(document.activeElement);
     const next = ev.key === 'Home' ? 0 : ev.key === 'End' ? btns.length - 1 :
       ((cur < 0 ? 0 : cur) + (ev.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length;
     btns[next]?.focus();
+    btns[next]?.scrollIntoView({ block: 'nearest' });
   });
-  host.querySelector('button')?.focus();
+  host.querySelector('button:not(:disabled)')?.focus();
   return close;
 }
 
@@ -248,8 +321,9 @@ function openMenu(items, anchor) {
   host.className = 'menu';
   host.setAttribute('role', 'menu');
   host.innerHTML = items.map((it, i) => it === '-' ? '<hr>' :
-    `<button role="menuitem" data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
+    `<button type="button" role="${typeof it.selected === 'boolean' ? 'menuitemradio' : 'menuitem'}" ${typeof it.selected === 'boolean' ? `aria-checked="${it.selected}"` : ''} data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
   const close = mountMenu(host, anchor);
+  host.querySelector('[aria-checked="true"]')?.focus();
   host.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-menu-i]');
     if (!b) return;
@@ -427,6 +501,7 @@ document.addEventListener('click', async (ev) => {
       const host = el;
       const options = JSON.parse(host.dataset.opts);
       openMenu(options.map((o) => ({
+        selected: o.value === host.dataset.value,
         icon: o.value === host.dataset.value ? I.check : '<span style="width:14px;flex:none"></span>',
         label: o.label,
         run: () => {
@@ -1182,14 +1257,19 @@ document.addEventListener('keydown', (ev) => {
   const mod = ev.metaKey || ev.ctrlKey;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;
 
+  if (UI.menu) {
+    if (ev.key === 'Escape') { ev.preventDefault(); window.__closeMenu?.(); }
+    return; // A popup owns keys until selection, Tab, or dismissal.
+  }
+
   // Focus trap: Tab stays inside an open modal (Linear/Notion behavior).
   if (ev.key === 'Tab' && UI.modal && $('.modal')) {
-    const focusables = $$('.modal button, .modal input, .modal a[href], .modal textarea').filter((el) => !el.disabled && el.offsetParent !== null);
+    const focusables = modalFocusables($('.modal'));
     if (focusables.length) {
       const first = focusables[0], last = focusables[focusables.length - 1];
-      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      if (ev.shiftKey && (document.activeElement === first || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); last.focus(); }
       else if (!ev.shiftKey && (document.activeElement === last || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); first.focus(); }
-    }
+    } else { ev.preventDefault(); $('.modal').focus(); }
     return;
   }
 
@@ -1226,7 +1306,7 @@ document.addEventListener('keydown', (ev) => {
 
   if (ev.key === 'Escape') {
     if (UI.menu) { ev.preventDefault(); window.__closeMenu?.(); return; }
-    if (UI.modal) { closeModal(); return; }
+    if (UI.modal) { ev.preventDefault(); closeModal(); return; }
     if ($('.lightbox')) { closeLightbox(); return; }
     const ac = $('.ed-autocomplete');
     if (ac && !ac.hidden) { ac.hidden = true; return; }
@@ -1242,6 +1322,8 @@ document.addEventListener('keydown', (ev) => {
     $('.modal [data-action="save-commit"]')?.click();
     return;
   }
+
+  if (UI.modal) return; // Editor shortcuts must not steal focus from a dialog.
 
   if (UI.editor) {
     const inBody = ev.target.matches('[data-ed="body"]');

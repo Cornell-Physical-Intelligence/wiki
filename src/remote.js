@@ -14,7 +14,13 @@ let prefsVersion = 0;
 let prefsQueued = false;
 let prefsFailures = 0;
 let prefsRetryAfter = 0;
+let prefsEditVersion = 0;
+let observedPrefs = null;
 const prefsFingerprint = (prefs) => JSON.stringify(Object.fromEntries(Object.keys(prefs).sort().map((key) => [key, prefs[key]])));
+function noteLocalPrefs(fingerprint) {
+  if (observedPrefs !== null && observedPrefs !== fingerprint) prefsEditVersion++;
+  observedPrefs = fingerprint;
+}
 
 async function api(path, opts) {
   const r = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts });
@@ -40,6 +46,7 @@ function adoptServer(payload) {
       const incomingPrefs = prefsFingerprint(Store.prefs());
       if (incomingVersion >= prefsVersion) { savedPrefs = incomingPrefs; prefsVersion = incomingVersion; }
       if (keepPrefs) Store.s.prefs[REMOTE.email] = JSON.parse(localPrefs);
+      observedPrefs = prefsFingerprint(Store.prefs());
       if (!prefsInFlight && !prefsTimer && prefsFingerprint(Store.prefs()) !== savedPrefs) Store.persist();
     }
   }
@@ -82,6 +89,8 @@ async function flushPrefs() {
   if (!REMOTE.email) return;
   if (prefsInFlight) { prefsQueued = true; return; }
   const fingerprint = prefsFingerprint(Store.prefs());
+  noteLocalPrefs(fingerprint);
+  const editVersion = prefsEditVersion;
   if (fingerprint === savedPrefs) { prefsQueued = false; return; }
   prefsInFlight = true;
   prefsQueued = false;
@@ -89,14 +98,15 @@ async function flushPrefs() {
   let succeeded = false;
   try {
     const out = await api('/mutate', { method: 'POST', body: JSON.stringify({ op: 'setPrefs', args: { prefs: JSON.parse(fingerprint) } }) });
-    if ((!out.ok && !out.state) || !Number.isFinite(out.version)) throw new Error('Preferences were not confirmed');
+    if ((out.ok !== true && !out.state) || !Number.isFinite(out.version)) throw new Error('Preferences were not confirmed');
     if (out.version >= prefsVersion) {
       savedPrefs = fingerprint;
       prefsVersion = out.version;
-    } else if (prefsFingerprint(Store.prefs()) === fingerprint) {
+    } else if (prefsEditVersion === editVersion && prefsFingerprint(Store.prefs()) === fingerprint) {
       // A newer complete snapshot already includes a subsequent preferences
       // write. Preserve any edits made after this request, otherwise use it.
       Store.s.prefs[REMOTE.email] = JSON.parse(savedPrefs);
+      observedPrefs = savedPrefs;
       render();
     }
     succeeded = true;
@@ -118,9 +128,11 @@ async function flushPrefs() {
 }
 Store.persist = function persistRemote() {
   if (!REMOTE.email) return;
+  const fingerprint = prefsFingerprint(Store.prefs());
+  noteLocalPrefs(fingerprint);
   clearTimeout(prefsTimer);
   prefsTimer = null;
-  if (!prefsInFlight && prefsFingerprint(Store.prefs()) === savedPrefs) { prefsQueued = false; return; }
+  if (!prefsInFlight && fingerprint === savedPrefs) { prefsQueued = false; return; }
   prefsQueued = true;
   prefsTimer = setTimeout(flushPrefs, Math.max(1200, prefsRetryAfter - Date.now()));
 };

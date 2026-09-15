@@ -158,6 +158,18 @@ for (const newerLocal of [false, true]) {
   } else assert.equal(f.timers.size, 0);
 }
 
+// Re-selecting the original value is still a newer user edit, even when its
+// fingerprint happens to equal the request that is finishing.
+{
+  const f = fixture();
+  f.change('B'); await f.tick(1200);
+  f.adopt(5, 'C'); f.change('D'); f.change('B');
+  await f.reply(0, { ok: true, version: 4 });
+  assert.deepEqual(f.values().starred, ['B']);
+  await f.tick(1200); assert.deepEqual(f.calls[1].body.args.prefs.starred, ['B']);
+  await f.reply(1, { ok: true, version: 6 });
+}
+
 // A persist requested during a failing request is retained and retried with spacing.
 {
   const f = fixture();
