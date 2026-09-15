@@ -563,6 +563,72 @@ function interestFootText(shown) {
     : `${shown} of ${total} shown`;
 }
 
+function interestPendingReview() {
+  return Store.isAdmin() && Array.isArray(UI.interest?.pendingReview) ? UI.interest.pendingReview : [];
+}
+
+function interestPendingReason(reason) {
+  if (reason === 'duplicate') return 'Existing submission needs review';
+  if (reason === 'capacity') return 'Live list is full';
+  if (reason === 'replay_failed') return 'Could not add to the list yet';
+  return 'Waiting to join the list';
+}
+
+function interestPendingHtml() {
+  if (!Store.isAdmin()) return '';
+  const pending = interestPendingReview();
+  const unavailable = UI.interest?.queueUnavailable
+    ? `<p class="sheet__note" role="status">Could not check for saved submissions waiting to join the list. <button class="linklike" data-action="interest-refresh">Retry</button></p>`
+    : '';
+  if (!pending.length) return unavailable;
+  return `<section aria-labelledby="interest-pending-heading">
+    <h2 class="sheet__heading" id="interest-pending-heading">Saved submissions awaiting review <span class="count" style="font-variant-numeric:tabular-nums">${pending.length}</span></h2>
+    <p class="sheet__note">These responses are saved separately and are not included in the live list or its CSV.</p>
+    ${unavailable}
+    <div class="sheet sheet--list">
+      ${pending.map((r) => `<div class="sheet__archive" style="height:auto;min-height:60px;flex-wrap:wrap;padding-top:4px;padding-bottom:4px">
+        <button class="interest-person" style="flex:1 1 180px" data-action="interest-pending-open" data-id="${MD.esc(r.id)}" aria-label="Review saved submission from ${MD.esc(r.name)}">
+          <b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span>
+        </button>
+        <span class="sheet__archivemeta" style="flex:1 1 180px">${interestPendingReason(r.reason)}</span>
+        <span class="interest-when" title="${MD.esc(new Date(r.receivedAt).toLocaleString())}">${interestDate(r.receivedAt)}</span>
+      </div>`).join('')}
+    </div>
+  </section>`;
+}
+
+function interestPendingModalHtml(id) {
+  const r = interestPendingReview().find((row) => row.id === id);
+  if (!r) return '';
+  // Only link the authenticated attachment route, never an arbitrary URL
+  // carried in a submission's payload.
+  const fileUrl = `/api/interest/queue/${encodeURIComponent(r.id)}/file`;
+  return `<div class="modal modal--wide" role="dialog" aria-label="Saved submission">
+    <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    <div class="modal__body">
+      <p class="sheet__note">${r.reason === 'duplicate'
+        ? 'This response is saved, but the same email already has a submission. The existing response has not been changed.'
+        : r.reason === 'capacity'
+          ? 'The live list is full. Review this application separately.'
+          : 'This response is saved separately and has not yet joined the live list. Refresh the list to retry syncing.'}</p>
+      <dl class="interest-detail">
+        <dt>Status</dt><dd>${interestPendingReason(r.reason)}</dd>
+        <dt>Email</dt><dd>${MD.esc(r.email)}</dd>
+        <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Not sure yet')}</dd>
+        <dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>
+        <dt>Received</dt><dd>${MD.esc(new Date(r.receivedAt).toLocaleString())}</dd>
+        <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
+        ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl
+          ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>`
+          : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
+      </dl>
+      <h4 class="interest-subhead">Coolest project they've done</h4>
+      <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
+    </div>
+    <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Close</button></div>
+  </div>`;
+}
+
 function viewInterest() {
   const shell = (inner) => topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
     `<div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">${inner}</div></div></div>`;
@@ -605,12 +671,14 @@ function viewInterest() {
     <p>People who filled the form on the site's Apply page. Open a person to read their answers, or select people to copy their emails.</p></div>`;
   if (st.loading) return shell(head + '<p class="sheet__note">Loading…</p>');
   if (st.error) return shell(head + `<p class="sheet__note">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
-  if (!rows.length) return shell(head + '<p class="sheet__note">No submissions yet. The Apply page feeds this list; the CSV reflects the moment you download it.</p>' + archivesBlock);
+  const pendingBlock = interestPendingHtml();
+  if (!rows.length) return shell(head + pendingBlock + `<p class="sheet__note">${interestPendingReview().length ? 'No submissions in the live list yet.' : 'No submissions in the live list.'} <button class="linklike" data-action="interest-refresh">Refresh</button></p><button class="btn btn--sm" data-action="interest-storage-check">Check storage</button>` + archivesBlock);
 
   const actions = `<button class="btn btn--sm" data-action="interest-refresh">Refresh</button>
+    <button class="btn btn--sm" data-action="interest-storage-check">Check storage</button>
     <a class="btn btn--sm btn--icon" href="/api/interest.csv" download>Download CSV${INTEREST_ICONS.download}</a>
     <button class="btn btn--sm" data-action="interest-archive">Archive list…</button>`;
-  return shell(head + interestSheet(interestVisible(), { actions }) + archivesBlock);
+  return shell(head + pendingBlock + interestSheet(interestVisible(), { actions }) + archivesBlock);
 }
 
 // One bounded card: toolbar, table, and count all share a single inner rail,
@@ -912,6 +980,8 @@ function viewModal() {
       </div>
       <div class="modal__foot"><button class="btn btn--primary" data-action="modal-close">Done</button></div>
     </div>`;
+  } else if (m.kind === 'interest-pending') {
+    inner = interestPendingModalHtml(m.id);
   } else if (m.kind === 'interest-row') {
     // The row's full text and its file. Nothing is truncated here — this is
     // where the sheet's one-line cells send you.
@@ -1175,7 +1245,14 @@ function render() {
   if (typeof REMOTE !== 'undefined' && r.name === 'interest' && UI.interest === undefined && Store.isAdmin()) {
     UI.interest = { loading: true };
     api('/interest')
-      .then((out) => { UI.interest = { rows: out.rows || [] }; render(); })
+      .then((out) => {
+        UI.interest = {
+          rows: out.rows || [],
+          pendingReview: Array.isArray(out.pendingReview) ? out.pendingReview : [],
+          queueUnavailable: Boolean(out.queueUnavailable),
+        };
+        render();
+      })
       .catch((e) => { UI.interest = { error: e.message || 'load failed' }; render(); });
   }
   if (typeof REMOTE !== 'undefined' && r.name === 'interest' && UI.interestArchives === undefined && Store.isAdmin()) {

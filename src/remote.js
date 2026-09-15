@@ -8,6 +8,13 @@
 'use strict';
 
 const REMOTE = { email: null, name: null, role: null, version: 0, pending: 0 };
+let savedPrefs = null;
+let prefsInFlight = false;
+let prefsVersion = 0;
+let prefsQueued = false;
+let prefsFailures = 0;
+let prefsRetryAfter = 0;
+const prefsFingerprint = (prefs) => JSON.stringify(Object.fromEntries(Object.keys(prefs).sort().map((key) => [key, prefs[key]])));
 
 async function api(path, opts) {
   const r = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts });
@@ -17,11 +24,24 @@ async function api(path, opts) {
 }
 
 function adoptServer(payload) {
+  // Responses from overlapping operations can arrive out of order.
+  if (payload.version !== undefined && payload.version < REMOTE.version) return;
+  const localPrefs = REMOTE.email && savedPrefs !== null ? prefsFingerprint(Store.prefs()) : null;
+  const incomingVersion = payload.version ?? REMOTE.version;
+  const keepPrefs = localPrefs !== null && (prefsInFlight || localPrefs !== savedPrefs || incomingVersion < prefsVersion);
   if (payload.version !== undefined) REMOTE.version = payload.version;
   if (payload.state) {
     Store.s = payload.state;
     if (!Store.s.prefs) Store.s.prefs = {};
     Store.reindex();
+    // Remember the received preferences so unrelated optimistic operations do
+    // not send an identical setPrefs request after every content mutation.
+    if (REMOTE.email) {
+      const incomingPrefs = prefsFingerprint(Store.prefs());
+      if (incomingVersion >= prefsVersion) { savedPrefs = incomingPrefs; prefsVersion = incomingVersion; }
+      if (keepPrefs) Store.s.prefs[REMOTE.email] = JSON.parse(localPrefs);
+      if (!prefsInFlight && !prefsTimer && prefsFingerprint(Store.prefs()) !== savedPrefs) Store.persist();
+    }
   }
   if (payload.files) {
     for (const f of payload.files) Files.mem.set(f.id, { ...f, url: '/api/att/' + f.id });
@@ -57,13 +77,52 @@ Store.reset = () => toast('Reset is a preview-only tool. The live wiki keeps eve
 
 // Prefs changes ride a debounced setPrefs; real ops go through sendOp.
 let prefsTimer = null;
+async function flushPrefs() {
+  prefsTimer = null;
+  if (!REMOTE.email) return;
+  if (prefsInFlight) { prefsQueued = true; return; }
+  const fingerprint = prefsFingerprint(Store.prefs());
+  if (fingerprint === savedPrefs) { prefsQueued = false; return; }
+  prefsInFlight = true;
+  prefsQueued = false;
+  REMOTE.pending++;
+  let succeeded = false;
+  try {
+    const out = await api('/mutate', { method: 'POST', body: JSON.stringify({ op: 'setPrefs', args: { prefs: JSON.parse(fingerprint) } }) });
+    if ((!out.ok && !out.state) || !Number.isFinite(out.version)) throw new Error('Preferences were not confirmed');
+    if (out.version >= prefsVersion) {
+      savedPrefs = fingerprint;
+      prefsVersion = out.version;
+    } else if (prefsFingerprint(Store.prefs()) === fingerprint) {
+      // A newer complete snapshot already includes a subsequent preferences
+      // write. Preserve any edits made after this request, otherwise use it.
+      Store.s.prefs[REMOTE.email] = JSON.parse(savedPrefs);
+      render();
+    }
+    succeeded = true;
+    prefsFailures = 0;
+    prefsRetryAfter = 0;
+    // Do not adopt the compact response's version: a concurrent content change
+    // may be included in it, and the next poll must still fetch that content.
+  } catch (e) {
+    // Keep local values, and space retries requested by later edits or syncs.
+    prefsFailures++;
+    prefsRetryAfter = Date.now() + Math.min(300000, 5000 * 2 ** Math.min(prefsFailures - 1, 6));
+  }
+  finally {
+    prefsInFlight = false;
+    REMOTE.pending--;
+    const current = prefsFingerprint(Store.prefs());
+    if (current !== savedPrefs && (succeeded || prefsQueued || current !== fingerprint)) Store.persist();
+  }
+}
 Store.persist = function persistRemote() {
   if (!REMOTE.email) return;
   clearTimeout(prefsTimer);
-  prefsTimer = setTimeout(() => {
-    api('/mutate', { method: 'POST', body: JSON.stringify({ op: 'setPrefs', args: { prefs: Store.prefs() } }) })
-      .catch(() => {});
-  }, 1200);
+  prefsTimer = null;
+  if (!prefsInFlight && prefsFingerprint(Store.prefs()) === savedPrefs) { prefsQueued = false; return; }
+  prefsQueued = true;
+  prefsTimer = setTimeout(flushPrefs, Math.max(1200, prefsRetryAfter - Date.now()));
 };
 
 async function sendOp(op, args, after, onError) {
@@ -193,9 +252,17 @@ viewLogin = function viewLoginRemote() {
 let pollInFlight = false;
 let pollFailures = 0;
 let pollAfter = 0;
+const IDLE_POLL_PAUSE_MS = 5 * 60 * 1000;
+let lastActivity = Date.now();
+
+function noteActivity() {
+  const wasIdle = Date.now() - lastActivity >= IDLE_POLL_PAUSE_MS;
+  lastActivity = Date.now();
+  if (wasIdle) pollOnce();
+}
 
 async function pollOnce() {
-  if (document.hidden || pollInFlight || Date.now() < pollAfter || !REMOTE.email || REMOTE.pending || UI.editor?.dirty) return;
+  if (document.hidden || Date.now() - lastActivity >= IDLE_POLL_PAUSE_MS || pollInFlight || Date.now() < pollAfter || !REMOTE.email || REMOTE.pending || UI.editor?.dirty) return;
   pollInFlight = true;
   const version = REMOTE.version;
   try {
@@ -214,4 +281,8 @@ async function pollOnce() {
   }
 }
 setInterval(pollOnce, 25000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) pollOnce(); });
+for (const event of ['pointerdown', 'keydown', 'scroll']) document.addEventListener(event, noteActivity, { passive: true, capture: true });
+window.addEventListener('focus', () => { lastActivity = Date.now(); pollOnce(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { lastActivity = Date.now(); pollOnce(); }
+});

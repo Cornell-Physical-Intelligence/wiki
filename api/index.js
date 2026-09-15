@@ -338,12 +338,19 @@ export default async function handler(req, res) {
         // retries after another admin removes a member or changes their role.
         const actor = s.users.find((u) => u.email === email && u.status === 'active');
         if (!actor) { opStatus = 401; opError = 'Not signed in'; return false; }
+        const beforePrefs = op === 'setPrefs' ? JSON.stringify(s.prefs?.[email] || {}) : null;
         const r = applyOp(s, op, args, actor.email, actor.role);
         if (r.error) { opError = r.error; return false; }
         opResult = r.result;
+        // Compare after validation so ignored fields and equivalent values do
+        // not rewrite the wiki or make every other member reload its history.
+        if (op === 'setPrefs' && beforePrefs === JSON.stringify(s.prefs?.[email] || {})) return false;
         return s;
       });
       if (opError) return json(res, opStatus, { error: opError, version: out.version });
+      // The preference caller already has its local values and does not adopt
+      // state from this response. Acknowledge only the durable write/no-op.
+      if (op === 'setPrefs') return json(res, 200, { ok: true, version: out.version });
 
       // Welcome emails go out after the state is durably written — access
       // exists either way, the email is just the pointer.

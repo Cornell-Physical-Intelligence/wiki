@@ -169,8 +169,12 @@ async function submitBug() {
 }
 
 function closeModal(after) {
+  const pendingId = UI.modal?.kind === 'interest-pending' ? UI.modal.id : null;
+  const restorePendingFocus = () => {
+    if (pendingId) $$('[data-action="interest-pending-open"]').find((el) => el.dataset.id === pendingId)?.focus();
+  };
   const veil = document.querySelector('.modal-veil');
-  if (!veil) { UI.modal = null; after ? after() : render(); return; }
+  if (!veil) { UI.modal = null; after ? after() : render(); restorePendingFocus(); return; }
   if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
   setTimeout(() => {
@@ -180,6 +184,7 @@ function closeModal(after) {
     // wipe the native undo stack the editor is built around.
     else if (UI.editor) { veil.remove(); $('[data-ed="body"]')?.focus(); }
     else render();
+    restorePendingFocus();
   }, 120);
 }
 
@@ -679,11 +684,34 @@ document.addEventListener('click', async (ev) => {
       render();
       break;
     }
+    case 'interest-storage-check': {
+      stop();
+      if (!Store.isAdmin() || el.disabled) return;
+      el.disabled = true;
+      el.textContent = 'Checking…';
+      try {
+        await api('/interest/storage-check', { method: 'POST', body: '{}' });
+        toast('Submission backup storage is working');
+      } catch (e) {
+        toast(`Storage check failed: ${e.message}`);
+      } finally {
+        el.disabled = false;
+        el.textContent = 'Check storage';
+      }
+      break;
+    }
     case 'interest-open': {
       // The file link inside the row keeps its own job.
       if (ev.target.closest('[data-stop]')) return;
       stop();
       UI.modal = { kind: 'interest-row', id: el.dataset.id };
+      render();
+      break;
+    }
+    case 'interest-pending-open': {
+      stop();
+      if (!Store.isAdmin() || !interestPendingReview().some((row) => row.id === el.dataset.id)) return;
+      UI.modal = { kind: 'interest-pending', id: el.dataset.id };
       render();
       break;
     }

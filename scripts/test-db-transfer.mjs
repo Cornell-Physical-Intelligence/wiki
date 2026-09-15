@@ -171,6 +171,28 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   assert.deepEqual(db.state.prefs[member].watched, ['welcome']);
   assert.equal(db.snapshotVersion, db.version);
   assert.deepEqual(await decodeSnapshot(db.snapshot), db.state);
+  assert.deepEqual(saved.data, { ok: true, version: db.version }, 'preference saves acknowledge without returning wiki history');
+  assert.ok(Buffer.byteLength(JSON.stringify(saved.data)) < 100, 'preference response stays small even with a megabyte of wiki history');
+
+  reset();
+  const beforeNoop = { version: db.version, state: structuredClone(db.state), snapshot: db.snapshot };
+  const unchangedPrefs = await request('/mutate', member, {
+    op: 'setPrefs', args: { prefs: { watched: ['welcome'], unknown: 'ignored', recents: 'not an array', editorMode: 123 } },
+  });
+  assert.deepEqual(unchangedPrefs.data, { ok: true, version: beforeNoop.version });
+  assert.equal(fullReads(), 1, 'no-op preference saves still authorize against the current state');
+  assert.equal(writes(), 0, 'equivalent sanitized preferences do not rewrite the state');
+  assert.equal(db.version, beforeNoop.version, 'no-op preferences do not force other members to reload');
+  assert.deepEqual(db.state, beforeNoop.state, 'ignored fields do not alter preferences or any other member');
+  assert.equal(db.snapshot, beforeNoop.snapshot, 'no-op preferences preserve the existing snapshot');
+
+  reset();
+  const profile = await request('/mutate', member, { op: 'setProfile', args: { name: 'Updated Member', subteam: 'Robotics' } });
+  assert.equal(profile.status, 200);
+  assert.equal(profile.data.state.users.find((u) => u.email === member).name, 'Updated Member');
+  assert.equal(profile.data.state.pages[1].body, state.pages[1].body, 'other mutation callers still receive the complete current wiki');
+  assert.deepEqual(Object.keys(profile.data.state.prefs), [member], 'normal responses keep other members’ preferences private');
+  assert.equal(profile.data.state.settings.email.key, undefined, 'normal responses keep email secrets private');
 
   reset();
   db.conflict = () => db.state.activity.unshift({ kind: 'concurrent-test' });
@@ -179,6 +201,28 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   assert.equal(fullReads(), 2);
   assert.equal(writes(), 2);
   assert.equal(db.state.activity[0].kind, 'concurrent-test', 'conflict retry preserves another writer');
+
+  reset();
+  const beforeSameWrite = db.version;
+  db.conflict = () => {
+    db.state.prefs[member].watched = ['onboarding'];
+    db.state.activity.unshift({ kind: 'same-prefs-concurrent-test' });
+  };
+  const alreadyApplied = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { watched: ['onboarding'] } } });
+  assert.deepEqual(alreadyApplied.data, { ok: true, version: beforeSameWrite + 1 });
+  assert.equal(fullReads(), 2, 'a conflicting preference save re-reads and reauthorizes');
+  assert.equal(writes(), 1, 'a retry skips writing when the concurrent writer already saved those preferences');
+  assert.equal(db.version, beforeSameWrite + 1, 'only the concurrent write increments the version');
+  assert.deepEqual(db.state.prefs[member].watched, ['onboarding']);
+  assert.equal(db.state.activity[0].kind, 'same-prefs-concurrent-test');
+
+  reset();
+  db.conflict = () => { db.state.users = db.state.users.filter((u) => u.email !== member); };
+  const revokedOnRetry = await request('/mutate', member, { op: 'setPrefs', args: { prefs: { watched: ['welcome'] } } });
+  assert.equal(revokedOnRetry.status, 401, 'no-op optimization never bypasses authorization on a conflict retry');
+  assert.equal(writes(), 1, 'a revoked member cannot retry its failed write');
+  db.state.users.push({ email: member, name: 'Member', role: 'member', status: 'active' });
+  db.version++; // Restore the synthetic member for the separate auth/read race below.
 
   reset();
   db.afterMember = () => { db.state.users = db.state.users.filter((u) => u.email !== member); db.version++; };
@@ -230,5 +274,5 @@ if (!process.env.TRANSFER_TEST_ROOT) {
     assert.doesNotMatch(unavailable.data.error, /HTTP status 402|neon:retryable/, 'driver internals are not shown');
   }
 
-  console.log('PASS: small auth/poll queries, compressed reads, versioned backfill, legacy writes, damaged cache fallback, optimistic retries, authorization, and quota errors');
+  console.log('PASS: small auth/poll queries, compact preference responses, no-op preference writes, compressed reads, versioned backfill, legacy writes, damaged cache fallback, optimistic retries, authorization, and quota errors');
 }

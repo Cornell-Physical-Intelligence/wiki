@@ -4,3 +4,4 @@ public/
 .devinterest.json
 .vercel
 .DS_Store
+.env*
