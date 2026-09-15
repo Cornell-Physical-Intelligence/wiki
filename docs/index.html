@@ -467,8 +467,8 @@ label > .dd { width: 100%; }
 .sidebar__user-text { flex: 1; min-width: 0; }
 .sidebar__user-name { display: block; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar__user-mail { display: block; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar__utilities { display: flex; justify-content: flex-end; gap: 8px; width: 100%; }
-.sidebar__utilities .icon-btn { width: 40px; height: 40px; }
+.sidebar__utilities { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; width: 100%; }
+.sidebar__utilities .icon-btn { width: 100%; height: 40px; }
 .sidebar__utilities .icon-btn::after { inset: 0; }
 
 /* ---------------------------------------------------------------------------
