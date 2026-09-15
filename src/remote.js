@@ -37,9 +37,16 @@ Store.boot = async function bootRemote() {
   } catch (e) {
     REMOTE.email = null;
     Store.s = { users: [], pages: [], activity: [], trash: [], prefs: {} };
+    if (e.status !== 401) UI.loginError = 'The wiki is temporarily unavailable. Please try again shortly.';
     return;
   }
-  adoptServer(await api('/state'));
+  try {
+    adoptServer(await api('/state'));
+  } catch (e) {
+    REMOTE.email = null;
+    Store.s = { users: [], pages: [], activity: [], trash: [], prefs: {} };
+    UI.loginError = 'The wiki is temporarily unavailable. Please try again shortly.';
+  }
 };
 
 Store.session = () => REMOTE.email;
@@ -183,12 +190,28 @@ viewLogin = function viewLoginRemote() {
 
 /* ------------------------------- live sync -------------------------------- */
 
+let pollInFlight = false;
+let pollFailures = 0;
+let pollAfter = 0;
+
 async function pollOnce() {
-  if (!REMOTE.email || REMOTE.pending || UI.editor?.dirty) return;
+  if (document.hidden || pollInFlight || Date.now() < pollAfter || !REMOTE.email || REMOTE.pending || UI.editor?.dirty) return;
+  pollInFlight = true;
+  const version = REMOTE.version;
   try {
-    const out = await api('/state?since=' + REMOTE.version);
-    if (!out.unchanged) { adoptServer(out); render(); }
-  } catch (e) { /* transient */ }
+    const out = await api('/state?since=' + version);
+    pollFailures = 0;
+    pollAfter = 0;
+    // A save or edit may have begun while the request was in flight.
+    if (!out.unchanged && !REMOTE.pending && !UI.editor?.dirty && REMOTE.version === version) {
+      adoptServer(out); render();
+    }
+  } catch (e) {
+    pollFailures++;
+    pollAfter = Date.now() + Math.min(300000, 25000 * 2 ** Math.min(pollFailures, 4));
+  } finally {
+    pollInFlight = false;
+  }
 }
 setInterval(pollOnce, 25000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollOnce(); });

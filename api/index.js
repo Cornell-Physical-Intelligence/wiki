@@ -1,7 +1,7 @@
 // The entire backend: auth, state, mutations, attachments. One function.
 // Rewrites in vercel.json send every /api/* request here.
 
-import { getState, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts, StorageNotConfigured } from '../lib/db.js';
+import { getState, getMember, getEmailSettings, updateState, putFile, getFile, deleteFile, listFiles, putPart, takeParts, StorageNotConfigured } from '../lib/db.js';
 import { applyOp, healWelcomeCrab } from '../lib/ops.js';
 import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
@@ -97,8 +97,7 @@ export default async function handler(req, res) {
     if (path === '/auth/callback') {
       const id = await oauthCallback(req, q);
       if (id.error) return redirect(res, '/?denied=' + encodeURIComponent(id.email || '') + '&reason=' + encodeURIComponent(id.error));
-      const { state } = await getState();
-      const u = state.users.find((x) => x.email === id.email);
+      const { member: u } = await getMember(id.email);
       if (!u) return redirect(res, '/?denied=' + encodeURIComponent(id.email));
       if (u.status === 'invited') {
         // Being on the roster is the whole gate: OAuth proves the address,
@@ -122,17 +121,17 @@ export default async function handler(req, res) {
     // Everything under /api/interest* belongs to lib/interest.js. The core
     // hands it a small capability context and stays ignorant of the feature.
     if (path === '/interest' || path === '/interest.csv' || path.startsWith('/interest/')) {
-      return handleInterest(req, res, path, {
+      return await handleInterest(req, res, path, {
         readJson,
         host: req.headers.host,
         clientId: OAUTH_CLIENT_ID,
         me: async () => {
           const who = process.env.DEV_FAKE_AUTH || readSession(req.headers.cookie);
           if (!who) return null;
-          const { state } = await getState();
-          return state.users.find((u) => u.email === who && u.status === 'active') || null;
+          const { member } = await getMember(who);
+          return member?.status === 'active' ? member : null;
         },
-        emailSettings: async () => (await getState()).state.settings?.email,
+        emailSettings: getEmailSettings,
         saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }),
       });
     }
@@ -141,9 +140,9 @@ export default async function handler(req, res) {
 
     const devAuth = process.env.DEV_FAKE_AUTH; // local dev only
     const email = devAuth || readSession(req.headers.cookie);
-    if (!crabHealed) { crabHealed = true; try { await updateState(healWelcomeCrab); } catch (e) { crabHealed = false; } }
-    const { state, version } = await getState();
-    const me = email ? state.users.find((u) => u.email === email && u.status === 'active') : null;
+    if (!email) return json(res, 401, { error: 'Not signed in' });
+    const { member, version } = await getMember(email);
+    const me = member?.status === 'active' ? member : null;
 
     if (path === '/me') {
       if (!me) return json(res, 401, { error: 'Not signed in' });
@@ -157,14 +156,25 @@ export default async function handler(req, res) {
 
     if (path === '/state') {
       if (q.since && Number(q.since) === version) return json(res, 200, { version, unchanged: true });
-      return json(res, 200, { version, state: shapeState(state, me), files: await listFiles() });
+      let out = await getState();
+      // Check the legacy content migration against state we already needed.
+      // Cold starts and unchanged polls must not fetch a second full copy.
+      if (!crabHealed) {
+        crabHealed = true;
+        if (healWelcomeCrab(structuredClone(out.state)) !== false) {
+          try { out = await updateState(healWelcomeCrab); } catch (e) { crabHealed = false; }
+        }
+      }
+      const currentMe = out.state.users.find((u) => u.email === email && u.status === 'active');
+      if (!currentMe) return json(res, 401, { error: 'Not signed in' });
+      return json(res, 200, { version: out.version, state: shapeState(out.state, currentMe), files: await listFiles() });
     }
 
     // Admins can verify the Resend wiring with one click — the real welcome
     // email, sent only to their own signed-in address.
     if (path === '/test-email' && req.method === 'POST') {
       if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
-      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host, settings: state.settings?.email, clientId: OAUTH_CLIENT_ID, saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }) });
+      const out = await sendWelcome({ to: me.email, addedByName: me.name, host: req.headers.host, settings: await getEmailSettings(), clientId: OAUTH_CLIENT_ID, saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }) });
       return json(res, 200, out);
     }
 
@@ -279,7 +289,7 @@ export default async function handler(req, res) {
 
     if (path === '/resend/domains') {
       if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
-      const email = state.settings?.email;
+      const email = await getEmailSettings();
       let bearer = null;
       if (email?.oauth?.refresh) {
         try {
@@ -300,7 +310,7 @@ export default async function handler(req, res) {
 
     if (path === '/resend/disconnect' && req.method === 'POST') {
       if (me.role !== 'admin') return json(res, 403, { error: 'Admins only' });
-      const cur = state.settings?.email?.oauth;
+      const cur = (await getEmailSettings())?.oauth;
       if (cur?.refresh) {
         try {
           await fetch('https://api.resend.com/oauth/revoke', {
@@ -322,14 +332,18 @@ export default async function handler(req, res) {
     if (path === '/mutate' && req.method === 'POST') {
       const body = await readJson(req, 2 * 1024 * 1024);
       const { op, args } = body;
-      let opResult, opError;
+      let opResult, opError, opStatus = 400;
       const out = await updateState((s) => {
-        const r = applyOp(s, op, args, me.email, me.role);
+        // Authorize against the same revision that is being changed, including
+        // retries after another admin removes a member or changes their role.
+        const actor = s.users.find((u) => u.email === email && u.status === 'active');
+        if (!actor) { opStatus = 401; opError = 'Not signed in'; return false; }
+        const r = applyOp(s, op, args, actor.email, actor.role);
         if (r.error) { opError = r.error; return false; }
         opResult = r.result;
         return s;
       });
-      if (opError) return json(res, 400, { error: opError, version: out.version });
+      if (opError) return json(res, opStatus, { error: opError, version: out.version });
 
       // Welcome emails go out after the state is durably written — access
       // exists either way, the email is just the pointer.
@@ -422,6 +436,12 @@ export default async function handler(req, res) {
     return json(res, 404, { error: 'No such endpoint' });
   } catch (e) {
     if (e instanceof StorageNotConfigured) return json(res, 503, { error: e.message });
+    if (/exceeded (?:the )?data transfer quota/i.test(String(e?.message || ''))) {
+      return json(res, 503, {
+        error: 'The wiki database has reached its monthly transfer limit. An administrator needs to restore database access.',
+        code: 'DATABASE_QUOTA_EXCEEDED',
+      }, { 'retry-after': '300' });
+    }
     return json(res, 500, { error: e.message || 'Server error' });
   }
 }
