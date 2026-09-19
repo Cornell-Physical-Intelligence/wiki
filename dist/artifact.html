@@ -504,9 +504,11 @@ label > .dd { width: 100%; }
 .sidebar__user-mail { display: block; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Account row: the account card fills the row; the Settings gear sits at its
    right and opens the wiki-level menu (activity, health, members, trash…). */
-.sidebar__account { display: flex; align-items: center; gap: 2px; }
+/* The gear stretches to the account card's height, so both hover
+   highlights are the same size: one 48px-tall card, one 48px square. */
+.sidebar__account { display: flex; align-items: stretch; gap: 2px; }
 .sidebar__account .sidebar__user { width: auto; flex: 1; }
-.sidebar__settings { width: 36px; height: 36px; flex: none; }
+.sidebar__settings { width: 48px; height: auto; min-height: 48px; flex: none; }
 
 /* ---------------------------------------------------------------------------
    Main column + glass topbar
