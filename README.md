@@ -17,7 +17,7 @@ Internal knowledge base for Cornell Physical Intelligence (CUPI), a Cornell Univ
 
 The CUPI mark is four circles: left half filled, bottom half filled, upper-right quarter filled, and an outline split by a vertical bar. It is the club's logo everywhere in this repo; the crab that appears on the welcome page, in the welcome email, and on the link-preview card is a mascot illustration, not the logo.
 
-- `src/client/logo-row.svg` — the row form (masters the sidebar brand and the boot splash, inlined as `CUPI_LOGO` at build time; draws in `currentColor` so it follows the theme). The mark already spells CUPI, so the sidebar brand is the mark followed by the single word "Wiki" set in the display serif (Playfair Display) in the foreground color; the link keeps an accessible "CUPI Wiki" label.
+- `src/client/logo-row.svg` — the row form, used by the boot splash (inlined into the shell at build time; draws in `currentColor` so it follows the theme). Inside the app the brand is the text "CUPI Wiki" in the display serif (Playfair Display) at the top of the sidebar; the mark itself is not shown there.
 - `src/client/logo-square.svg` — the 2x2 form, the master for every icon: `favicon-squircle-32.png` (browser tab, inline data URI) and `favicon-cupi-192.png` (crawlable `/favicon-cupi.png`, Apple touch icon) are rasterized from it as a black mark on white with a hairline edge.
 - Opening the wiki shows the mark drawing itself in over the page background until the store has booted, then the splash fades out over the app (`settleBoot` in `src/client/main.js`). The mark does not travel to the sidebar.
 

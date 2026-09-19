@@ -7,8 +7,8 @@ import { AI_MODELS, AI_DEFAULTS } from '../lib/ai-settings.js';
 const read = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url), 'utf8');
 const b64 = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url)).toString('base64');
 
-// The CUPI mark: four circles. logo-row.svg is the wordmark-height row the
-// sidebar and boot splash use; logo-square.svg is the 2x2 form behind every
+// The CUPI mark: four circles. logo-row.svg is the row the boot splash
+// draws in; logo-square.svg is the 2x2 form behind every
 // icon (favicon-squircle-32.png, favicon-cupi-192.png). Both draw in
 // currentColor so they follow the theme. See README "Brand".
 const svg = (f) => read(f).replace(/<!--[\s\S]*?-->\s*/g, '').trim();
@@ -85,7 +85,6 @@ export function scripts({ remote = false } = {}) {
 const assets = `'use strict';
 const AI_MODELS = ${JSON.stringify(AI_MODELS)};
 const AI_DEFAULTS = ${JSON.stringify(AI_DEFAULTS)};
-const CUPI_LOGO = ${JSON.stringify(LOGO_ROW)};
 const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
   return [
     assets,
