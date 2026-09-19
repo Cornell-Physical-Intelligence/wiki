@@ -22,7 +22,7 @@ function fixture(kind = 'email-settings-form') {
   const configure = { focus() { document.activeElement = configure; } };
   const controls = [...Object.values(form.elements), { disabled: false }];
   const transport = (...args) => new Promise((resolve, reject) => requests.push({ args, resolve, reject }));
-  const ctx = vm.createContext({ UI: { route: { name: 'admin' }, aiEdit: kind === 'ai-settings-form' }, REMOTE: {}, Store: { s: { settings: {} }, isAdmin: () => false }, AbortSignal, document, AI_MODELS, AI_DEFAULTS,
+  const ctx = vm.createContext({ ADMIN_FORM_ROUTES: ['admin', 'integrations'], UI: { route: { name: 'integrations' }, aiEdit: kind === 'ai-settings-form' }, REMOTE: {}, Store: { s: { settings: {} }, isAdmin: () => false }, AbortSignal, document, AI_MODELS, AI_DEFAULTS,
     MD: { esc: (value) => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;') },
     dd: (name, options, value) => `<button type="button" class="dd" data-m="${name}" data-value="${value}">${options.find((o) => o.value === value)?.label || ''}</button>`,
     $: (selector, scope) => selector.includes('data-ai-connection-error') ? rowError : selector.includes('data-action="ai-configure"') ? configure
@@ -156,6 +156,7 @@ function memberFixture() {
   const f = fixture(), users = [{ email: 'owner@example.com', name: 'Owner', role: 'admin' }, { email: 'member@example.com', name: 'Member', role: 'member' }];
   Object.assign(f.ctx.Store, { user: (email) => users.find((u) => u.email === email), me: () => users[0], isAdmin: () => true,
     setRole() { throw new Error('Remote role update must await acknowledgment'); }, removeUser() { throw new Error('Remote removal must await acknowledgment'); } });
+  f.ctx.UI.route.name = 'admin'; // member rows repaint on the Members page
   f.form.contains = () => false;
   let rows = 0;
   f.ctx.renderMemberRows = () => { rows++; };

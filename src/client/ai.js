@@ -31,13 +31,13 @@ function viewAiUsage() {
 let aiUsageTimer = null;
 function syncAiUsage() {
   clearTimeout(aiUsageTimer); aiUsageTimer = null;
-  if (typeof REMOTE === 'undefined' || UI.route?.name !== 'admin' || UI.editor || document.hidden || !Store.isAdmin()) return;
+  if (typeof REMOTE === 'undefined' || UI.route?.name !== 'integrations' || UI.editor || document.hidden || !Store.isAdmin()) return;
   if (!UI.aiUsageLoading && (!UI.aiUsageCheckedAt || Date.now() - UI.aiUsageCheckedAt >= 20000)) loadAiUsage();
   aiUsageTimer = setTimeout(syncAiUsage, 20000);
 }
 
 async function loadAiUsage() {
-  if (typeof REMOTE === 'undefined' || UI.aiUsageLoading || UI.route?.name !== 'admin' || !Store.isAdmin()) return;
+  if (typeof REMOTE === 'undefined' || UI.aiUsageLoading || UI.route?.name !== 'integrations' || !Store.isAdmin()) return;
   UI.aiUsageLoading = true;
   const refresh = $('[data-action="ai-usage-refresh"]');
   const restoreFocus = refresh && document.activeElement === refresh;
@@ -49,7 +49,7 @@ async function loadAiUsage() {
   } catch { UI.aiUsageError = 'Usage could not refresh. New AI calls stop if spending protection is unavailable.'; }
   finally {
     UI.aiUsageLoading = false; UI.aiUsageCheckedAt = Date.now();
-    if (UI.route?.name === 'admin' && !UI.editor && Store.isAdmin()) {
+    if (UI.route?.name === 'integrations' && !UI.editor && Store.isAdmin()) {
       const host = $('[data-ai-usage]');
       if (host) host.innerHTML = viewAiUsage();
       const button = $('[data-action="ai-usage-refresh"]');
@@ -161,14 +161,14 @@ async function changeAiSettings(form, action = 'save') {
       UI.aiBusy = false;
       // The owner may have moved to an editor while the request was pending.
       // Never let this completion remount that unrelated, possibly dirty view.
-      if (UI.route?.name === 'admin' && !UI.editor && !UI.modal) {
+      if (UI.route?.name === 'integrations' && !UI.editor && !UI.modal) {
         const returnFocus = origin.isConnected && (document.activeElement === document.body || section?.contains(document.activeElement));
         const current = $('.ai-integration');
         if (current) current.outerHTML = viewAiSettings();
         if (returnFocus) $('.ai-integration [data-action="ai-configure"]')?.focus({ preventScroll: true });
       }
     }
-    if (UI.route?.name === 'admin' && Store.isAdmin()) loadAiUsage();
+    if (UI.route?.name === 'integrations' && Store.isAdmin()) loadAiUsage();
     toast(action === 'test' ? 'Connection verified' : action === 'disconnect' ? 'AI disconnected' : 'AI settings saved');
   } catch (e) {
     if (form) form.dataset.adminDirty = 'true';

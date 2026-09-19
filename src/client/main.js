@@ -684,8 +684,10 @@ document.addEventListener('click', async (ev) => {
     case 'settings-menu': stop(); openMenu([
       { icon: I.clock, label: 'Activity', run: () => nav('#/activity') },
       { icon: I.shield, label: 'Wiki health', run: () => nav('#/health') },
-      ...(Store.isAdmin() ? [{ icon: I.users, label: 'Members & access', run: () => nav('#/admin') }] : []),
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
+      ...(Store.isAdmin() ? ['-',
+        { icon: I.users, label: 'Members', run: () => nav('#/admin') },
+        { icon: I.bolt, label: 'Integrations', run: () => nav('#/integrations') }] : []),
       '-',
       { icon: I.bug, label: 'Report a bug', run: openBugReport },
       { icon: I.help, label: 'Keyboard shortcuts', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
@@ -743,7 +745,7 @@ document.addEventListener('click', async (ev) => {
         label: o.label,
         run: () => {
           host.dataset.value = o.value;
-          if (UI.route.name === 'admin' && host.closest('form')) host.closest('form').dataset.adminDirty = 'true';
+          if (ADMIN_FORM_ROUTES.includes(UI.route.name) && host.closest('form')) host.closest('form').dataset.adminDirty = 'true';
           host.querySelector('.dd__label').textContent = o.label;
           if (host.dataset.m === 'ed-section' && UI.editor) { UI.editor.section = o.value; markDirty(); autosaveDraft(); }
           if (host.dataset.m === 'ai-model') {
@@ -1226,7 +1228,7 @@ function syncEmailPending() {
 }
 
 function paintEmailIntegration() {
-  if (UI.route?.name !== 'admin' || UI.editor || UI.modal) return;
+  if (UI.route?.name !== 'integrations' || UI.editor || UI.modal) return;
   const section = $('.email-integration');
   if (!section) return;
   const forms = $$('form[data-action="email-settings-form"]', section).filter((form) => form.dataset.adminDirty === 'true' || form.dataset.adminPending === 'true');
@@ -1268,7 +1270,7 @@ async function runEmailIntegrationAction(action) {
     UI.emailBusy = false;
     controls.forEach((el) => { el.disabled = false; });
     syncEmailPending();
-    if (!UI.modal && UI.route?.name === 'admin' && !UI.editor && document.activeElement === document.body) {
+    if (!UI.modal && UI.route?.name === 'integrations' && !UI.editor && document.activeElement === document.body) {
       if (active?.isConnected) active.focus({ preventScroll: true });
       else if (origin?.isConnected === false) $('.email-integration .integration__actions button, .email-integration .integration__actions a')?.focus({ preventScroll: true });
     }
@@ -1302,7 +1304,7 @@ async function runAdminForm(form, submit) {
 function paintAdminFormSuccess(form) {
   form.dataset.adminDirty = 'false';
   form.dataset.adminPending = 'false';
-  if (UI.route?.name === 'admin' && !UI.editor && !UI.modal && form.isConnected) {
+  if (ADMIN_FORM_ROUTES.includes(UI.route?.name) && !UI.editor && !UI.modal && form.isConnected) {
     render();
     return $(`form[data-action="${form.dataset.action}"]`);
   }
@@ -1396,7 +1398,7 @@ document.addEventListener('visibilitychange', () => {
 let previewTimer = null;
 document.addEventListener('input', (ev) => {
   const t = ev.target;
-  if (UI.route.name === 'admin' && t.closest('form[data-action]')) t.closest('form[data-action]').dataset.adminDirty = 'true';
+  if (ADMIN_FORM_ROUTES.includes(UI.route.name) && t.closest('form[data-action]')) t.closest('form[data-action]').dataset.adminDirty = 'true';
 
   if (t.matches('[data-m="member-q"]')) {
     UI.memberQuery = t.value;

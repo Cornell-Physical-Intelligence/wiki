@@ -9,7 +9,7 @@ Internal knowledge base for Cornell Physical Intelligence (CUPI), a Cornell Univ
 - **Search** automatically searches page previews for the task you describe; save previews suggest change summaries and flag concrete dependencies in linked pages
 - Admin intake review with shared flags, attributed comments, direct row deletion, and archives that preserve reviews
 - Comments, activity feed, per-page **watching with an inbox**, starred pages, **wiki health** (broken links / orphans / stale pages)
-- Sidebar: Home, Applications (admins), New page, then the page tree. Activity, Wiki health, Members & access, Trash, bug reports, and keyboard shortcuts live in the **Settings** menu behind the gear beside the account card
+- Sidebar: Home, Applications (admins), New page, then the page tree. Activity, Wiki health, Trash, Members (roster and access log), Integrations (AI and email), bug reports, and keyboard shortcuts live in the **Settings** menu behind the gear beside the account card
 - **Google OAuth restricted to cornell.edu** + an admin-managed member allowlist with emailed invite codes
 - Matches the design language of [cornellphysicalintelligence.com](https://cornellphysicalintelligence.com)
 
@@ -22,6 +22,8 @@ The CUPI mark is four circles: left half filled, bottom half filled, upper-right
 - Opening the wiki shows the mark drawing itself in over the page background until the store has booted, then the splash fades out over the app (`settleBoot` in `src/client/main.js`). The mark does not travel to the sidebar.
 
 Re-rasterize the PNGs from `logo-square.svg` whenever the mark changes; do not reintroduce the crab as a logo or icon.
+
+The sign-in page is the wiki's front door and reads like one: a top bar with the mark and Sign in, the hero with the sign-in card, "What's inside" built from the real section list with a blurb per section (`LOGIN_SECTION_BLURBS` in `src/client/ui.js`), "How it works" listing the wiki's features, and an "Access" note on membership and applying. No artwork there; the hand render from the team shirt was tried and removed. Add a blurb when adding a section.
 
 ## Architecture
 
@@ -49,9 +51,9 @@ The public apply form feeds **Applications** (`#/applications`; the older `#/int
    - Also set `SESSION_SECRET` to a long random string (`openssl rand -hex 32`)
 4. **Domain** — Vercel project → *Settings → Domains* → add `wiki.cornellphysicalintelligence.com`; then in Google Cloud DNS (the domain's DNS host) add: `wiki  CNAME  cname.vercel-dns.com.`
 5. **Invite emails (optional)** — create a [Resend](https://resend.com) key, set `RESEND_API_KEY` (and `RESEND_FROM` once the domain is verified there). Without it, invites still work — admins share the code from the Pending list.
-6. **Page assistance (optional)** — an admin connects an OpenAI API key under **Settings → AI**, chooses a model and reasoning effort, and tests the connection there. Defaults are Luna (`gpt-5.6-luna`) with no reasoning for speed. Keys are AES-256-GCM encrypted using `WIKI_CREDENTIAL_SECRET` (or the existing `SESSION_SECRET`); keep that server secret stable across deployments. An existing server-side `OPENAI_API_KEY` remains a migration fallback until a saved key replaces it; Disconnect disables both. Set server-side `TYPESAFE_API_KEY` separately for Jev (`jev-latest`) and redeploy. ChatGPT/Codex sign-in does not supply the Platform API credential. Never put either key in client files or public environment variables.
+6. **Page assistance (optional)** — an admin connects an OpenAI API key under **Integrations → AI**, chooses a model and reasoning effort, and tests the connection there. Defaults are Luna (`gpt-5.6-luna`) with no reasoning for speed. Keys are AES-256-GCM encrypted using `WIKI_CREDENTIAL_SECRET` (or the existing `SESSION_SECRET`); keep that server secret stable across deployments. An existing server-side `OPENAI_API_KEY` remains a migration fallback until a saved key replaces it; Disconnect disables both. Set server-side `TYPESAFE_API_KEY` separately for Jev (`jev-latest`) and redeploy. ChatGPT/Codex sign-in does not supply the Platform API credential. Never put either key in client files or public environment variables.
 
-First sign-in: `ab3233@cornell.edu` is seeded as admin. Add everyone else from **Members & access**.
+First sign-in: `ab3233@cornell.edu` is seeded as admin. Add everyone else from **Members**.
 
 ### Page assistance
 
@@ -61,7 +63,7 @@ Change summaries start quietly after a 1.6-second pause while editing, with at l
 
 All three endpoints require active membership. Requests have size limits and short timeouts, and identical provider calls share a ten-minute in-memory cache. Provider credentials stay on the server, and provider failures leave normal search and saving available. `npm run test:assistance` exercises provider contracts and save-preview behavior with synthetic transports.
 
-**OpenAI spending:** Settings → AI shows estimated costs and request counts for today and this month. The shared limits are **$1/day, $5/calendar month, and 5¢ per request**, with UTC boundaries. Every paid request, including connection tests, must first reserve its conservative maximum cost in Postgres. Provider-reported input, cached input, cache-write and output/reasoning usage settle that reservation; timeouts, missing usage, and failed accounting keep the full reservation counted. If accounting is unavailable, no new provider call is sent. Unexpected costs or provider tiers pause calls for review. Editing and saving remain available throughout.
+**OpenAI spending:** Integrations → AI shows estimated costs and request counts for today and this month. The shared limits are **$1/day, $5/calendar month, and 5¢ per request**, with UTC boundaries. Every paid request, including connection tests, must first reserve its conservative maximum cost in Postgres. Provider-reported input, cached input, cache-write and output/reasoning usage settle that reservation; timeouts, missing usage, and failed accounting keep the full reservation counted. If accounting is unavailable, no new provider call is sent. Unexpected costs or provider tiers pause calls for review. Editing and saving remain available throughout.
 
 OpenAI calls are additionally limited to 3 concurrent requests globally (1 per member), 30/minute globally (8 per member), and 1,200/day globally (200 per member). Cross-worker duplicates are suppressed for two minutes, and a crashed worker releases its concurrency slot after 90 seconds without refunding possible spend. High-cost model/effort combinations may be rejected by the 5¢ request ceiling. Limits cannot be raised by browser input or by replacing a key. The admin readout refreshes only while visible, without replacing unsaved forms.
 

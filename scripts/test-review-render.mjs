@@ -74,7 +74,7 @@ function fixture() {
   };
   const app = node('#app');
   Object.defineProperty(app, 'innerHTML', { set() { counts.appWrites++; mountShell(); } });
-  const context = vm.createContext({ UI, document, window: {}, innerWidth: 1200,
+  const context = vm.createContext({ ADMIN_FORM_ROUTES: ['admin', 'integrations'], UI, document, window: {}, innerWidth: 1200,
     location: { pathname: '/', search: '', hash: '#/page/sample' },
     Store: { me: () => ({ email: 'synthetic@example.test' }), isAdmin: () => true },
     $: (selector) => document.querySelector(selector), $$: () => [],
@@ -184,7 +184,7 @@ test('template thumbnails are decorative and contain no nested links, buttons, o
   const markdown = await readFile(new URL('../src/client/markdown.js', import.meta.url), 'utf8');
   const modalSource = ui2.slice(ui2.indexOf('function viewModal() {'), ui2.indexOf('\n/* ------------------------------- video hydration'));
   const body = '## Agenda\n\n[[Missing page]] and [Reference](https://example.test)\n\n| Item | Owner |\n| --- | --- |\n| Review | Team |\n\n!file[Reference](att:sample)';
-  const context = vm.createContext({
+  const context = vm.createContext({ ADMIN_FORM_ROUTES: ['admin', 'integrations'],
     UI: { modal: { kind: 'new-page' } }, I: { x: '×' },
     TEMPLATES: [
       { id: 'blank', name: 'Blank page', desc: 'Start from nothing', body: '' },

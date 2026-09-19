@@ -163,7 +163,7 @@ function route() {
   const name = raw === 'applications' ? 'interest' : raw;
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
-  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'integrations', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'home', params: {} }; nav('#/home'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
@@ -213,19 +213,76 @@ function loginFooter(previewLine) {
 }
 
 
+// The sign-in page is the wiki's front door, and reads like one: a top bar,
+// the hero with the sign-in card, what the wiki holds (the real section
+// list), how it works, and how access is granted. No artwork; type, hairlines,
+// and the mark carry it. The card contents differ between the preview and the
+// live wiki, so they are passed in.
+const LOGIN_SECTION_BLURBS = {
+  'getting-started': 'Onboarding checklist, lab access and safety, how to use the wiki, and the team\u2019s decision records.',
+  projects: 'One page per project: goals, current status, decisions, and the build log behind them.',
+  mechanical: 'CAD standards in Onshape, part numbering and BOMs, 3D printing, machining resources, and design write-ups.',
+  electrical: 'Altium workflow and libraries, PCB design checklists, power distribution, wiring, and board bring-up logs.',
+  software: 'Dev environment and repo standards, the ROS 2 perception stack, locomotion, and test procedures.',
+  creative: 'Photos, video, brand assets, and the material the team shows the world.',
+  operations: 'Meeting notes, budget and purchasing, recruiting, and how the team runs week to week.',
+};
+const LOGIN_FEATURES = [
+  ['Search everything', 'Press \u2318K anywhere. Pages, attachments, and people, with filters by section.'],
+  ['Every change kept', 'Full version history with diffs and one-click restore. Deleted pages wait in the trash for 30 days.'],
+  ['CAD and schematics inline', 'Drop in STL or OBJ for a 3D viewer in the page. STEP, PCB, and PDF files attach as labeled cards; Onshape and Altium 365 links unfurl.'],
+  ['Templates that fit the work', 'Meeting notes, design docs, decision records, BOMs, test reports, and bring-up logs, ready to fill in.'],
+  ['Pages that link back', 'Wiki links between pages, backlinks on every page, callouts, live task lists, and sortable tables.'],
+  ['Stay in the loop', 'Watch a page to get changes in your inbox, star what you use, and let wiki health flag broken links and stale pages.'],
+];
+const LOGIN_NOTE = 'Members only. Sign in with a cornell.edu Google account; not on the member list yet? Ask a team lead to add you.';
+
+function loginPage({ card, signIn, previewLine }) {
+  return `<div class="login login--page">
+    <header class="login__bar">
+      <a class="login__brand" href="#/login" aria-label="CUPI Wiki"><span class="login__brand-mark" aria-hidden="true">${CUPI_LOGO}</span><span>Wiki</span></a>
+      <nav class="login__bar-nav" aria-label="Site">
+        <a class="login__bar-link" href="https://cornellphysicalintelligence.com" target="_blank" rel="noreferrer">cornellphysicalintelligence.com</a>
+        ${signIn}
+      </nav>
+    </header>
+    <section class="login__hero">
+      <p class="login__org">Cornell University Physical Intelligence</p>
+      <h1 class="login__title">The team wiki</h1>
+      <p class="login__lede">Everything CUPI learns the hard way, written down: subteam documentation, project pages, build logs, and the processes behind them.</p>
+      <div class="login__card">${card}</div>
+      <p class="login__note">${LOGIN_NOTE}</p>
+    </section>
+    <section class="login__section" aria-labelledby="login-inside">
+      <h2 class="login__eyebrow" id="login-inside">What\u2019s inside</h2>
+      <div class="login__tiles">
+        ${SECTIONS.map((sec) => `<div class="login__tile"><b>${MD.esc(sec.name)}</b><span>${LOGIN_SECTION_BLURBS[sec.id] || ''}</span></div>`).join('')}
+      </div>
+    </section>
+    <section class="login__section" aria-labelledby="login-how">
+      <h2 class="login__eyebrow" id="login-how">How it works</h2>
+      <div class="login__features">
+        ${LOGIN_FEATURES.map(([name, blurb]) => `<div class="login__feature"><b>${name}</b><span>${blurb}</span></div>`).join('')}
+      </div>
+    </section>
+    <section class="login__section" aria-labelledby="login-access">
+      <h2 class="login__eyebrow" id="login-access">Access</h2>
+      <p class="login__access">The wiki is for CUPI members. Signing in proves a cornell.edu address through Google, and an admin-managed member list decides who gets in; new members are added by a team lead and receive an invitation by email. Interested in joining the team? Apply at <a href="https://cornellphysicalintelligence.com/apply" target="_blank" rel="noreferrer">cornellphysicalintelligence.com/apply</a>.</p>
+    </section>
+    ${loginFooter(previewLine)}
+  </div>`;
+}
+
 function viewLogin() {
   const denied = UI.route.name === 'denied';
-  return `<div class="login">
-    <h1 class="login__title"><span class="visually-hidden">Cornell Physical Intelligence (CUPI)</span><span class="vt-title" aria-hidden="true"><canvas class="vt-title__canvas"></canvas></span></h1>
-    <p class="login__caption">(Cornell University Physical Intelligence)</p>
-    <div class="login__card">
-      ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
-      ${UI.chooser ? viewChooser() : `
-      <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
-    </div>
-    ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
-  </div>`;
+  const card = `${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
+    ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
+    ${UI.chooser ? viewChooser() : `<button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}`;
+  return loginPage({
+    card,
+    signIn: `<button class="btn btn--primary" data-action="login-google">Sign in</button>`,
+    previewLine: 'Preview build: sign-in is simulated and data stays in this browser.',
+  });
 }
 
 function viewChooser() {
@@ -317,8 +374,11 @@ function viewSidebar() {
 }
 
 // Routes reached from the Settings menu (the gear beside the account card):
-// everything about the wiki itself rather than its pages.
-const SETTINGS_ROUTES = ['activity', 'health', 'admin', 'trash'];
+// everything about the wiki itself rather than its pages. 'admin' is the
+// Members page; 'integrations' holds the AI and email connections.
+const SETTINGS_ROUTES = ['activity', 'health', 'admin', 'integrations', 'trash'];
+// Routes whose forms keep unsaved input across background re-renders.
+const ADMIN_FORM_ROUTES = ['admin', 'integrations'];
 
 function topbar(crumbHtml, right) {
   return `<header class="topbar">

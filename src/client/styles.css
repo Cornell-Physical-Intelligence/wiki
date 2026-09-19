@@ -245,20 +245,6 @@ label > .dd { width: 100%; }
 .login > :first-child { margin-top: auto; }
 .login > :last-child { margin-bottom: auto; }
 
-.login__wordmark {
-  font-family: var(--font-display); font-weight: 700;
-  font-size: clamp(56px, 11vw, 108px); line-height: 1;
-  letter-spacing: 0.01em; user-select: none;
-  margin: 0;
-}
-
-.login__sub {
-  margin: 14px 0 0;
-  font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(9px, 1vw, 12px); letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--fg); text-align: center; user-select: none;
-}
-
 .login__card {
   position: relative;
   width: min(400px, 92vw);
@@ -1672,21 +1658,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
    is bounded by the CUPI letterforms; the caption is the site's Times caption. */
 .login__title { margin: 0; line-height: 0; display: flex; justify-content: center; user-select: none; width: 100%; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.vt-title {
-  display: block; width: min(90vw, 720px); opacity: 0;
-  transition: opacity 0.6s cubic-bezier(0.2, 0, 0, 1);
-  user-select: none; -webkit-user-select: none;
-}
-.vt-title.is-ready { opacity: 1; }
-.vt-title__canvas { display: block; width: 100%; height: 100%; }
-@media (prefers-reduced-motion: reduce) { .vt-title { transition: none; } }
-.login__caption {
-  margin: clamp(-6px, 0.6vw, 14px) 0 0; color: var(--fg);
-  font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(7px, 0.9vw, 12px); letter-spacing: 0.22em;
-  text-transform: uppercase; text-align: center; white-space: nowrap;
-  pointer-events: none;
-}
 .login__welcome { margin: 0; text-align: center; font-size: 14px; color: var(--fg); text-wrap: balance; }
 
 
@@ -1893,3 +1864,56 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .integration-card > .email-adv { margin: 0; padding: 12px 18px 14px; }
 .integration-card__editor { margin: 0; padding: 16px 18px 18px; background: var(--hover); border-radius: 0 0 var(--radius) var(--radius); }
 .integration-card .ai-settings { max-width: none; }
+
+/* Sign-in page: the wiki's front door, laid out like one. A top bar, the
+   hero with the sign-in card, then the section list, the feature list, and
+   the access note, all on hairlines in the theme's own colors. */
+.login--page { display: block; padding: 0; }
+.login--page > :first-child { margin-top: 0; }
+.login--page > :last-child { margin-bottom: 0; }
+.login__bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  height: 56px; padding: 0 clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid var(--hairline);
+}
+.login__brand {
+  display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--fg);
+  font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; user-select: none;
+}
+.login__brand-mark { height: 18px; display: block; }
+.login__brand-mark svg { height: 100%; width: auto; display: block; }
+.login__bar-nav { display: flex; align-items: center; gap: 18px; }
+.login__bar-link { font-size: 13px; color: var(--muted); text-decoration: none; }
+.login__bar-link:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
+.login__bar-nav .btn { height: 32px; padding: 0 14px; text-decoration: none; }
+.login__hero {
+  max-width: 640px; margin: 0 auto; padding: clamp(44px, 8vh, 88px) 24px 44px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.login__org {
+  margin: 0; font-family: var(--font-label); font-size: 11px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--muted); user-select: none;
+}
+.login__title {
+  margin: 10px 0 0; font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(38px, 7vw, 60px); line-height: 1.05; letter-spacing: 0.005em; color: var(--fg); text-wrap: balance;
+}
+.login__lede { margin: 16px 0 0; font-size: 16px; line-height: 1.55; color: var(--muted); max-width: 52ch; text-wrap: balance; }
+.login__hero .login__card { margin-top: 30px; }
+.login__note { margin: 16px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--faint); text-align: center; max-width: 44ch; text-wrap: balance; }
+.login__section { max-width: 960px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 40px) 8px; border-top: 1px solid var(--hairline); }
+.login__eyebrow { margin: 0 0 18px; font-family: var(--font-label); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); font-weight: 400; }
+.login__tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.login__tile { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: var(--radius); }
+.login__tile b { font-size: 14px; font-weight: 600; }
+.login__tile span { font-size: 13px; line-height: 1.5; color: var(--muted); }
+.login__features { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 24px 28px; }
+.login__feature { display: flex; flex-direction: column; gap: 6px; }
+.login__feature b { font-size: 14px; font-weight: 600; }
+.login__feature span { font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.login__access { margin: 0; max-width: 72ch; font-size: 14.5px; line-height: 1.6; color: var(--muted); }
+.login__access a { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
+.login--page .site-footer { margin-top: clamp(32px, 6vw, 64px); }
+@media (max-width: 560px) {
+  .login__bar-link { display: none; }
+}

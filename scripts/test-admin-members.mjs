@@ -30,7 +30,10 @@ assert.doesNotMatch(html, /awaiting first sign-in|chip--admin|class="chip"|<h2>A
 assert.equal((html.match(/class="member-invited"/g) || []).length, 1);
 assert.match(html, /class="member-role">Admin<\/td>/);
 assert.match(html, /data-member-invite hidden/); assert.match(html, /aria-label="Search members/);
-assert.match(html, /data-test-ai/); assert.match(html, /<h2>Email/); assert.match(html, /<h2>Access log/);
+assert.doesNotMatch(html, /data-test-ai|<h2>Email/, 'integrations left the members page'); assert.match(html, /<h2>Access log/);
+const integrations = run('viewIntegrations()');
+assert.match(integrations, /<h1>Integrations<\/h1>/); assert.match(integrations, /data-test-ai/); assert.match(integrations, /<h2>Email/);
+assert.doesNotMatch(integrations, /<table\b|alice@example.com/, 'the integrations page carries no member data');
 assert.doesNotMatch(html, /Welcome emails for new members/);
 ctx.UI.emailBusy = 'disconnect';
 ctx.Store.emailSettings = () => ({ from: 'wiki@example.com', name: 'Team', oauthConnected: true });
@@ -62,4 +65,5 @@ assert.match(run('viewAdmin()'), /data-member-invite >/);
 delete ctx.REMOTE; assert.match(run('memberRowsHtml([Store.s.users[1]])'), /data-action="invite-view"/);
 ctx.Store.isAdmin = () => false;
 assert.match(run('viewAdmin()'), /Only admins/); assert.doesNotMatch(run('viewAdmin()'), /alice@example.com|data-test-ai/);
-console.log('PASS: unified members/invites, plain roles, subtle status, search, self-action protection, inline invitation disclosure, retained integrations and admin authorization');
+assert.match(run('viewIntegrations()'), /Only admins/); assert.doesNotMatch(run('viewIntegrations()'), /data-test-ai|<h2>Email/);
+console.log('PASS: unified members/invites, plain roles, subtle status, search, self-action protection, inline invitation disclosure, a separate integrations page, and admin authorization');

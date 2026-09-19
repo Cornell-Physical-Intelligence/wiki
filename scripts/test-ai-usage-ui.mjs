@@ -11,7 +11,7 @@ function fixture() {
   const pending = [], timers = new Map(), host = { innerHTML: '' }, document = { body: {}, activeElement: null, hidden: false };
   const key = { value: 'unsaved synthetic key' }, refresh = { disabled: false, focus() { document.activeElement = this; } };
   let nextTimer = 0;
-  const ctx = vm.createContext({ UI: { route: { name: 'admin' } }, Store: { isAdmin: () => true }, REMOTE: {}, AbortSignal, document,
+  const ctx = vm.createContext({ UI: { route: { name: 'integrations' } }, Store: { isAdmin: () => true }, REMOTE: {}, AbortSignal, document,
     MD: { esc: (s) => String(s).replaceAll('<', '&lt;') },
     $: (selector) => selector === '[data-ai-usage]' ? host : selector === '[data-action="ai-usage-refresh"]' ? refresh : key,
     setTimeout(fn) { timers.set(++nextTimer, fn); return nextTimer; }, clearTimeout(id) { timers.delete(id); },

@@ -1364,9 +1364,9 @@ function viewAdmin() {
     </div></div></div></div>`;
   }
   const users = memberListUsers();
-  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members &amp; access</span>`) + `
+  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Members</span>`) + `
   <div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">
-    <div class="plain-head"><h1>Members &amp; access</h1></div>
+    <div class="plain-head"><h1>Members</h1></div>
     <div class="admin-grid">
       <section class="member-sheet" aria-label="Members">
         <div class="sheet__bar">
@@ -1387,12 +1387,31 @@ function viewAdmin() {
         </table></div>
         <div class="sheet__foot" data-member-count role="status">${memberCountText(users.length)}</div>
       </section>
-      ${viewAiSettings()}
-      ${viewEmailSettings()}
       <section class="admin-block">
         <div class="admin-block__head"><h2>Access log</h2></div>
         <div class="audit" data-member-audit>${memberAuditHtml()}</div>
       </section>
+    </div>
+  </div></div></div>`;
+}
+
+// AI assistance and email sending: the wiki's connections to outside services.
+function viewIntegrations() {
+  const crumbs = `<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Integrations</span>`;
+  if (!Store.isAdmin()) {
+    return topbar(crumbs) + `
+    <div class="content"><div class="page-wrap"><div class="page-col"><div class="empty">
+      ${I.bolt}<b>Only admins can manage integrations</b>
+      <p>AI assistance and email sending are set up by team leads.</p>
+      <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a>
+    </div></div></div></div>`;
+  }
+  return topbar(crumbs) + `
+  <div class="content"><div class="page-wrap"><div class="page-col">
+    <div class="plain-head"><h1>Integrations</h1></div>
+    <div class="admin-grid">
+      ${viewAiSettings()}
+      ${viewEmailSettings()}
     </div>
   </div></div></div>`;
 }
@@ -1761,8 +1780,6 @@ function render() {
     stopMeaningSearch('home'); stopMeaningSearch('modal');
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
-    const vt = $('.login .vt-title');
-    if (vt) mountHeroTitle(vt);
     mountLoginCard($('.login__card'));
     return;
   }
@@ -1772,6 +1789,7 @@ function render() {
   else if (r.name === 'history') view = viewHistory(r.params.id);
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();
+  else if (r.name === 'integrations') view = viewIntegrations();
   else if (r.name === 'interest') view = viewInterest();
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
@@ -1795,7 +1813,7 @@ function render() {
   }
   else view = topbar('<span class="crumbs__here">Home</span>') + `<div class="content search-home-content">${viewSearchHome()}</div>`;
 
-  const adminForms = r.name === 'admin' && UI._mountedRoute === 'admin' && !UI.editor && Store.isAdmin()
+  const adminForms = ADMIN_FORM_ROUTES.includes(r.name) && UI._mountedRoute === r.name && !UI.editor && Store.isAdmin()
     ? [...document.querySelectorAll('form[data-action]')].filter((form) => form.dataset.adminDirty === 'true' || form.dataset.adminPending === 'true') : [];
   const adminFocus = adminForms.some((form) => form.contains(document.activeElement)) ? document.activeElement : null;
   const palette = UI.palette && UI._mountedPalette === UI.palette ? $('.palette-veil') : null;
@@ -1838,12 +1856,11 @@ function render() {
   syncAiUsage();
   $$('.cad-embed').forEach(mountCadViewer);
   mountTableSort();
-  { const vt = $('.login .vt-title'); if (vt) mountHeroTitle(vt); }
-  if (typeof REMOTE !== 'undefined' && r.name === 'admin' && !UI.editor && UI.resendDomains === undefined && Store.isAdmin()) {
+  if (typeof REMOTE !== 'undefined' && r.name === 'integrations' && !UI.editor && UI.resendDomains === undefined && Store.isAdmin()) {
     const es = Store.emailSettings();
     if (es.oauthConnected || es.keySet || es.envKeySet) {
       UI.resendDomains = 'pending';
-      api('/resend/domains').then((out) => { UI.resendDomains = out.domains; renderBackground('admin'); }).catch(() => { UI.resendDomains = null; });
+      api('/resend/domains').then((out) => { UI.resendDomains = out.domains; renderBackground('integrations'); }).catch(() => { UI.resendDomains = null; });
     }
   }
   // The interest component loads from its own endpoint the first time its
