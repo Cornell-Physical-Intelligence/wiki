@@ -237,76 +237,27 @@ label > .dd { width: 100%; }
    Login — mirrors the site's hero: emptiness, wordmark, letterspaced caps.
    ------------------------------------------------------------------------- */
 
-.login__card {
-  position: relative;
-  width: min(400px, 92vw);
-  display: flex; flex-direction: column; gap: 14px;
-  padding: clamp(18px, 3vw, 26px);
-  margin-top: clamp(18px, 3vh, 34px);
-  border-radius: var(--box-radius);
-  box-shadow: inset 0 0 0 2px transparent;
-  transition: box-shadow 0.17s ease;
-}
-
-/* Debug-style label (the site's motif, MissionTiles.css verbatim). */
-.login__card::before {
-  content: 'signin';
-  position: absolute;
-  top: -22px;
-  left: 8px;
-  background: rgba(var(--page-rgb), 0.75);
-  color: var(--fg);
-  border: 1px solid rgba(var(--fg-rgb), 0.35);
-  font-size: 9px;
-  font-family: monospace;
-  padding: 1px 5px;
-  line-height: 1.2;
-  border-radius: 2px;
-  z-index: 10;
-  pointer-events: none;
-}
-
-/* Debug-style dotted border. Matches the wrapper's radius so the dotted and
-   solid states trace the same corner. */
-.login__card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px dotted var(--fg);
-  border-radius: var(--box-radius);
-  z-index: -1;
-  pointer-events: none;
-  transition: opacity 0.17s ease;
-}
-
-/* Finalized state: dots fade out, solid fades in, tag flashes out. */
-.login__card.is-finalized {
-  box-shadow: inset 0 0 0 2px var(--fg);
-}
-.login__card.is-finalized::after { opacity: 0; }
-.login__card.is-finalized::before { animation: tag-flash-out 0.17s ease-out forwards; }
-
-@keyframes tag-flash-out {
-  0% { opacity: 1; filter: brightness(1); }
-  20% { opacity: 1; filter: brightness(2.5); }
-  40% { opacity: 0.8; filter: brightness(1); }
-  100% { opacity: 0; filter: brightness(1); }
-}
-
-.login__google {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  height: 44px; width: 100%;
-  border: 1px solid var(--rule); border-radius: var(--radius);
-  font-size: 14px; font-weight: 500;
-}
-.login__google:hover { background: var(--hover); }
-.login__google svg { width: 18px; height: 18px; flex: none; }
-
-/* Signed-out frame: the same shell with the members-only controls locked. */
-.sidebar__search:disabled { opacity: 0.55; pointer-events: none; }
-.navlink--locked { opacity: 0.55; cursor: default; }
-.navlink--locked:hover { background: transparent; color: var(--muted); }
+/* Signed-out frame: the shell with the members-only parts closed. The
+   sign-in control sits where the home page's search box sits, same metrics. */
 .tree-section--locked .tree-section__head--static { cursor: default; }
+.signin { max-width: 740px; margin: 0 auto; padding: clamp(32px, 6vh, 64px) 0 70px; display: flex; flex-direction: column; gap: 14px; -webkit-font-smoothing: antialiased; }
+.signin__title { margin: 0 0 11px; color: var(--fg); font-family: var(--font-ui); font-size: 30px; font-weight: 550; line-height: 1.25; letter-spacing: -0.04em; text-wrap: balance; }
+.signin__button {
+  display: flex; align-items: center; gap: 13px; width: 100%; height: 54px; padding: 0 17px;
+  border-radius: 9px; background: var(--page); color: var(--fg);
+  box-shadow: 0 0 0 1px var(--hairline), 0 2px 5px rgba(0, 0, 0, 0.03);
+  font-size: 16px; text-decoration: none; text-align: left; cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+.signin__button:hover, .signin__button:focus-visible { box-shadow: 0 0 0 1px var(--rule), 0 2px 5px rgba(0, 0, 0, 0.03); outline: none; }
+.signin__button svg { width: 19px; height: 19px; flex: none; }
+.signin__note { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); max-width: 62ch; }
+.signin .login__error { margin: 0; }
+@media (max-width: 600px) {
+  .signin { padding-top: 32px; }
+  .signin__title { font-size: 27px; }
+  .signin__button { gap: 10px; padding: 0 13px; }
+}
 .sidebar__user--anon { cursor: default; }
 .sidebar__user--anon:hover { background: transparent; }
 .avatar--anon { background: transparent; border: 1px dashed var(--rule); }
@@ -1348,14 +1299,14 @@ a.feed__row:hover { background: var(--hover); }
 .preview-tag { user-select: none; }
 
 /* Press feedback: exactly 0.96, properties named. */
-.btn, .icon-btn, .chooser__item, .tpl, .palette__item, .login__google, .navlink, .tree-item__row,
+.btn, .icon-btn, .chooser__item, .tpl, .palette__item, .signin__button, .navlink, .tree-item__row,
 .menu button, a.feed__row, .rev, .crumbs a, .backlink, .sidebar__user, .sidebar__search,
 .tree-section__head, .dd, .ed-autocomplete button, .prose a, .prose th, .reaction, .draft-chip {
   transition-property: background-color, border-color, color, opacity, scale, text-decoration-color;
   transition-duration: 0.15s;
   transition-timing-function: ease;
 }
-.btn:active, .icon-btn:active, .chooser__item:active, .login__google:active, .tpl:active { scale: 0.96; }
+.btn:active, .icon-btn:active, .chooser__item:active, .signin__button:active, .tpl:active { scale: 0.96; }
 
 /* ---------------------------------------------------------------------------
    Feature layer: inbox badge, link previews, sortable tables, task meter
@@ -1672,73 +1623,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .email-adv { margin-top: 12px; }
 
 
-/* The team site's footer, CSS ported verbatim (SiteFooter.css). */
-.site-footer {
-  width: 100%;
-  margin-top: clamp(40px, 8vw, 96px);
-  padding: clamp(12px, 1.8vw, 24px) clamp(18px, 4vw, 48px) clamp(36px, 4vw, 72px);
-  color: var(--muted);
-  font-family: 'Questrial', sans-serif;
-  font-size: 12px;
-  line-height: 1.35;
-  position: relative;
-  z-index: 2;
-}
-.site-footer__inner {
-  max-width: 960px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(16px, 3vw, 32px);
-  text-align: center;
-}
-.site-footer__socials {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: clamp(16px, 4vw, 28px);
-  margin-bottom: clamp(6px, 1.4vw, 16px);
-}
-.site-footer__socials a {
-  display: inline-flex;
-  width: clamp(26px, 5vw, 38px);
-  height: clamp(26px, 5vw, 38px);
-  justify-content: center;
-  align-items: center;
-  color: var(--fg);
-  opacity: 0.7;
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-.site-footer__socials a:hover,
-.site-footer__socials a:focus-visible {
-  opacity: 1;
-  transform: translateY(-2px) scale(1.06);
-}
-.site-footer__socials svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  fill: currentColor;
-}
-.site-footer__copy {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(4px, 1vw, 12px);
-  color: var(--muted);
-  max-width: 720px;
-}
-.site-footer__copy p {
-  margin: 0;
-}
-.site-footer a {
-  color: var(--fg);
-  text-decoration: none;
-  word-break: break-word;
-}
-.site-footer a:hover {
-  text-decoration: underline;
-}
 
 
 /* Bug reports: dropzone and screenshot strip. */

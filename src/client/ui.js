@@ -170,56 +170,13 @@ function route() {
 
 /* ------------------------------- login ----------------------------------- */
 
-// The team site's footer, ported glyph-for-glyph (SiteFooter.jsx). The one
-// wording change is required: the registered-status claim is banned while
-// Cornell registration is pending.
-// The site's debug-box motif: the card starts as a dotted draft and
-// finalizes to a solid ring once seen (MissionTiles.jsx, verbatim timing).
-function mountLoginCard(el) {
-  if (!el || el.dataset.mounted) return;
-  el.dataset.mounted = '1';
-  let timer;
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting) {
-        timer = setTimeout(() => {
-          el.classList.add('is-finalized');
-        }, 800);
-        observer.disconnect();
-      }
-    },
-    { threshold: 0.5 }
-  );
-  observer.observe(el);
-  cadCleanups.push(() => { observer.disconnect(); clearTimeout(timer); });
-}
-
-function loginFooter(previewLine) {
-  return `<footer class="site-footer">
-    <div class="site-footer__inner">
-      <div class="site-footer__socials" aria-label="CUPI social links">
-        <a href="https://github.com/Cornell-Physical-Intelligence" target="_blank" rel="noreferrer" aria-label="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.014 2.898-.014 3.293 0 .322.216.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
-        <a href="https://www.instagram.com/cornellphysicalintelligence/" target="_blank" rel="noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></a>
-        <a href="https://www.linkedin.com/company/cu-physical-intelligence/" target="_blank" rel="noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg></a>
-      </div>
-      <div class="site-footer__copy">
-        ${previewLine ? `<p>${previewLine}</p>` : ''}
-        <p><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a></p>
-        <p>CUPI is a student robotics organization at Cornell University.</p>
-        <p>Equal Education and Employment: <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" target="_blank" rel="noreferrer">https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment</a></p>
-      </div>
-    </div>
-  </footer>`;
-}
-
-
-// The signed-out page is the wiki's own frame with the members-only parts
-// locked: the sidebar shows the brand, a disabled search, the section names
-// with no pages, and an unsigned account row; the content column carries the
-// sign-in card where a page would be. Both builds render through
-// viewLoginShell and differ only in the card: src/remote.js overrides
-// viewLogin with the live Google link and the ?denied notice.
-const LOGIN_SUMMARY = 'CUPI’s internal knowledge base: subteam documentation, project pages, and team processes, with page history, CAD and schematic previews, and search. Members sign in with a cornell.edu Google account.';
+// Signed out, the wiki shows its own frame with the members-only parts
+// closed: the sidebar keeps the brand, the section names, and an unsigned
+// account row; the content column mirrors the home page, with the sign-in
+// control in the slot the search box has when signed in. Both builds render
+// through viewLoginShell and differ only in the control (src/remote.js
+// overrides viewLogin with the live Google link and the ?denied notice).
+const SIGNIN_NOTE = 'The internal wiki of Cornell Physical Intelligence. Members sign in with a cornell.edu Google account.';
 
 function viewSidebarLocked() {
   const folder = `<span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>`;
@@ -227,11 +184,6 @@ function viewSidebarLocked() {
     <div class="sidebar__head">
       <span class="sidebar__brand"><span class="sidebar__mark" aria-hidden="true">${CUPI_MARK}</span>CUPI Wiki</span>
     </div>
-    <button class="sidebar__search" disabled title="Sign in to search">${I.search} <span>Search…</span> <span class="kbd">⌘K</span></button>
-    <nav class="sidebar__nav">
-      <span class="navlink active">${I.home} Home</span>
-      <span class="navlink navlink--locked" title="Sign in to add pages">${I.plus} New page</span>
-    </nav>
     <div class="sidebar__scroll">
       ${SECTIONS.map((sec) => `<div class="tree-section tree-section--locked"><div class="tree-section__head tree-section__head--static">${folder}<span class="tree-section__label">${MD.esc(sec.name)}</span></div></div>`).join('')}
     </div>
@@ -244,16 +196,16 @@ function viewSidebarLocked() {
   </aside>`;
 }
 
-function viewLoginShell(card, footerNote = '') {
+function viewLoginShell(control) {
   return `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
     ${viewSidebarLocked()}
     <main class="main">
       ${topbar('<span class="crumbs__here">Sign in</span>')}
-      <div class="content"><div class="page-wrap"><div class="page-col">
-        <div class="plain-head"><h1>Sign in</h1><p>${LOGIN_SUMMARY}</p></div>
-        <div class="login__card">${card}</div>
-        ${loginFooter(footerNote)}
-      </div></div></div>
+      <div class="content search-home-content"><section class="signin" aria-labelledby="signin-title">
+        <h1 class="signin__title" id="signin-title">Sign in to the CUPI Wiki</h1>
+        ${control}
+        <p class="signin__note">${SIGNIN_NOTE}</p>
+      </section></div>
     </main>
     <div class="shell__scrim" data-action="nav-close"></div>
   </div>`;
@@ -264,8 +216,7 @@ function viewLogin() {
   return viewLoginShell(`
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
-      ${UI.chooser ? viewChooser() : `<button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}`,
-    'Preview build: sign-in is simulated and data stays in this browser.');
+      ${UI.chooser ? viewChooser() : `<button class="signin__button" data-action="login-google">${I.google}<span>Continue with Google</span></button>`}`);
 }
 
 function viewChooser() {

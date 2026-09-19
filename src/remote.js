@@ -330,7 +330,7 @@ viewLogin = function viewLoginRemote() {
   return viewLoginShell(`
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you. Once you're added, this same button will work.</div>` : ''}
-      <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>`);
+      <a class="signin__button" href="/api/auth/login">${I.google}<span>Continue with Google</span></a>`);
 };
 
 

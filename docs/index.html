@@ -248,76 +248,27 @@ label > .dd { width: 100%; }
    Login — mirrors the site's hero: emptiness, wordmark, letterspaced caps.
    ------------------------------------------------------------------------- */
 
-.login__card {
-  position: relative;
-  width: min(400px, 92vw);
-  display: flex; flex-direction: column; gap: 14px;
-  padding: clamp(18px, 3vw, 26px);
-  margin-top: clamp(18px, 3vh, 34px);
-  border-radius: var(--box-radius);
-  box-shadow: inset 0 0 0 2px transparent;
-  transition: box-shadow 0.17s ease;
-}
-
-/* Debug-style label (the site's motif, MissionTiles.css verbatim). */
-.login__card::before {
-  content: 'signin';
-  position: absolute;
-  top: -22px;
-  left: 8px;
-  background: rgba(var(--page-rgb), 0.75);
-  color: var(--fg);
-  border: 1px solid rgba(var(--fg-rgb), 0.35);
-  font-size: 9px;
-  font-family: monospace;
-  padding: 1px 5px;
-  line-height: 1.2;
-  border-radius: 2px;
-  z-index: 10;
-  pointer-events: none;
-}
-
-/* Debug-style dotted border. Matches the wrapper's radius so the dotted and
-   solid states trace the same corner. */
-.login__card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px dotted var(--fg);
-  border-radius: var(--box-radius);
-  z-index: -1;
-  pointer-events: none;
-  transition: opacity 0.17s ease;
-}
-
-/* Finalized state: dots fade out, solid fades in, tag flashes out. */
-.login__card.is-finalized {
-  box-shadow: inset 0 0 0 2px var(--fg);
-}
-.login__card.is-finalized::after { opacity: 0; }
-.login__card.is-finalized::before { animation: tag-flash-out 0.17s ease-out forwards; }
-
-@keyframes tag-flash-out {
-  0% { opacity: 1; filter: brightness(1); }
-  20% { opacity: 1; filter: brightness(2.5); }
-  40% { opacity: 0.8; filter: brightness(1); }
-  100% { opacity: 0; filter: brightness(1); }
-}
-
-.login__google {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  height: 44px; width: 100%;
-  border: 1px solid var(--rule); border-radius: var(--radius);
-  font-size: 14px; font-weight: 500;
-}
-.login__google:hover { background: var(--hover); }
-.login__google svg { width: 18px; height: 18px; flex: none; }
-
-/* Signed-out frame: the same shell with the members-only controls locked. */
-.sidebar__search:disabled { opacity: 0.55; pointer-events: none; }
-.navlink--locked { opacity: 0.55; cursor: default; }
-.navlink--locked:hover { background: transparent; color: var(--muted); }
+/* Signed-out frame: the shell with the members-only parts closed. The
+   sign-in control sits where the home page's search box sits, same metrics. */
 .tree-section--locked .tree-section__head--static { cursor: default; }
+.signin { max-width: 740px; margin: 0 auto; padding: clamp(32px, 6vh, 64px) 0 70px; display: flex; flex-direction: column; gap: 14px; -webkit-font-smoothing: antialiased; }
+.signin__title { margin: 0 0 11px; color: var(--fg); font-family: var(--font-ui); font-size: 30px; font-weight: 550; line-height: 1.25; letter-spacing: -0.04em; text-wrap: balance; }
+.signin__button {
+  display: flex; align-items: center; gap: 13px; width: 100%; height: 54px; padding: 0 17px;
+  border-radius: 9px; background: var(--page); color: var(--fg);
+  box-shadow: 0 0 0 1px var(--hairline), 0 2px 5px rgba(0, 0, 0, 0.03);
+  font-size: 16px; text-decoration: none; text-align: left; cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+.signin__button:hover, .signin__button:focus-visible { box-shadow: 0 0 0 1px var(--rule), 0 2px 5px rgba(0, 0, 0, 0.03); outline: none; }
+.signin__button svg { width: 19px; height: 19px; flex: none; }
+.signin__note { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); max-width: 62ch; }
+.signin .login__error { margin: 0; }
+@media (max-width: 600px) {
+  .signin { padding-top: 32px; }
+  .signin__title { font-size: 27px; }
+  .signin__button { gap: 10px; padding: 0 13px; }
+}
 .sidebar__user--anon { cursor: default; }
 .sidebar__user--anon:hover { background: transparent; }
 .avatar--anon { background: transparent; border: 1px dashed var(--rule); }
@@ -1359,14 +1310,14 @@ a.feed__row:hover { background: var(--hover); }
 .preview-tag { user-select: none; }
 
 /* Press feedback: exactly 0.96, properties named. */
-.btn, .icon-btn, .chooser__item, .tpl, .palette__item, .login__google, .navlink, .tree-item__row,
+.btn, .icon-btn, .chooser__item, .tpl, .palette__item, .signin__button, .navlink, .tree-item__row,
 .menu button, a.feed__row, .rev, .crumbs a, .backlink, .sidebar__user, .sidebar__search,
 .tree-section__head, .dd, .ed-autocomplete button, .prose a, .prose th, .reaction, .draft-chip {
   transition-property: background-color, border-color, color, opacity, scale, text-decoration-color;
   transition-duration: 0.15s;
   transition-timing-function: ease;
 }
-.btn:active, .icon-btn:active, .chooser__item:active, .login__google:active, .tpl:active { scale: 0.96; }
+.btn:active, .icon-btn:active, .chooser__item:active, .signin__button:active, .tpl:active { scale: 0.96; }
 
 /* ---------------------------------------------------------------------------
    Feature layer: inbox badge, link previews, sortable tables, task meter
@@ -1683,73 +1634,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .email-adv { margin-top: 12px; }
 
 
-/* The team site's footer, CSS ported verbatim (SiteFooter.css). */
-.site-footer {
-  width: 100%;
-  margin-top: clamp(40px, 8vw, 96px);
-  padding: clamp(12px, 1.8vw, 24px) clamp(18px, 4vw, 48px) clamp(36px, 4vw, 72px);
-  color: var(--muted);
-  font-family: 'Questrial', sans-serif;
-  font-size: 12px;
-  line-height: 1.35;
-  position: relative;
-  z-index: 2;
-}
-.site-footer__inner {
-  max-width: 960px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(16px, 3vw, 32px);
-  text-align: center;
-}
-.site-footer__socials {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: clamp(16px, 4vw, 28px);
-  margin-bottom: clamp(6px, 1.4vw, 16px);
-}
-.site-footer__socials a {
-  display: inline-flex;
-  width: clamp(26px, 5vw, 38px);
-  height: clamp(26px, 5vw, 38px);
-  justify-content: center;
-  align-items: center;
-  color: var(--fg);
-  opacity: 0.7;
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-.site-footer__socials a:hover,
-.site-footer__socials a:focus-visible {
-  opacity: 1;
-  transform: translateY(-2px) scale(1.06);
-}
-.site-footer__socials svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  fill: currentColor;
-}
-.site-footer__copy {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(4px, 1vw, 12px);
-  color: var(--muted);
-  max-width: 720px;
-}
-.site-footer__copy p {
-  margin: 0;
-}
-.site-footer a {
-  color: var(--fg);
-  text-decoration: none;
-  word-break: break-word;
-}
-.site-footer a:hover {
-  text-decoration: underline;
-}
 
 
 /* Bug reports: dropzone and screenshot strip. */
@@ -4411,56 +4295,13 @@ function route() {
 
 /* ------------------------------- login ----------------------------------- */
 
-// The team site's footer, ported glyph-for-glyph (SiteFooter.jsx). The one
-// wording change is required: the registered-status claim is banned while
-// Cornell registration is pending.
-// The site's debug-box motif: the card starts as a dotted draft and
-// finalizes to a solid ring once seen (MissionTiles.jsx, verbatim timing).
-function mountLoginCard(el) {
-  if (!el || el.dataset.mounted) return;
-  el.dataset.mounted = '1';
-  let timer;
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting) {
-        timer = setTimeout(() => {
-          el.classList.add('is-finalized');
-        }, 800);
-        observer.disconnect();
-      }
-    },
-    { threshold: 0.5 }
-  );
-  observer.observe(el);
-  cadCleanups.push(() => { observer.disconnect(); clearTimeout(timer); });
-}
-
-function loginFooter(previewLine) {
-  return `<footer class="site-footer">
-    <div class="site-footer__inner">
-      <div class="site-footer__socials" aria-label="CUPI social links">
-        <a href="https://github.com/Cornell-Physical-Intelligence" target="_blank" rel="noreferrer" aria-label="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.014 2.898-.014 3.293 0 .322.216.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
-        <a href="https://www.instagram.com/cornellphysicalintelligence/" target="_blank" rel="noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></a>
-        <a href="https://www.linkedin.com/company/cu-physical-intelligence/" target="_blank" rel="noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg></a>
-      </div>
-      <div class="site-footer__copy">
-        ${previewLine ? `<p>${previewLine}</p>` : ''}
-        <p><a href="https://cornellphysicalintelligence.com/">cornellphysicalintelligence.com</a></p>
-        <p>CUPI is a student robotics organization at Cornell University.</p>
-        <p>Equal Education and Employment: <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" target="_blank" rel="noreferrer">https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment</a></p>
-      </div>
-    </div>
-  </footer>`;
-}
-
-
-// The signed-out page is the wiki's own frame with the members-only parts
-// locked: the sidebar shows the brand, a disabled search, the section names
-// with no pages, and an unsigned account row; the content column carries the
-// sign-in card where a page would be. Both builds render through
-// viewLoginShell and differ only in the card: src/remote.js overrides
-// viewLogin with the live Google link and the ?denied notice.
-const LOGIN_SUMMARY = 'CUPI’s internal knowledge base: subteam documentation, project pages, and team processes, with page history, CAD and schematic previews, and search. Members sign in with a cornell.edu Google account.';
+// Signed out, the wiki shows its own frame with the members-only parts
+// closed: the sidebar keeps the brand, the section names, and an unsigned
+// account row; the content column mirrors the home page, with the sign-in
+// control in the slot the search box has when signed in. Both builds render
+// through viewLoginShell and differ only in the control (src/remote.js
+// overrides viewLogin with the live Google link and the ?denied notice).
+const SIGNIN_NOTE = 'The internal wiki of Cornell Physical Intelligence. Members sign in with a cornell.edu Google account.';
 
 function viewSidebarLocked() {
   const folder = `<span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>`;
@@ -4468,11 +4309,6 @@ function viewSidebarLocked() {
     <div class="sidebar__head">
       <span class="sidebar__brand"><span class="sidebar__mark" aria-hidden="true">${CUPI_MARK}</span>CUPI Wiki</span>
     </div>
-    <button class="sidebar__search" disabled title="Sign in to search">${I.search} <span>Search…</span> <span class="kbd">⌘K</span></button>
-    <nav class="sidebar__nav">
-      <span class="navlink active">${I.home} Home</span>
-      <span class="navlink navlink--locked" title="Sign in to add pages">${I.plus} New page</span>
-    </nav>
     <div class="sidebar__scroll">
       ${SECTIONS.map((sec) => `<div class="tree-section tree-section--locked"><div class="tree-section__head tree-section__head--static">${folder}<span class="tree-section__label">${MD.esc(sec.name)}</span></div></div>`).join('')}
     </div>
@@ -4485,16 +4321,16 @@ function viewSidebarLocked() {
   </aside>`;
 }
 
-function viewLoginShell(card, footerNote = '') {
+function viewLoginShell(control) {
   return `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
     ${viewSidebarLocked()}
     <main class="main">
       ${topbar('<span class="crumbs__here">Sign in</span>')}
-      <div class="content"><div class="page-wrap"><div class="page-col">
-        <div class="plain-head"><h1>Sign in</h1><p>${LOGIN_SUMMARY}</p></div>
-        <div class="login__card">${card}</div>
-        ${loginFooter(footerNote)}
-      </div></div></div>
+      <div class="content search-home-content"><section class="signin" aria-labelledby="signin-title">
+        <h1 class="signin__title" id="signin-title">Sign in to the CUPI Wiki</h1>
+        ${control}
+        <p class="signin__note">${SIGNIN_NOTE}</p>
+      </section></div>
     </main>
     <div class="shell__scrim" data-action="nav-close"></div>
   </div>`;
@@ -4505,8 +4341,7 @@ function viewLogin() {
   return viewLoginShell(`
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
-      ${UI.chooser ? viewChooser() : `<button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}`,
-    'Preview build: sign-in is simulated and data stays in this browser.');
+      ${UI.chooser ? viewChooser() : `<button class="signin__button" data-action="login-google">${I.google}<span>Continue with Google</span></button>`}`);
 }
 
 function viewChooser() {
@@ -6831,7 +6666,6 @@ function render() {
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
     syncSidebarInteraction();
-    mountLoginCard($('.login__card'));
     return;
   }
   if (UI.editor) view = viewEditor();

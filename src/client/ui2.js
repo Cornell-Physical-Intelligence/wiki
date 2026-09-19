@@ -1778,7 +1778,6 @@ function render() {
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
     syncSidebarInteraction();
-    mountLoginCard($('.login__card'));
     return;
   }
   if (UI.editor) view = viewEditor();
