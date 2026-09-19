@@ -1972,26 +1972,13 @@ function syncViewerTheme() {
   document.body.dataset.viewerDark = dark ? '1' : '0';
 }
 
-// Flies the boot-splash mark onto the sidebar brand (or just fades the splash
-// when there is no sidebar to land on: login, hidden nav, reduced motion).
+// Fades the boot splash out over the rendered app. The mark stays put while
+// it fades; it does not travel to the sidebar brand.
 function settleBoot(el) {
   if (!el) return;
-  const mark = el.querySelector('svg');
-  const target = $('.sidebar__logo svg');
-  const finish = () => { document.body.classList.remove('boot-settling'); el.remove(); };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const b = target && target.getBoundingClientRect();
-  const canFly = mark && b && !reduced && b.width > 0 && b.left >= 0;
   el.classList.add('is-done');
-  if (!canFly) { setTimeout(finish, reduced ? 0 : 400); return; }
-  const a = mark.getBoundingClientRect();
-  document.body.classList.add('boot-settling');
-  mark.style.transformOrigin = '0 0';
-  mark.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1)';
-  requestAnimationFrame(() => {
-    mark.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(${b.width / a.width})`;
-  });
-  setTimeout(finish, 520);
+  setTimeout(() => el.remove(), reduced ? 0 : 400);
 }
 
 (async function boot() {

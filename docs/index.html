@@ -395,21 +395,20 @@ label > .dd { width: 100%; }
   text-transform: uppercase; user-select: none; text-decoration: none;
 }
 .sidebar__brand { display: inline-flex; align-items: center; gap: 9px; }
-.sidebar__brand span { color: var(--faint); }
+.sidebar__brand span { color: var(--fg); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: 0.08em; }
 .sidebar__brand .sidebar__logo { color: var(--fg); }
 .sidebar__logo { height: 18px; display: block; color: var(--fg); user-select: none; }
 .sidebar__logo svg { height: 100%; width: auto; display: block; overflow: visible; }
-.boot-settling .sidebar__logo { visibility: hidden; }
 
 /* Boot splash: the mark draws itself in (rings, then fills, then the divider)
-   while the store boots; main.js then flies it onto .sidebar__logo. */
+   while the store boots, then the whole splash fades out over the app. */
 .boot {
   position: fixed; inset: 0; z-index: 1000;
   display: grid; place-items: center;
   background: var(--page); color: var(--fg);
-  transition: background-color 0.4s ease;
+  transition: opacity 0.35s ease;
 }
-.boot.is-done { background-color: transparent; pointer-events: none; }
+.boot.is-done { opacity: 0; pointer-events: none; }
 .boot svg { width: min(280px, 60vw); height: auto; overflow: visible; }
 .boot .mark__ring {
   stroke-dasharray: 233; stroke-dashoffset: 233;
@@ -11333,26 +11332,13 @@ function syncViewerTheme() {
   document.body.dataset.viewerDark = dark ? '1' : '0';
 }
 
-// Flies the boot-splash mark onto the sidebar brand (or just fades the splash
-// when there is no sidebar to land on: login, hidden nav, reduced motion).
+// Fades the boot splash out over the rendered app. The mark stays put while
+// it fades; it does not travel to the sidebar brand.
 function settleBoot(el) {
   if (!el) return;
-  const mark = el.querySelector('svg');
-  const target = $('.sidebar__logo svg');
-  const finish = () => { document.body.classList.remove('boot-settling'); el.remove(); };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const b = target && target.getBoundingClientRect();
-  const canFly = mark && b && !reduced && b.width > 0 && b.left >= 0;
   el.classList.add('is-done');
-  if (!canFly) { setTimeout(finish, reduced ? 0 : 400); return; }
-  const a = mark.getBoundingClientRect();
-  document.body.classList.add('boot-settling');
-  mark.style.transformOrigin = '0 0';
-  mark.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1)';
-  requestAnimationFrame(() => {
-    mark.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(${b.width / a.width})`;
-  });
-  setTimeout(finish, 520);
+  setTimeout(() => el.remove(), reduced ? 0 : 400);
 }
 
 (async function boot() {
