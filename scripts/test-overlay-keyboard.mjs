@@ -52,7 +52,7 @@ function fixture() {
     getBoundingClientRect() { return this.rect || { left: 30, top: 25, bottom: 45 }; }
   }
   document.body = new Node('body'); document.body.connect(true); document.activeElement = document.body;
-  const context = vm.createContext({ document, window: {}, UI: { modal: null, editor: null, menu: null },
+  const context = vm.createContext({ document, window: { addEventListener() {}, removeEventListener() {} }, UI: { modal: null, editor: null, menu: null },
     innerWidth: 800, innerHeight: 600,
     $: (selector) => document.querySelector(selector), $$: (selector) => document.querySelectorAll(selector),
     setTimeout(fn) { timers.push(fn); }, render() {}, nav() {}, route() {},
@@ -170,6 +170,47 @@ function fixture() {
   const dialog = f.node('div', { cls: 'modal' }); const cancel = f.node('button', {}, dialog); cancel.focus();
   f.key('f', cancel, { ctrlKey: true }); f.key('s', cancel, { metaKey: true });
   assert.equal(f.document.activeElement, cancel);
+}
+
+// Exit callbacks cannot leave an invisible veil or close a newer dialog.
+{
+  const f = fixture(); const closing = { kind: 'confirm' }; f.context.UI.modal = closing;
+  const veil = f.node('div', { cls: 'modal-veil' });
+  f.context.calls = 0; f.run('closeModal(() => { calls++; })');
+  f.timers.shift()();
+  assert.equal(veil.isConnected, false, 'veil removed even when callback never renders');
+  assert.equal(f.context.calls, 1); assert.equal(f.context.UI.modal, null);
+}
+{
+  const f = fixture(); f.context.UI.modal = { kind: 'profile' };
+  const veil = f.node('div', { cls: 'modal-veil' });
+  f.context.calls = 0; f.run('closeModal(() => { calls++; })');
+  const newer = { kind: 'new-page' }; f.context.UI.modal = newer;
+  f.timers.shift()();
+  assert.equal(f.context.UI.modal, newer); assert.equal(f.context.calls, 0);
+  assert.equal(veil.isConnected, false);
+}
+// Save-dialog shortcuts do not hijack a focused disclosure or Cancel button.
+{
+  const f = fixture(); f.context.UI.editor = {}; f.context.UI.modal = { kind: 'save-summary' };
+  const dialog = f.node('div', { cls: 'modal' });
+  const cancel = f.node('button', { data: { action: 'modal-close' } }, dialog); cancel.focus();
+  assert.equal(f.key('Enter').defaultPrevented, false);
+  const disclosure = f.node('summary', {}, dialog); disclosure.focus();
+  assert.equal(f.key('Enter').defaultPrevented, false);
+  f.key('Escape', disclosure, { isComposing: true }); assert.ok(f.context.UI.modal);
+}
+// A popup stays open while scrolling its own content, closes when its anchor moves.
+{
+  const f = fixture(); const anchor = f.node('button'); const host = f.node('div'); host.remove(); f.node('button', {}, host);
+  f.context.host = host; f.context.anchor = anchor; f.context.UI.menu = {};
+  f.run('mountMenu(host, anchor)');
+  for (const fn of [...f.listeners.get('pointerdown')]) fn({ target: anchor });
+  assert.ok(f.context.UI.menu, 'pointerdown on trigger leaves toggle ownership to click');
+  for (const fn of [...f.listeners.get('scroll')]) fn({ target: host });
+  assert.ok(f.context.UI.menu);
+  for (const fn of [...f.listeners.get('scroll')]) fn({ target: f.document.body });
+  assert.equal(f.context.UI.menu, null);
 }
 
 console.log('overlay keyboard tests passed: dialog focus/restore/traps, popup dismissal/navigation/bounds, editor isolation');

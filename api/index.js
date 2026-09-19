@@ -7,6 +7,12 @@ import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
 import { handleInterest } from '../lib/interest.js';
 import { fileBugPR } from '../lib/github.js';
+import { generateChangeSummary, validateChangeSummary } from '../lib/change-summary.js';
+import { reviewPage, validatePageReview } from '../lib/page-review.js';
+import { meaningSearch, validateMeaningSearch } from '../lib/meaning-search.js';
+import { getAiSettings } from '../lib/db.js';
+import { aiUsageLedger } from '../lib/ai-usage.js';
+import { AI_MODELS, aiPublicSettings, validateAiSettings, sealAiKey, resolveAiConnection } from '../lib/ai-settings.js';
 
 // Best-effort per-instance spacing so one member cannot firehose PRs.
 const bugLast = new Map();
@@ -26,6 +32,8 @@ const MAX_UPLOAD = 4 * 1024 * 1024; // Vercel function body ceiling is ~4.5MB
 // Vercel may have pre-parsed the body despite the config flag; prefer it.
 async function readJson(req, cap = MAX_UPLOAD) {
   if (req.body !== undefined && req.body !== null) {
+    const raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    if (Buffer.byteLength(raw, 'utf8') > cap) throw Object.assign(new Error('Body too large'), { status: 413 });
     return typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
   }
   const buf = await readBody(req, cap);
@@ -68,6 +76,7 @@ function shapeState(state, me, prefs) {
     ...state,
     prefs: me ? { [me.email]: prefs ?? state.prefs?.[me.email] ?? {} } : {},
     settings: {
+      ai: aiPublicSettings(state.settings?.ai, me?.role === 'admin'),
       email: {
         from: email?.from || '',
         name: email?.name || '',
@@ -156,6 +165,70 @@ export default async function handler(req, res) {
 
     // Everything below requires a signed-in, active member.
     if (!me) return json(res, 401, { error: 'Not signed in' });
+
+    if (path === '/ai/usage' && req.method === 'GET') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Only admins can view AI usage' });
+      return json(res, 200, { usage: await aiUsageLedger.snapshot() }, { 'cache-control': 'private, no-store' });
+    }
+
+    if (path === '/ai/settings' || path === '/ai/test') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Only admins can configure AI' });
+      const headers = { 'cache-control': 'private, no-store' };
+      if (path === '/ai/settings' && req.method === 'GET') {
+        return json(res, 200, { settings: aiPublicSettings(await getAiSettings(), true), models: AI_MODELS }, headers);
+      }
+      if ((path === '/ai/settings' && req.method === 'PUT') || (path === '/ai/test' && req.method === 'POST')) {
+        const body = await readJson(req, 6000);
+        const disconnect = path === '/ai/settings' && body?.disconnect === true;
+        const checked = disconnect ? { value: {} } : validateAiSettings(body);
+        if (checked.error) return json(res, 400, { error: checked.error }, headers);
+        const input = checked.value;
+        if (path === '/ai/test') {
+          const connection = resolveAiConnection(await getAiSettings());
+          if (input.key) connection.apiKey = input.key;
+          if (!connection.apiKey) return json(res, 400, { error: 'Add an OpenAI API key first' }, headers);
+          const result = await generateChangeSummary({ title: 'Connection test', beforeTitle: 'Connection test', section: 'Software', beforeSection: 'Software', diff: '- Test pending\n+ Test complete', isNew: false, truncated: false }, { ...connection, model: input.model, effort: input.effort, actor: email });
+          const errors = { budget_limit: 'The wiki has reached its AI spending limit. Editing and saving are still available.', request_limit: 'This request could exceed the 5¢ limit. Choose Luna or a lower reasoning effort.', rate_limit: 'Too many AI requests. Try again in a minute.', concurrency_limit: 'AI is handling other requests. Try again shortly.', duplicate: 'This request was already checked recently. Try again later.', accounting_unavailable: 'Spending protection is unavailable. No AI request was sent.', accounting_halted: 'AI is paused because provider usage exceeded its reservation. Review the account billing before resuming.', authentication: 'OpenAI rejected this key. Check its permissions or replace it.', quota: 'OpenAI could not accept the request. Check the account’s credits and rate limits.', configuration: 'This account cannot use the selected model and effort.', incomplete: 'The model did not finish in the available response budget. Try a lower effort.', unavailable: 'OpenAI did not respond in time. Try again.' };
+          return result.available ? json(res, 200, { ok: true }, headers) : json(res, 422, { error: errors[result.reason] || 'The connection could not complete a test request.' }, headers);
+        }
+        const credential = input.key ? sealAiKey(input.key) : null;
+        let denied = false;
+        const out = await updateState((s) => {
+          denied = !s.users.some((u) => u.email === email && u.status === 'active' && u.role === 'admin');
+          if (denied) return false;
+          s.settings ||= {};
+          const current = s.settings.ai || {};
+          s.settings.ai = disconnect
+            ? { ...current, credential: null, keyTail: '', enabled: false, updatedAt: Date.now(), updatedBy: email }
+            : { ...current, model: input.model, effort: input.effort, enabled: true,
+                ...(credential ? { credential, keyTail: input.key.slice(-4) } : {}), updatedAt: Date.now(), updatedBy: email };
+          return s;
+        });
+        if (denied) return json(res, 403, { error: 'Only active admins can configure AI' }, headers);
+        return json(res, 200, { settings: aiPublicSettings(out.state.settings.ai, true) }, headers);
+      }
+      return json(res, 405, { error: 'Method not allowed' }, headers);
+    }
+
+    // Server-only credentials; summaries never mutate the page or bypass its
+    // normal save/conflict checks. Every provider call reserves shared budget.
+    if (path === '/change-summary' && req.method === 'POST') {
+      const input = validateChangeSummary(await readJson(req, 80000));
+      if (!input) return json(res, 400, { error: 'Invalid change preview' });
+      return json(res, 200, await generateChangeSummary(input, { ...resolveAiConnection(await getAiSettings()), actor: email }), { 'cache-control': 'private, no-store' });
+    }
+
+    if (path === '/page-review' && req.method === 'POST') {
+      const input = validatePageReview(await readJson(req, 240000));
+      if (!input) return json(res, 400, { error: 'Invalid page review' });
+      return json(res, 200, await reviewPage(input), { 'cache-control': 'private, no-store' });
+    }
+
+    if (path === '/meaning-search' && req.method === 'POST') {
+      const input = validateMeaningSearch(await readJson(req, 180000));
+      if (!input) return json(res, 400, { error: 'Invalid search request' });
+      return json(res, 200, await meaningSearch(input), { 'cache-control': 'private, no-store' });
+    }
 
     /* ------------------------------ state ---------------------------------- */
 
@@ -442,6 +515,7 @@ export default async function handler(req, res) {
 
     return json(res, 404, { error: 'No such endpoint' });
   } catch (e) {
+    if (e.status === 413) return json(res, 413, { error: 'Body too large' });
     if (e instanceof StorageNotConfigured) return json(res, 503, { error: e.message });
     if (/exceeded (?:the )?data transfer quota/i.test(String(e?.message || ''))) {
       return json(res, 503, {

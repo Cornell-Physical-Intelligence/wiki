@@ -1,0 +1,102 @@
+/* Floating controls share a restrained glass material. Large reading surfaces
+   carry more tint; compact confirmations keep the clear, rounded bubble. */
+:root {
+  --popup-corner-scale: 1;
+  --glass-popup: rgba(255,255,255,.52);
+  --glass-panel: rgba(255,255,255,.76);
+  --glass-edge: rgba(255,255,255,.64);
+  --glass-shadow: 0 8px 28px rgba(20,25,30,.10), 0 2px 5px rgba(20,25,30,.045), 0 0 0 .5px rgba(20,25,30,.10);
+  --glass-inner: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 rgba(255,255,255,.16);
+}
+/* Preserve the nominal circular corner's diagonal footprint when switching
+   to G2. Scaling both contours keeps the inset even at edges and diagonals;
+   remaining normal-clearance variation is under .3px at our largest inset. */
+@supports (corner-shape: superellipse(2)) {
+  :root { --popup-corner-scale: 1.8408964153; }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --glass-popup: rgba(39,41,44,.66); --glass-panel: rgba(34,36,39,.84);
+    --glass-edge: rgba(255,255,255,.08);
+    --glass-shadow: 0 8px 28px rgba(0,0,0,.24), 0 2px 5px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.18);
+    --glass-inner: inset 0 1px 0 rgba(255,255,255,.07), inset 0 -1px 0 rgba(255,255,255,.035);
+  }
+}
+:root[data-theme='dark'] {
+  --glass-popup: rgba(39,41,44,.66); --glass-panel: rgba(34,36,39,.84);
+  --glass-edge: rgba(255,255,255,.08);
+  --glass-shadow: 0 8px 28px rgba(0,0,0,.24), 0 2px 5px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.18);
+  --glass-inner: inset 0 1px 0 rgba(255,255,255,.07), inset 0 -1px 0 rgba(255,255,255,.035);
+}
+.toast, .menu, .modal, .palette, .linkpreview, .ed-autocomplete, .findbar {
+  --popup-radius: 12px;
+  --popup-inset: 6px;
+  --popup-border: 1px;
+  --popup-pad: calc(var(--popup-inset) - var(--popup-border));
+  --popup-inner-radius: max(0px, calc(var(--popup-radius) - var(--popup-inset)));
+  --popup-inner-curve: calc(var(--popup-inner-radius) * var(--popup-corner-scale));
+  isolation: isolate;
+  background: var(--glass-popup);
+  color: var(--fg);
+  border: var(--popup-border) solid var(--glass-edge);
+  border-radius: calc(var(--popup-radius) * var(--popup-corner-scale));
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+  backdrop-filter: blur(12px) saturate(1.25);
+}
+.toast, .modal, .palette { position: relative; }
+.glass-surface::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit; pointer-events: none;
+  background-image: var(--glass-shader, none); background-size: 100% 100%;
+}
+.toast { --popup-radius: 12px; min-height: 46px; padding: 12px 20px; font-size: 13px; white-space: normal; max-width: calc(100vw - 32px); }
+.toast button { color: var(--fg); white-space: nowrap; min-height: 24px; }
+.menu, .ed-autocomplete { padding: var(--popup-pad); }
+.menu button, .ed-autocomplete button { border-radius: var(--popup-inner-curve); min-height: 40px; }
+.menu button { gap: 10px; line-height: 20px; }
+.menu__icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 20px; flex: none; }
+.menu__label { min-width: 0; overflow-wrap: anywhere; }
+.menu hr { margin: 4px 0; flex-shrink: 0; }
+.menu--account button { padding-left: 0; gap: 9px; }
+.menu--account .menu__icon { width: 24px; }
+.emoji-pop { min-width: 0; width: max-content; grid-template-columns: repeat(4, 40px); gap: 2px; }
+.emoji-pop button { width: 40px; height: 40px; padding: 0; }
+.modal { --popup-radius: 16px; --popup-inset: 10px; background: var(--glass-panel); }
+.modal.interest-review { --popup-radius: 14px; --popup-inset: 8px; }
+.modal__head { padding: var(--popup-pad) var(--popup-pad) 0 19px; }
+.modal__head > .icon-btn { width: 40px; height: 40px; align-self: flex-start; border-radius: var(--popup-inner-curve); }
+.modal__head > .icon-btn::after { inset: 0; }
+.modal__foot { padding: var(--popup-pad); flex-wrap: wrap; background: transparent; }
+.modal__foot > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
+.interest-review .modal__head { padding: var(--popup-pad) var(--popup-pad) var(--popup-pad) 19px; }
+.modal .tpl { --template-inset: 8px; padding: var(--template-inset); border-radius: 6px; }
+.modal .tpl__thumb { border-radius: max(0px, calc(6px - var(--template-inset) - 1px)); }
+.palette { --popup-radius: 18px; --popup-inset: 10px; background: var(--glass-panel); }
+.palette .palette__list { padding: var(--popup-pad); }
+.palette .palette__item { border-radius: var(--popup-inner-curve); }
+.palette__foot { background: transparent; }
+.ed-autocomplete { min-width: min(230px, calc(100vw - 20px)); max-width: calc(100vw - 20px); max-height: min(320px, calc(100dvh - 20px)); overflow-y: auto; }
+.ed-autocomplete button { min-width: 0; overflow-wrap: anywhere; }
+.linkpreview { max-height: calc(100dvh - 16px); overflow-y: auto; overflow-wrap: anywhere; }
+.findbar { position: relative; --popup-radius: 12px; --popup-inset: 6px; margin: 6px clamp(10px, 2vw, 24px); padding: var(--popup-pad); }
+.findbar input { flex: 1 1 180px; min-width: 40px; width: auto; height: 40px; border-radius: var(--popup-inner-curve); }
+.findbar .icon-btn { width: 40px; height: 40px; border-radius: var(--popup-inner-curve); }
+.findbar .icon-btn::after { inset: 0; }
+.findbar__count { min-width: 0; white-space: nowrap; }
+@media (max-width: 600px) {
+  .palette { --popup-radius: 14px; --popup-inset: 6px; }
+  .modal__foot { gap: 6px; }
+  .findbar { gap: 2px; }
+  .findbar__count { font-size: 10px; }
+}
+.modal-veil, .palette-veil { background: rgba(0,0,0,.10); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.modal-veil--steady:not(.leaving), .modal-veil--steady:not(.leaving) > .modal { animation: none; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .toast, .menu, .modal, .palette, .linkpreview, .ed-autocomplete, .findbar { background: var(--pop); }
+}
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .toast, .menu, .modal, .palette, .linkpreview, .ed-autocomplete, .findbar { background: var(--pop); border: 1px solid var(--fg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-surface::before { display: none; }
+}
+@media print { .glass-surface::before { display: none; } }

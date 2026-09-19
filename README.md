@@ -6,9 +6,21 @@ Internal knowledge base for Cornell Physical Intelligence (CUPI), a Cornell Univ
 - Drag-and-drop **images, schematics, and CAD**: STL/OBJ get an interactive 3D viewer in the page; STEP / SchDoc / PcbDoc / PDF attach as labeled cards; **Onshape and Altium 365 links become rich cards**
 - Full **version history with diffs and restore**, trash with 30-day retention
 - **⌘K search**, templates (meeting notes, design doc, decision record, BOM, test report, bring-up log)
+- **Search** automatically searches page previews for the task you describe; save previews suggest change summaries and flag concrete dependencies in linked pages
+- Admin intake review with shared flags, attributed comments, direct row deletion, and archives that preserve reviews
 - Comments, activity feed, per-page **watching with an inbox**, starred pages, **wiki health** (broken links / orphans / stale pages)
 - **Google OAuth restricted to cornell.edu** + an admin-managed member allowlist with emailed invite codes
 - Matches the design language of [cornellphysicalintelligence.com](https://cornellphysicalintelligence.com)
+
+## Brand
+
+The CUPI mark is four circles: left half filled, bottom half filled, upper-right quarter filled, and an outline split by a vertical bar. It is the club's logo everywhere in this repo; the crab that appears on the welcome page, in the welcome email, and on the link-preview card is a mascot illustration, not the logo.
+
+- `src/client/logo-row.svg` — the row form (masters the sidebar brand and the boot splash, inlined as `CUPI_LOGO` at build time; draws in `currentColor` so it follows the theme). The mark already spells CUPI, so the sidebar brand is the mark followed by the single word "Wiki"; the link keeps an accessible "CUPI Wiki" label.
+- `src/client/logo-square.svg` — the 2x2 form, the master for every icon: `favicon-squircle-32.png` (browser tab, inline data URI) and `favicon-cupi-192.png` (crawlable `/favicon-cupi.png`, Apple touch icon) are rasterized from it as a black mark on white with a hairline edge.
+- Opening the wiki shows the mark drawing itself in over the page background until the store has booted, then it flies onto the sidebar brand (`settleBoot` in `src/client/main.js`). Reduced-motion users get a plain fade.
+
+Re-rasterize the PNGs from `logo-square.svg` whenever the mark changes; do not reintroduce the crab as a logo or icon.
 
 ## Architecture
 
@@ -22,6 +34,7 @@ No framework. The client is one self-contained HTML file (`scripts/build.mjs` as
 - `/api/state?since=<content version>&prefsSince=<personal version>` checks both versions in one small query. A preferences-only change returns preferences without pages or attachment listings. Older open tabs can still save; reload them to receive cross-device preference changes without waiting for a content change.
 - Hidden tabs and tabs idle for five minutes pause polling. Preference saves are debounced and duplicate values are skipped. Server acknowledgments include the canonical saved values so validation limits cannot leave the client displaying unsaved settings.
 - Multipart page uploads retain their parts until the completed file is verified. A stable file ID makes finish retries reuse the same file after a lost response; cleanup failures do not invalidate a successful upload.
+- `wiki_ai_usage` holds shared OpenAI spending reservations, measured token costs, and request counters separately from content. Include it in backups and retain it across redeployments and rollbacks; deleting or restoring an older ledger can reset spending protection. Production uses atomic versioned updates across workers; local development uses `.devaiusage.json`.
 
 The public Interest form uses a separate private Blob receipt journal before database processing. Its recovery path and browser draft protections are independent of wiki preference synchronization.
 
@@ -35,8 +48,25 @@ The public Interest form uses a separate private Blob receipt journal before dat
    - Also set `SESSION_SECRET` to a long random string (`openssl rand -hex 32`)
 4. **Domain** — Vercel project → *Settings → Domains* → add `wiki.cornellphysicalintelligence.com`; then in Google Cloud DNS (the domain's DNS host) add: `wiki  CNAME  cname.vercel-dns.com.`
 5. **Invite emails (optional)** — create a [Resend](https://resend.com) key, set `RESEND_API_KEY` (and `RESEND_FROM` once the domain is verified there). Without it, invites still work — admins share the code from the Pending list.
+6. **Page assistance (optional)** — an admin connects an OpenAI API key under **Settings → AI**, chooses a model and reasoning effort, and tests the connection there. Defaults are Luna (`gpt-5.6-luna`) with no reasoning for speed. Keys are AES-256-GCM encrypted using `WIKI_CREDENTIAL_SECRET` (or the existing `SESSION_SECRET`); keep that server secret stable across deployments. An existing server-side `OPENAI_API_KEY` remains a migration fallback until a saved key replaces it; Disconnect disables both. Set server-side `TYPESAFE_API_KEY` separately for Jev (`jev-latest`) and redeploy. ChatGPT/Codex sign-in does not supply the Platform API credential. Never put either key in client files or public environment variables.
 
 First sign-in: `ab3233@cornell.edu` is seeded as admin. Add everyone else from **Members & access**.
+
+### Page assistance
+
+Change summaries start quietly after a 1.6-second pause while editing, with at least 10 seconds between background requests. Exact recent drafts reuse their results, including Undo and opening Save; hidden tabs, composition, pending uploads, unchanged pages and disconnected AI skip prefetch. Failures back off for 30 seconds. Saving opens an editable summary and a bounded diff preview immediately, using a cached suggestion as the placeholder when ready; generation never disables Save. The owner-selected model (Luna by default) receives the page title, section and changed lines, with embedded file data removed; provider response storage is disabled. A basic summary remains available when the key is absent or the provider times out. After a pause in editing, Jev quietly checks the page for a clearer section, unfinished placeholders, unassigned commitments, and concrete effects on up to eight linked pages. Suggestions never change content automatically or prevent saving.
+
+**Search** automatically sends the query and up to 32 eligible page previews (a mix of keyword matches and pages from each section) to Jev. It returns up to five strongly relevant pages ahead of normal results. Existing search filters still apply. Requests are debounced and cancelled when the query changes or search closes. Results appear in the normal list without an AI mode or status; existing keyboard selections stay in place. This is bounded discovery rather than an exhaustive semantic index. Attachments and intake records are never candidates.
+
+All three endpoints require active membership. Requests have size limits and short timeouts, and identical provider calls share a ten-minute in-memory cache. Provider credentials stay on the server, and provider failures leave normal search and saving available. `npm run test:assistance` exercises provider contracts and save-preview behavior with synthetic transports.
+
+**OpenAI spending:** Settings → AI shows estimated costs and request counts for today and this month. The shared limits are **$1/day, $5/calendar month, and 5¢ per request**, with UTC boundaries. Every paid request, including connection tests, must first reserve its conservative maximum cost in Postgres. Provider-reported input, cached input, cache-write and output/reasoning usage settle that reservation; timeouts, missing usage, and failed accounting keep the full reservation counted. If accounting is unavailable, no new provider call is sent. Unexpected costs or provider tiers pause calls for review. Editing and saving remain available throughout.
+
+OpenAI calls are additionally limited to 3 concurrent requests globally (1 per member), 30/minute globally (8 per member), and 1,200/day globally (200 per member). Cross-worker duplicates are suppressed for two minutes, and a crashed worker releases its concurrency slot after 90 seconds without refunding possible spend. High-cost model/effort combinations may be rejected by the 5¢ request ceiling. Limits cannot be raised by browser input or by replacing a key. The admin readout refreshes only while visible, without replacing unsaved forms.
+
+Tracking starts when the ledger is initialized and covers this wiki’s OpenAI requests only. It excludes earlier use, Jev, hosting, and other applications sharing the key. Costs use published standard short-context rates dated September 18, 2026; review `lib/ai-usage.js` when provider pricing changes. The provider invoice remains authoritative. There is deliberately no UI action to clear the ledger or reset a safety halt; inspect provider billing and reconcile retained reservations before changing it. `node --test scripts/test-ai-usage.mjs scripts/test-ai-usage-ui.mjs` covers concurrent workers, budget races, crash/timeout handling, UTC rollover, and settings refresh behavior without using a real credential.
+
+Intake review adds `review` and `review_version` columns on first use. Keep them in database backups. Comments append atomically with retry-safe IDs; applicant updates cannot overwrite review data. Archive clearing checks both the application and review versions so a comment arriving during archiving stays on the live list.
 
 ## Local dev
 
@@ -47,3 +77,5 @@ npm run dev     # builds the client and serves on :4870 with fake auth + in-memo
 ## Security model
 
 Google proves the email (domain re-verified server-side — the `hd` hint is not trusted); the allowlist in state decides membership; every mutation is re-applied server-side with role checks; invite codes are one-time, admin-visible only; sessions are HMAC-signed HttpOnly cookies. Attachments are served only to signed-in members.
+
+The workspace uses restrained navigation and reference-wiki article structure. Floating surfaces share a custom WebGL fragment shader for curved edge lighting and shading, with CSS backdrop blur. One shared renderer draws only on open, resize or theme change. Reduced-transparency/high-contrast preferences and unavailable WebGL use a readable fallback.

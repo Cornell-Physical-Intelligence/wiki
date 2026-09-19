@@ -116,10 +116,30 @@ if (!process.env.INTAKE_TEST_ROOT) {
       }
       if (text.startsWith('DELETE FROM interest_submissions AS live')) {
         assert.match(text, /live.id = archived.id AND live.updated = archived.updated/);
-        const versions = new Map(JSON.parse(v[0]).map((r) => [r.id, r.updated]));
-        const removed = db.rows.filter((r) => versions.get(r.id) === r.updated);
-        db.rows = db.rows.filter((r) => versions.get(r.id) !== r.updated);
+        assert.match(text, /live.review_version = archived.review_version/);
+        const versions = new Map(JSON.parse(v[0]).map((r) => [r.id, `${r.updated}/${r.review_version || 0}`]));
+        const included = (r) => versions.get(r.id) === `${r.updated}/${r.review_version || 0}`;
+        const removed = db.rows.filter(included);
+        db.rows = db.rows.filter((r) => !included(r));
         return result(removed);
+      }
+      if (text.startsWith('DELETE FROM interest_submissions WHERE id')) {
+        const removed = db.rows.filter((r) => r.id === v[0]);
+        db.rows = db.rows.filter((r) => r.id !== v[0]);
+        return result(removed);
+      }
+      if (text.startsWith('DELETE FROM interest_archives WHERE id')) {
+        const removed = db.archives.filter((a) => a.id === v[0]);
+        db.archives = db.archives.filter((a) => a.id !== v[0]);
+        return result(removed);
+      }
+      if (text.startsWith('DELETE FROM wiki_files WHERE id')) {
+        assert.match(text, /NOT EXISTS \(SELECT 1 FROM interest_submissions WHERE file_id/);
+        assert.match(text, /NOT EXISTS \(SELECT 1 FROM interest_archives/);
+        assert.match(text, /jsonb_array_elements\(a.rows\)/);
+        assert.deepEqual(v, [v[0], v[0], v[0]]);
+        if (!db.rows.some((r) => r.file_id === v[0]) && !db.archives.some((a) => a.rows.some((r) => r.fileId === v[0]))) db.files.delete(v[0]);
+        return result();
       }
       throw new Error('Unexpected synthetic SQL: ' + text);
     },
@@ -244,6 +264,24 @@ if (!process.env.INTAKE_TEST_ROOT) {
   await request('POST', '/interest/archive', { name: 'Concurrent archive' });
   assert.equal(db.rows.length, 2, 'new and edited versions absent from the archive snapshot remain live');
   assert.notEqual(db.archives.at(-1).rows[0].project, 'Changed during archive');
+
+  const reviewedId = db.rows[0].id;
+  db.archiveRace = () => {
+    db.rows[0].review_version = 1;
+    db.rows[0].review = { comments: [{ id: 'ic-concurrent', text: 'Review posted during archive', by: 'lead@cornell.edu', ts: clock }] };
+  };
+  await request('POST', '/interest/archive', { name: 'Concurrent review archive' });
+  assert.deepEqual(db.rows.map((r) => r.id), [reviewedId], 'review updates absent from the snapshot remain on the live list');
+  assert.equal(db.archives.at(-1).rows.find((r) => r.id === reviewedId).review, undefined);
+
+  const sharedFile = 'int-sharedreview';
+  db.rows[0].file_id = sharedFile;
+  db.files.set(sharedFile, { id: sharedFile });
+  db.archives.push({ id: 'ar-referenceguard', ts: clock, name: 'Shared file', rows: [{ id: reviewedId, fileId: sharedFile }] });
+  assert.equal((await request('DELETE', `/interest/${reviewedId}`)).status, 200);
+  assert.ok(db.files.has(sharedFile), 'Postgres cleanup preserves archived files when deleting live rows');
+  assert.equal((await request('DELETE', '/interest/archives/ar-referenceguard')).status, 200);
+  assert.equal(db.files.has(sharedFile), false, 'Postgres cleans up only after the last reference is removed');
 
   blob.failed = true;
   const availableDb = await request('POST', '/interest', form('blobdown@example.com'));

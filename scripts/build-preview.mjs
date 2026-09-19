@@ -1,7 +1,7 @@
 // Builds docs/index.html (GitHub Pages preview: whole app, browser-local mode)
 // and dist/artifact.html (the same app as a Claude artifact fragment).
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { fullPage, styles, scripts } from './assemble.mjs';
+import { fullPage, styles, scripts, bootSplash } from './assemble.mjs';
 
 mkdirSync(new URL('../docs', import.meta.url), { recursive: true });
 const page = fullPage({ remote: false });
@@ -14,6 +14,7 @@ const fragment = `<title>CUPI Wiki</title>
 <style>
 ${styles()}
 </style>
+${bootSplash()}
 <div id="app"></div>
 <script>
 ${scripts({ remote: false })}

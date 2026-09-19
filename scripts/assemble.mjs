@@ -2,13 +2,29 @@
 // GitHub Pages preview (docs/), and the artifact fragment. One source of
 // truth so the builds can't drift.
 import { readFileSync } from 'node:fs';
+import { AI_MODELS, AI_DEFAULTS } from '../lib/ai-settings.js';
 
 const read = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url), 'utf8');
 const b64 = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url)).toString('base64');
 
-// The site's own favicon — the same rounded-square tab mark as
-// cornellphysicalintelligence.com, so both CUPI tabs carry one silhouette.
+// The CUPI mark: four circles. logo-row.svg is the wordmark-height row the
+// sidebar and boot splash use; logo-square.svg is the 2x2 form behind every
+// icon (favicon-squircle-32.png, favicon-cupi-192.png). Both draw in
+// currentColor so they follow the theme. See README "Brand".
+const svg = (f) => read(f).replace(/<!--[\s\S]*?-->\s*/g, '').trim();
+export const LOGO_ROW = svg('logo-row.svg');
+export const LOGO_SQUARE = svg('logo-square.svg');
+
+// The site's own favicon — the rounded-square tab mark, rasterized from
+// logo-square.svg (black mark on white).
 export const FAVICON = `data:image/png;base64,${b64('favicon-squircle-32.png')}`;
+
+// Shown from the first paint until the store has booted: the mark draws
+// itself in, then main.js settles it onto the sidebar brand. Lives outside
+// #app so render() cannot wipe it mid-animation.
+export function bootSplash() {
+  return `<div id="boot" class="boot" aria-hidden="true">${LOGO_ROW}</div>`;
+}
 
 // Public SEO surface for the production wiki only. The GitHub Pages preview
 // and the artifact build stay noindexed so they can never be indexed in place
@@ -60,13 +76,16 @@ export function styles() {
   return `@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${b64('playfair.woff2')}) format('woff2');}
 @font-face{font-family:'Questrial';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,${b64('questrial.woff2')}) format('woff2');}
 ${read('styles.css')}
-${read('search.css')}`;
+${read('search.css')}
+${read('glass.css')}`;
 }
 
 // Binary assets are injected ahead of the app code as constants.
 export function scripts({ remote = false } = {}) {
-  const assets = `'use strict';
-const CUPI_LOGO = 'data:image/png;base64,${b64('cupi-logo-192.png')}';
+const assets = `'use strict';
+const AI_MODELS = ${JSON.stringify(AI_MODELS)};
+const AI_DEFAULTS = ${JSON.stringify(AI_DEFAULTS)};
+const CUPI_LOGO = ${JSON.stringify(LOGO_ROW)};
 const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
   return [
     assets,
@@ -79,8 +98,10 @@ const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
     read('ui2.js'),
     read('ui3.js'),
     read('search.js'),
+    read('ai.js'),
     ...(remote ? [readFileSync(new URL('../src/remote.js', import.meta.url), 'utf8')] : []),
     read('main.js'),
+    read('glass.js'),
   ].join('\n');
 }
 
@@ -125,6 +146,7 @@ ${styles()}
 </style>
 </head>
 <body>
+${bootSplash()}
 <div id="app"></div>
 <script>
 ${scripts({ remote })}

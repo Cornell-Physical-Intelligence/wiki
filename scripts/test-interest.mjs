@@ -56,6 +56,62 @@ if (!process.env.INTEREST_TEST_ROOT) {
   assert.equal(legacyUpdated.ts, old.ts);
   assert.equal(legacyUpdated.project, old.project);
   assert.equal(legacyUpdated.year, 'Grad');
+  const reviewer = { role: 'admin', email: 'lead@example.com', name: 'Team Lead' };
+  const secondReviewer = { role: 'admin', email: 'other@example.com', name: 'Other Lead' };
+  const reviewPath = `/interest/${old.id}/review`;
+  const commentPath = `/interest/${old.id}/comments`;
+  for (const me of [null, { role: 'member', email: 'member@example.com' }]) {
+    for (const [method, path, body] of [['PATCH', reviewPath, { flagged: true }], ['POST', commentPath, { id: 'ic-test0001', text: 'A comment' }], ['DELETE', commentPath + '/ic-test0001', {}]]) {
+      assert.equal((await request(method, path, body, me)).status, me ? 403 : 401);
+    }
+  }
+  assert.equal((await request('PATCH', reviewPath, { flagged: 'yes' }, reviewer)).status, 400);
+  assert.equal((await request('PATCH', '/interest/in-missing/review', { flagged: true }, reviewer)).status, 404);
+  for (const body of [{ text: '' }, { text: 'x'.repeat(4001) }, { text: 'Valid', id: '../bad' }]) {
+    assert.equal((await request('POST', commentPath, body, reviewer)).status, 400);
+  }
+  const firstComment = { id: 'ic-test0001', text: '<script>alert("test")</script>\nStrong project', by: 'forged@example.com' };
+  const concurrent = await Promise.all([
+    request('POST', commentPath, firstComment, reviewer),
+    request('POST', commentPath, { id: 'ic-test0002', text: 'Follow up about sensors' }, secondReviewer),
+    request('PATCH', reviewPath, { flagged: true }, reviewer),
+  ]);
+  assert.ok(concurrent.every((r) => r.status === 200));
+  let reviewed = (await rows()).find((r) => r.id === old.id);
+  assert.equal(reviewed.review.comments.length, 2, 'concurrent comments are both retained');
+  assert.equal(reviewed.review.comments[0].by, reviewer.email, 'the server supplies authorship');
+  assert.equal(reviewed.review.flagged, true);
+  assert.equal(reviewed.updated, legacyUpdated.updated, 'review changes do not change the applicant update timestamp');
+  const retry = await request('POST', commentPath, firstComment, reviewer);
+  assert.equal(retry.status, 200);
+  assert.equal(retry.data.row.review.comments.length, 2, 'lost-response retries do not duplicate comments');
+  assert.equal((await request('POST', commentPath, { ...firstComment, text: 'Different' }, reviewer)).status, 409);
+  assert.equal((await request('POST', commentPath, firstComment, secondReviewer)).status, 409);
+  assert.equal((await request('POST', '/interest', { name: old.name, email: old.email, confirmUpdate: true, project: 'A revised answer', review: { comments: [] } })).status, 200);
+  reviewed = (await rows()).find((r) => r.id === old.id);
+  assert.equal(reviewed.review.comments.length, 2, 'applicant edits cannot erase admin comments');
+  assert.equal(reviewed.review.flagged, true);
+  assert.equal((await request('PATCH', reviewPath, { flagged: false }, secondReviewer)).data.row.review.comments.length, 2);
+  const disk = JSON.parse(await readFile(join(process.env.INTEREST_TEST_ROOT, '.devinterest.json'), 'utf8'));
+  assert.equal(disk.rows.find((r) => r.id === old.id).review.comments.length, 2, 'reviews persist to storage');
+  const deletedWithConcurrentReview = await Promise.all([
+    request('DELETE', commentPath + '/ic-test0001', {}, secondReviewer),
+    request('POST', commentPath, { id: 'ic-test0003', text: 'Keep this concurrent comment' }, reviewer),
+    request('PATCH', reviewPath, { flagged: true }, reviewer),
+  ]);
+  assert.ok(deletedWithConcurrentReview.every((r) => r.status === 200));
+  reviewed = (await rows()).find((r) => r.id === old.id);
+  assert.deepEqual(reviewed.review.comments.map((c) => c.id), ['ic-test0002', 'ic-test0003'], 'deleting one comment preserves simultaneous comments');
+  assert.equal(reviewed.review.flagged, true, 'deleting a comment preserves a concurrent flag');
+  assert.deepEqual(reviewed.review.deletedCommentIds, ['ic-test0001']);
+  const deletedRetry = await request('DELETE', commentPath + '/ic-test0001', {}, reviewer);
+  assert.equal(deletedRetry.status, 200, 'a lost deletion response can safely be retried');
+  assert.equal(deletedRetry.data.row.reviewVersion, reviewed.reviewVersion, 'delete retries do not invent extra mutations');
+  assert.equal((await request('POST', commentPath, firstComment, reviewer)).status, 409, 'a late post retry cannot resurrect a deleted comment');
+  assert.equal((await request('DELETE', commentPath + '/ic-notfound1', {}, reviewer)).status, 404);
+  assert.equal((await request('DELETE', '/interest/in-missing/comments/ic-test0001', {}, reviewer)).status, 404);
+  const deletionDisk = JSON.parse(await readFile(join(process.env.INTEREST_TEST_ROOT, '.devinterest.json'), 'utf8'));
+  assert.deepEqual(deletionDisk.rows.find((r) => r.id === old.id).review.deletedCommentIds, ['ic-test0001'], 'deletion tombstones survive persistence');
   const csv = await request('GET', '/interest.csv');
   assert.equal(csv.text.split('\r\n')[0], '\uFEFFSubmitted,Updated,Name,Email,Subteam,Coolest project,Cornell address,File,Year');
   assert.match(csv.text, /"Grad"/);
@@ -69,7 +125,23 @@ if (!process.env.INTEREST_TEST_ROOT) {
   assert.deepEqual(await rows(), []);
   assert.deepEqual((await request('GET', `/interest/archives/${archive.data.archive.id}`)).data.archive.rows, beforeArchive);
   assert.equal((await request('GET', `/interest/archives/${archive.data.archive.id}.csv`)).text, csv.text);
+  assert.equal((await request('POST', commentPath, firstComment, reviewer)).status, 404, 'archived reviews cannot be changed through live routes');
+  assert.equal((await request('DELETE', commentPath + '/ic-test0002', {}, reviewer)).status, 404, 'archived comments cannot be deleted through live routes');
+  assert.deepEqual((await request('GET', `/interest/archives/${archive.data.archive.id}`)).data.archive.rows, beforeArchive, 'deletion attempts leave archives unchanged');
+  console.log('PASS: review authorization, validation, concurrency, retry deduplication, durable notes, archive snapshots');
   console.log('PASS: years, legacy records, old-client updates, validation, CSV/archive round trips, admin access');
+
+  const serverSource = await readFile(new URL('../lib/interest.js', import.meta.url), 'utf8');
+  const update = serverSource.slice(serverSource.indexOf('async function updateReview'), serverSource.indexOf('async function clearRows'));
+  const historyRow = { id: 'in-history', reviewVersion: 1, review: { flagged: true, comments: [{ id: 'ic-last0001', by: reviewer.email, text: 'Last live comment' }],
+    deletedCommentIds: Array.from({ length: 999 }, (_, i) => `ic-deleted${String(i).padStart(4, '0')}`) } };
+  const reviewContext = vm.createContext({ storageMode: () => 'memory', memLoad() {}, memSave() {}, mem: { rows: [historyRow] } });
+  vm.runInContext(update, reviewContext);
+  assert.equal((await vm.runInContext("updateReview('in-history', {comment:{id:'ic-new00001',by:'lead@example.com',text:'Over the bound'}})", reviewContext)).status, 409);
+  assert.equal((await vm.runInContext("updateReview('in-history', {deleteComment:'ic-last0001'})", reviewContext)).row.review.comments.length, 0, 'deletion remains available at the history bound');
+  assert.equal(historyRow.review.deletedCommentIds.length, 1000);
+  assert.equal((await vm.runInContext("updateReview('in-history', {comment:{id:'ic-deleted0000',by:'lead@example.com',text:'Late retry'}})", reviewContext)).status, 409, 'oldest tombstones are never evicted');
+  console.log('PASS: comment deletion authorization, concurrent reviews, retry safety, bounded tombstones and archive immutability');
 
   const source = await readFile(new URL('../src/client/ui2.js', import.meta.url), 'utf8');
   const context = vm.createContext({ UI: { interest: { rows: [old, { ...old, id: 'in-new', name: 'New Applicant', email: 'new@example.com', year: 'Grad', ts: 2 }] } } });
@@ -86,6 +158,12 @@ if (!process.env.INTEREST_TEST_ROOT) {
   assert.equal(run('interestSelectedEmails().length'), 2, 'emails are deduplicated');
   run("UI.interest.rows = UI.interest.rows.filter(r => r.id !== 'in-legacy')");
   assert.equal(run("interestSelection().has('in-legacy')"), false, 'deleted records are pruned');
+  run("UI.interest.rows[0].review = { flagged: true, comments: [{ text: 'Review' }] }; UI.interestFilter = 'flagged'");
+  assert.equal(run('interestVisible().length'), 1);
+  run("UI.interestFilter = 'comments'");
+  assert.equal(run('interestVisible().length'), 1);
+  run("UI.interestQuery = 'no match'");
+  assert.equal(run('interestVisible().length'), 0, 'search and review filters combine');
   run("UI.interestArchiveView = { id: 'ar-test', archive: { rows: [] } }");
   assert.equal(run('interestSelection().size'), 0, 'archive has a separate selection');
   assert.equal(run('interestEmailsCsv([\'a,"b@example.com\'])'), '"a,""b@example.com"');

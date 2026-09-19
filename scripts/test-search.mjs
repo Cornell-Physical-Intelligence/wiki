@@ -113,7 +113,7 @@ assert.equal(run("WikiSearch.terms('a '.repeat(5000)).length"), 1, 'query tokeni
 
 // The home view shares results without borrowing the modal's disposable state.
 const home = run('viewSearchHome()');
-assert.ok(home.includes('Search the wiki') && home.includes('search-home-input'));
+assert.ok(home.includes('Search the CUPI Knowledge base') && home.includes('search-home-input'));
 assert.ok(home.includes('search-result--recent') && !home.includes('palette__snip'), 'home recents stay compact');
 assert.ok(!home.includes('search-discovery') && !home.includes('search-status'), 'blank home does not advertise workflows');
 assert.ok(home.includes('href="#/page/scout"') && !home.includes('#/project/'), 'home links open normal wiki pages');
@@ -197,7 +197,7 @@ assert.ok(context.UI.palette, 'first Escape closes the dropdown and leaves searc
 const trigger = {};
 context.fakeTrigger = trigger;
 run('searchFilterMenu = { host: menuHost, anchor: fakeTrigger, close: fakeFilterClose }');
-const click = { target: { closest: () => trigger }, preventDefault() {}, stopImmediatePropagation() {} };
+const click = { target: { closest: (selector) => selector === '[data-search-filter]' ? trigger : null }, preventDefault() {}, stopImmediatePropagation() {} };
 listeners.pointerdown[0](click);
 listeners.click[0](click);
 assert.equal(filterClosed, 2, 'the expanded trigger toggles closed once');
@@ -216,6 +216,61 @@ prevented = false; stopped = false;
 listeners.keydown[0](key('button', 'Enter'));
 assert.equal(prevented, false, 'native button activation is preserved');
 assert.equal(stopped, true);
+
+// Meaning matches obey current filters and cannot survive an edit or query
+// change. A delayed provider response must not change newer results.
+context.REMOTE = {};
+context.AbortSignal = AbortSignal;
+context.AbortController = AbortController;
+const timers = new Map(); let timerId = 0;
+context.setTimeout = (fn) => { timers.set(++timerId, fn); return timerId; };
+context.clearTimeout = (id) => timers.delete(id);
+context.document.hidden = false;
+results('explain the procedure', { section: 'software' });
+run("UI.palette.meaning = { key: searchMeaningKey(UI.palette), available: true, ids: ['unreviewed', 'replay', 'missing'], checked: 3 }");
+assert.equal(run('paletteResults().items[0].page.id'), 'replay');
+assert.ok(!run('paletteResults().items').some((item) => item.page.id === 'unreviewed'));
+assert.ok(!/Search by meaning|Matched from|data-search-meaning/.test(run('viewPalette()')), 'meaning search is invisible and automatic');
+removed.updated++;
+assert.equal(run('paletteResults().semantic'), undefined, 'document edits invalidate semantic results');
+let pendingMeaning, renderedMeaning = 0;
+context.api = (url, opts) => {
+  assert.equal(url, '/meaning-search');
+  const body = JSON.parse(opts.body);
+  assert.ok(body.candidates.length <= 32 && body.candidates.every((p) => p.excerpt.length <= 700));
+  return new Promise((resolve) => { pendingMeaning = resolve; });
+};
+context.recordSearchRender = () => renderedMeaning++;
+run('renderSearchList = recordSearchRender');
+run("scheduleMeaningSearch('modal')");
+assert.equal(timers.size, 1, 'typing schedules meaning search without another action');
+run("scheduleMeaningSearch('modal')");
+assert.equal(timers.size, 1, 'repeat renders do not duplicate requests');
+const [timer, start] = timers.entries().next().value; timers.delete(timer);
+const finding = start();
+assert.equal(typeof pendingMeaning, 'function');
+assert.equal(renderedMeaning, 0, 'background requests do not add status UI');
+run("UI.palette.q = 'a different query'; scheduleMeaningSearch('modal')");
+pendingMeaning({ available: true, ids: ['replay', 'missing'] });
+await finding;
+assert.equal(renderedMeaning, 0, 'stale results do not repaint the current query');
+assert.equal(run('paletteResults().semantic'), undefined);
+run("stopMeaningSearch('modal')");
+assert.equal(timers.size, 0, 'closing search cancels scheduled work');
+run("UI.palette.q = 'contact'; scheduleMeaningSearch('modal')");
+const [timer2, start2] = timers.entries().next().value; timers.delete(timer2);
+const finding2 = start2();
+const beforeMeaning = Array.from(run('paletteResults().items'), (item) => item.page.id);
+run("UI.palette.navigationKey = searchMeaningKey(UI.palette)");
+pendingMeaning({ available: true, ids: ['decision'] });
+await finding2;
+assert.equal(renderedMeaning, 1);
+assert.deepEqual(Array.from(run('paletteResults().items'), (item) => item.page.id).slice(0, beforeMeaning.length), beforeMeaning, 'late meaning matches cannot move a keyboard selection');
+run("scheduleMeaningSearch('modal')");
+assert.equal(timers.size, 0, 'settled queries are not re-requested');
+context.document.hidden = true;
+run("UI.palette.q = 'another query'; scheduleMeaningSearch('modal')");
+assert.equal(timers.size, 0, 'hidden tabs do not call the provider');
 context.Store.me = () => null;
 assert.equal(run('paletteResults().items.length'), 0, 'logged-out searches expose no cached pages');
 console.log('PASS: search relevance and visibility, custom filter values and menu lifecycle, keyboard ownership, compact home, independent state and caret restoration');

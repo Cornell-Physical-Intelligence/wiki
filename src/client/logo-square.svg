@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 174 174" fill="none" stroke="currentColor" stroke-width="2.5">
+  <!-- CUPI mark, 2x2 form: the same four circles as logo-row.svg read left to right, top to bottom. -->
+  <circle class="mark__ring" cx="41" cy="41" r="37"/>
+  <path class="mark__fill" d="M41 4A37 37 0 0 0 41 78Z" fill="currentColor" stroke="none"/>
+  <circle class="mark__ring" cx="133" cy="41" r="37"/>
+  <path class="mark__fill" d="M96 41A37 37 0 0 0 170 41Z" fill="currentColor" stroke="none"/>
+  <circle class="mark__ring" cx="41" cy="133" r="37"/>
+  <path class="mark__fill" d="M41 96A37 37 0 0 1 78 133L41 133Z" fill="currentColor" stroke="none"/>
+  <circle class="mark__ring" cx="133" cy="133" r="37"/>
+  <line class="mark__bar" x1="133" y1="96" x2="133" y2="170"/>
+</svg>

@@ -19,9 +19,19 @@ jobs:
           node-version: 22
       - run: npm run check
       - run: npm run test:search
+      - run: npm run test:assistance
+      - run: node --test scripts/test-ai-usage.mjs scripts/test-ai-usage-ui.mjs
       - name: Verify intake recovery, transfer limits, and keyboard behavior
         run: |
           npm run test:interest
+          node scripts/test-interest-interactions.mjs
+          node scripts/test-interest-attachments.mjs
+          node scripts/test-admin-interactions.mjs
+          node scripts/test-admin-members.mjs
+          node scripts/test-interest-filter.mjs
+          node --test scripts/test-review-search.mjs scripts/test-review-render.mjs
+          node scripts/test-review-editor.mjs
+          node --test scripts/test-popup-placement.mjs
           node scripts/test-intake-journal.mjs
           node scripts/test-db-transfer.mjs
           node scripts/test-multipart-upload.mjs

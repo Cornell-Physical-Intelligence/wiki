@@ -9,10 +9,11 @@ const hook = source.slice(source.indexOf('  // Opening one archive pulls its row
 const requests = [];
 let renders = 0;
 const context = vm.createContext({
-  REMOTE: {}, UI: { interestArchiveView: { id: 'synthetic-a', loading: true } },
+  REMOTE: {}, UI: { route: { name: 'interest' }, interestArchiveView: { id: 'synthetic-a', loading: true } },
   api(url) { return new Promise((resolve, reject) => requests.push({ url, resolve, reject })); },
   render() { renders++; vm.runInContext(hook, context); },
 });
+vm.runInContext(source.slice(source.indexOf('function renderBackground('), source.indexOf('function render()')), context);
 const render = () => vm.runInContext(hook, context);
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -33,4 +34,10 @@ context.UI.interestArchiveView = { id: 'synthetic-c', loading: true }; render();
 requests[2].reject(new Error('Synthetic unavailable archive')); await settle();
 assert.equal(context.UI.interestArchiveView.error, true);
 render(); assert.equal(requests.length, 3, 'error state does not cause a retry loop');
+context.UI.interestArchiveView = { id: 'synthetic-d', loading: true }; render();
+context.UI.modal = { kind: 'interest-row', id: 'synthetic-person' };
+const before = renders;
+requests[3].resolve({ archive: { id: 'synthetic-d', rows: [] } }); await settle();
+assert.equal(renders, before, 'late archive data must not remount a live comment dialog');
+assert.equal(context.UI.interestArchiveView.archive.id, 'synthetic-d');
 console.log('archive load tests passed: one pending request, navigation guard, stable error state');

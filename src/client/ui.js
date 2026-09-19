@@ -45,7 +45,7 @@ const I = {
 };
 
 // Standardize the chrome on Lucide (the star keeps its filled variant, the
-// Google mark and CUPI logo stay brand-exact).
+// Google mark stays brand-exact; the CUPI mark is CUPI_LOGO from logo-row.svg).
 Object.assign(I, {
   search: lucide('search', 1.8),
   home: lucide('home', 1.8),
@@ -151,7 +151,7 @@ function parseHash() {
   return { seg, params };
 }
 
-function nav(hash) { location.hash = hash; }
+function nav(hash) { if (UI.editor?.saving) return; location.hash = hash; }
 
 function route() {
   const { seg, params } = parseHash();
@@ -216,9 +216,8 @@ function viewLogin() {
     <p class="login__caption">(Cornell University Physical Intelligence)</p>
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
-      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list yet. Ask a team lead to add this address. Once you're on the list, signing in just works.</div>` : ''}
+      ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
       ${UI.chooser ? viewChooser() : `
-      <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
     </div>
     ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
@@ -265,12 +264,15 @@ function sectionTree(sec) {
   const collapsed = prefs.collapsed.includes(sec.id);
   const cur = UI.route.params.id;
   return `<div class="tree-section ${collapsed ? 'collapsed' : ''}" data-sec="${sec.id}">
-    <button class="tree-section__head" data-action="sec-toggle" data-sec="${sec.id}" aria-expanded="${!collapsed}">
-      <svg class="tree-section__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
-      <span class="eyebrow">${sec.name}</span>
-      <span class="tree-section__add" data-action="new-page" data-sec="${sec.id}" role="button" aria-label="New page in ${sec.name}" title="New page in ${sec.name}">${I.plus}</span>
-    </button>
-    <div class="tree-section__body"><div class="tree-section__rows">
+    <div class="tree-section__head"><button class="tree-section__toggle" data-action="sec-toggle" data-sec="${sec.id}" aria-expanded="${!collapsed}" aria-controls="tree-section-${sec.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${MD.esc(sec.name)}">
+      <span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path class="tree-section__folder-open" d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v2M3 18l3-7h16l-3 7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+        <path class="tree-section__folder-closed" d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+      </svg></span>
+      <span class="tree-section__label">${MD.esc(sec.name)}</span>
+      </button><button class="tree-section__add" data-action="new-page" data-sec="${sec.id}" aria-label="New page in ${MD.esc(sec.name)}" title="New page in ${MD.esc(sec.name)}">${I.plus}</button>
+    </div>
+    <div class="tree-section__body" id="tree-section-${sec.id}" ${collapsed ? 'inert' : ''}><div class="tree-section__rows">
       ${pages.map((p) => treeRow(p, cur, prefs)).join('')}
     </div></div>
   </div>`;
@@ -283,21 +285,21 @@ function viewSidebar() {
   const r = UI.route;
   return `<aside class="sidebar">
     <div class="sidebar__head">
-      <a class="sidebar__brand" href="#/home"><img class="sidebar__logo" src="${CUPI_LOGO}" alt="" draggable="false">CUPI <span>Wiki</span></a>
+      <a class="sidebar__brand" href="#/home" aria-label="CUPI Wiki"><span class="sidebar__logo">${CUPI_LOGO}</span><span>Wiki</span></a>
     </div>
     <button class="sidebar__search" data-action="palette">
       ${I.search} <span>Search…</span> <span class="kbd">⌘K</span>
     </button>
     <nav class="sidebar__nav">
       <a class="navlink ${r.name === 'home' ? 'active' : ''}" href="#/home">${I.home} Home</a>
-      <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity" title="Everything that changed, newest first">${I.clock} Activity</a>
+      <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity">${I.clock} Activity</a>
       <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
       ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
     <div class="sidebar__scroll">
-      ${starred.length ? `<div class="tree-section"><div class="tree-section__head" style="cursor:default"><span class="tree-section__chev" style="width:10px"></span><span class="eyebrow">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
+      ${starred.length ? `<div class="tree-section"><div class="tree-section__head tree-section__head--static"><span class="tree-section__icon" aria-hidden="true">${I.star}</span><span class="tree-section__label">Starred</span></div><div class="tree-section__body"><div class="tree-section__rows">
         ${starred.map((p) => `<div class="tree-item"><a class="tree-item__row ${p.id === r.params.id ? 'active' : ''}" href="#/page/${p.id}"><span class="tree-item__label">${MD.esc(p.title)}</span><span class="tree-item__star">${I.starFill}</span></a></div>`).join('')}
       </div></div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
@@ -404,11 +406,11 @@ function viewSection(secId) {
   return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">${sec.name}</span>`,
     `<button class="btn" data-action="new-page" data-sec="${secId}">${I.plus} New page</button>`) + `
   <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><span class="eyebrow">Section</span><h1>${sec.name}</h1></div>
+    <div class="plain-head"><h1>${sec.name}</h1></div>
     <div class="cardlist">
       ${pages.map((p) => `<a class="pagecard" href="#/page/${p.id}"><b>${MD.esc(p.title)}</b><span class="snip">${MD.esc(MD.mdToText(p.body).slice(0, 130))}</span><span class="meta">${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span></a>`).join('')}
     </div>
-    ${pages.length === 0 ? `<div class="empty">${I.page}<b>Nothing here yet</b><p>Start the first page in ${sec.name}.</p></div>` : ''}
+    ${pages.length === 0 ? `<div class="empty">${I.page}<b>No pages yet</b></div>` : ''}
   </div></div></div>`;
 }
 
@@ -463,6 +465,8 @@ function parseOBJ(text) {
 }
 
 async function mountCadViewer(host) {
+  if (host._cadMounted) return;
+  host._cadMounted = true;
   const att = Store.att(host.dataset.att);
   const canvas = $('canvas', host);
   if (!att || !canvas) return;
@@ -567,7 +571,9 @@ async function mountCadViewer(host) {
   }, { passive: false });
   draw();
   loop();
-  cadCleanups.push(() => cancelAnimationFrame(raf));
+  const cleanup = () => cancelAnimationFrame(raf);
+  host._cadCleanup = cleanup;
+  cadCleanups.push(cleanup);
 }
 
 let cadCleanups = [];
@@ -723,7 +729,9 @@ function mountUrdfViewer(host, canvas, att, text) {
   }, { passive: false });
   draw();
   loop();
-  cadCleanups.push(() => cancelAnimationFrame(raf));
+  const cleanup = () => cancelAnimationFrame(raf);
+  host._cadCleanup = cleanup;
+  cadCleanups.push(cleanup);
 }
 
 /* ------------------------------- lightbox -------------------------------- */
@@ -732,15 +740,31 @@ function closeLightbox() {
   const veil = document.querySelector('.lightbox');
   if (!veil || veil.classList.contains('leaving')) return;
   veil.classList.add('leaving');
-  setTimeout(() => veil.remove(), 130);
+  setTimeout(() => {
+    veil.remove();
+    syncSidebarInteraction();
+    resolveFocus(veil._opener)?.focus({ preventScroll: true });
+  }, 130);
 }
 
 function openLightbox(src, alt) {
+  document.querySelector('.lightbox')?.remove();
   const veil = document.createElement('div');
   veil.className = 'lightbox';
-  veil.innerHTML = `<img src="${src}" alt="${MD.esc(alt || '')}"><button class="icon-btn lightbox__close" aria-label="Close">${I.x}</button>`;
+  veil._opener = focusReference(document.activeElement);
+  veil.setAttribute('role', 'dialog');
+  veil.setAttribute('aria-modal', 'true');
+  veil.setAttribute('aria-label', alt || 'Image preview');
+  veil.innerHTML = `<img src="${MD.esc(src)}" alt="${MD.esc(alt || '')}"><button class="icon-btn lightbox__close" aria-label="Close">${I.x}</button>`;
   veil.addEventListener('click', closeLightbox);
+  veil.addEventListener('keydown', (ev) => {
+    if (ev.isComposing) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeLightbox(); }
+    if (ev.key === 'Tab') { ev.preventDefault(); veil.querySelector('button').focus(); }
+  });
   document.body.appendChild(veil);
+  syncSidebarInteraction();
+  veil.querySelector('button').focus({ preventScroll: true });
 }
 
 function reactionChips(p) {

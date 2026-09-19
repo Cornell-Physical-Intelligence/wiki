@@ -61,6 +61,17 @@ if (!process.env.TRANSFER_TEST_ROOT) {
       if (text.startsWith('ALTER TABLE')) return reply();
       if (text === 'SELECT 1 FROM wiki_state WHERE id = 1') { this.ready = true; return reply([{ '?column?': 1 }]); }
       assert.ok(this.ready, 'queries must wait until initialization finishes');
+      if (text.startsWith('INSERT INTO wiki_ai_usage')) {
+        this.aiUsage ||= { version: 1, state: JSON.parse(values[0]) }; return reply();
+      }
+      if (text.startsWith('SELECT version, ledger AS state FROM wiki_ai_usage')) return reply([this.aiUsage]);
+      if (text.startsWith('UPDATE wiki_ai_usage')) {
+        assert.match(text, /WHERE id = 1 AND version = \? RETURNING version/);
+        if (this.failAiUsage) throw new Error('AI ledger unavailable');
+        if (values[1] !== this.aiUsage.version) return reply();
+        this.aiUsage = { version: this.aiUsage.version + 1, state: JSON.parse(values[0]) };
+        return reply([{ version: this.aiUsage.version }]);
+      }
       if (text.startsWith('SELECT version,') && text.includes('AS snapshot64')) {
         assert.equal((text.match(/CASE WHEN snapshot_version = version AND snapshot IS NOT NULL/g) || []).length, 2);
         assert.match(text, /THEN NULL ELSE state END AS state/);
@@ -103,6 +114,7 @@ if (!process.env.TRANSFER_TEST_ROOT) {
         const callback = this.afterMember; this.afterMember = null; callback?.();
         return out;
       }
+      if (text.startsWith("SELECT state #> '{settings,ai}'")) return reply([{ ai: this.state.settings?.ai || {} }]);
       if (text.startsWith("SELECT state #> '{settings,email}'")) return reply([{ email: this.state.settings?.email || null }]);
       if (text === 'SELECT state, version FROM wiki_state WHERE id = 1') return reply([{ state: this.state, version: this.version }]);
       if (text.startsWith('UPDATE wiki_state SET state =')) {
@@ -138,10 +150,10 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   const writes = () => db.calls.filter((q) => q.startsWith('UPDATE wiki_state SET state =')).length;
   const preferenceWrites = () => db.calls.filter((q) => q.startsWith('WITH authorized AS MATERIALIZED')).length;
   const backfills = () => db.calls.filter((q) => q.startsWith('UPDATE wiki_state SET snapshot =')).length;
-  async function request(path, email = admin, body) {
+  async function request(path, email = admin, body, method) {
     const headers = { host: 'wiki.cornellphysicalintelligence.com' };
     if (email) headers.cookie = `cupi_session=${makeSession(email)}`;
-    const req = { url: '/api' + path, method: body ? 'POST' : 'GET', headers, body };
+    const req = { url: '/api' + path, method: method || (body ? 'POST' : 'GET'), headers, body };
     const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(value) { this.body = value; } };
     await handler(req, res);
     return { status: res.statusCode, headers: res.headers, data: res.headers['content-type'] === 'application/json' ? JSON.parse(res.body) : res.body };
@@ -156,6 +168,22 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   assert.equal(fullReads(), 0, '/me and unchanged cold polls must not read full wiki state');
   assert.ok(db.bytes < 2000, 'auth and unchanged polls transfer only small records');
   assert.deepEqual(cold[1].data, { version: 7, unchanged: true, prefsVersion: 0 });
+
+  // Assistance uses server credentials only after membership checks, and never
+  // fetches the entire wiki or changes the saved state to generate a preview.
+  reset();
+  for (const [path, body] of [
+    ['/change-summary', { title: 'Wiring', beforeTitle: 'Wiring', section: 'Electrical', beforeSection: 'Electrical', diff: '- 5V\n+ 3.3V', isNew: false, truncated: false }],
+    ['/page-review', { title: 'Wiring', body: 'Use 3.3V', section: 'electrical', truncated: false }],
+    ['/meaning-search', { query: 'power reset', candidates: [{ id: 'power', title: 'Power', excerpt: 'Scope regulator voltage.' }] }],
+  ]) {
+    for (const who of [null, 'unknown@cornell.edu']) assert.equal((await request(path, who, body)).status, 401);
+    assert.equal((await request(path, member, {})).status, 400);
+    const assistance = await request(path, member, body);
+    assert.equal(assistance.status, 200); assert.equal(assistance.data.available, false, 'missing provider keys degrade gracefully');
+    assert.equal(assistance.headers['cache-control'], 'private, no-store');
+  }
+  assert.equal(fullReads(), 0); assert.equal(writes(), 0);
 
   reset();
   const initial = await request('/state');
@@ -399,6 +427,84 @@ if (!process.env.TRANSFER_TEST_ROOT) {
   db.backfillFail = false;
   await getState();
   assert.deepEqual(await decodeSnapshot(db.snapshot), db.state);
+
+  // Owner configuration must be private, durable and reauthorized on a CAS retry.
+  db.state.users.find((u) => u.email === admin).role = 'admin'; db.version++;
+  if (!db.state.users.some((u) => u.email === member)) db.state.users.push({ email: member, name: 'Member', role: 'member', status: 'active' });
+  const key = 'sk-synthetic-no-real-credential-123456789';
+  const aiInput = { model: 'gpt-5.6-luna', effort: 'none', key };
+  for (const path of ['/ai/settings', '/ai/test']) {
+    assert.equal((await request(path, null)).status, 401);
+    assert.equal((await request(path, member, aiInput, path.endsWith('test') ? 'POST' : 'PUT')).status, 403);
+  }
+  assert.equal((await request('/ai/settings', admin, { ...aiInput, effort: 'ultra' }, 'PUT')).status, 400);
+  assert.equal((await request('/ai/settings', admin, aiInput, 'POST')).status, 405);
+  const savedAi = await request('/ai/settings', admin, aiInput, 'PUT');
+  assert.equal(savedAi.status, 200);
+  assert.equal(savedAi.data.settings.connected, true);
+  assert.equal(savedAi.data.settings.keyTail, key.slice(-4));
+  assert.ok(db.state.settings.ai.credential.data);
+  assert.ok(!JSON.stringify(db.state.settings.ai).includes(key), 'stored credential is authenticated ciphertext');
+  const ciphertext = db.state.settings.ai.credential.data;
+  for (const who of [admin, member]) {
+    const out = await request('/state', who);
+    assert.equal(out.status, 200);
+    const wire = JSON.stringify(out.data);
+    assert.ok(!wire.includes(key) && !wire.includes(ciphertext), 'neither raw nor sealed credentials leave the server');
+    if (who === member) assert.equal(out.data.state.settings.ai.keyTail, undefined);
+  }
+  const { resolveAiConnection } = await import(pathToFileURL(join(root, 'lib/ai-settings.js')));
+  assert.equal(resolveAiConnection(db.state.settings.ai).apiKey, key);
+  const sealedBeforeSettings = structuredClone(db.state.settings.ai.credential);
+  assert.equal((await request('/ai/settings', admin, { model: 'gpt-6-astra', effort: 'low', key: '' }, 'PUT')).status, 200);
+  assert.deepEqual(db.state.settings.ai.credential, sealedBeforeSettings, 'model changes keep the saved key');
+  const refusedTest = await request('/ai/test', admin, { model: 'gpt-6-astra', effort: 'max' });
+  assert.equal(refusedTest.status, 422); assert.match(refusedTest.data.error, /5¢ limit/);
+  assert.equal((await request('/ai/settings', admin, { model: 'gpt-5.6-sol', effort: 'none', key: '' }, 'PUT')).status, 200);
+  let providerCalls = 0;
+  globalThis.fetch = async (url, init) => {
+    providerCalls++;
+    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.equal(init.headers.authorization, 'Bearer ' + key);
+    const body = JSON.parse(init.body);
+    assert.equal(body.model, 'gpt-5.6-sol'); assert.equal(body.reasoning.effort, 'none');
+    assert.equal(body.store, false); assert.equal(body.max_output_tokens, 160); assert.equal(body.service_tier, 'default');
+    return { ok: true, json: async () => ({ status: 'completed', service_tier: 'default', usage: { input_tokens: 1000, output_tokens: 50 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Updated the test connection' }] }] }) };
+  };
+  assert.equal((await request('/ai/test', admin, { model: 'gpt-5.6-sol', effort: 'none' })).status, 200);
+  const summaryInput = { title: 'Fixture', beforeTitle: 'Fixture', section: 'Software', beforeSection: 'Software', diff: '- old\n+ new', isNew: false, truncated: false };
+  assert.equal((await request('/change-summary', member, summaryInput)).data.available, true);
+  assert.equal(providerCalls, 2, 'ordinary members use the owner-selected account, model and effort');
+  assert.equal((await request('/ai/usage', null)).status, 401);
+  assert.equal((await request('/ai/usage', member)).status, 403);
+  const tracked = await request('/ai/usage', admin);
+  assert.equal(tracked.status, 200); assert.equal(tracked.headers['cache-control'], 'private, no-store');
+  assert.equal(tracked.data.usage.current.requests, 2);
+  assert.equal(tracked.data.usage.current.costMicros, 10000, 'connection tests and summaries both count');
+  assert.equal(tracked.data.usage.limits.monthMicros, 5000000);
+  assert.equal(tracked.data.usage.limits.dayMicros, 1000000);
+  assert.ok(!JSON.stringify(tracked.data).includes(key));
+  assert.ok(!JSON.stringify(tracked.data).includes(member), 'usage does not disclose member identifiers');
+  const tooBig = await request('/change-summary', member, { ...summaryInput, ignored: 'x'.repeat(80001) });
+  assert.equal(tooBig.status, 413, 'pre-parsed bodies obey the same byte limit');
+  assert.equal(providerCalls, 2);
+  db.failAiUsage = true;
+  const protectedCall = await request('/change-summary', member, { ...summaryInput, diff: '+ another change' });
+  assert.equal(protectedCall.data.reason, 'accounting_unavailable'); assert.equal(providerCalls, 2);
+  db.failAiUsage = false;
+  reset();
+  assert.equal((await request('/ai/settings')).status, 200);
+  assert.equal(fullReads(), 0, 'settings reads do not fetch the wiki documents');
+  db.conflict = () => { db.state.users.find((u) => u.email === admin).role = 'member'; };
+  assert.equal((await request('/ai/settings', admin, aiInput, 'PUT')).status, 403);
+  assert.equal(db.state.settings.ai.model, 'gpt-5.6-sol', 'a demoted admin cannot retry the settings write');
+  db.state.users.find((u) => u.email === admin).role = 'admin'; db.version++;
+  assert.equal((await request('/ai/settings', admin, { disconnect: true }, 'PUT')).status, 200);
+  assert.equal(db.state.settings.ai.credential, null);
+  assert.equal(resolveAiConnection(db.state.settings.ai).apiKey, '');
+  assert.equal((await request('/change-summary', member, summaryInput)).data.available, false);
+  assert.equal(providerCalls, 2, 'disconnect prevents inference, including cached summaries');
+  globalThis.fetch = async () => { throw new Error('Network disabled in transfer tests'); };
 
   db.failQuota = true;
   for (const path of ['/me', '/state', '/interest']) {

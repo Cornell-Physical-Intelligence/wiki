@@ -266,6 +266,7 @@ const Store = {
     const now = Date.now();
     const changedBody = body !== undefined && body !== p.body;
     const changedTitle = title !== undefined && title !== p.title;
+    const changedSection = section !== undefined && section !== p.section;
     if (changedTitle) {
       Store.rewriteLinks(p.title, title);
       // The incoming editor body may carry self-links under the old title too.
@@ -278,7 +279,7 @@ const Store = {
     if (section !== undefined) p.section = section;
     if (tags !== undefined) p.tags = tags;
     if (body !== undefined) p.body = body;
-    if (changedBody || changedTitle) {
+    if (changedBody || changedTitle || changedSection) {
       p.updated = now;
       p.updatedBy = me.email;
       p.revs.push({ ts: now, by: me.email, summary: summary || (changedTitle && !changedBody ? 'Renamed' : 'Edited'), body: p.body });

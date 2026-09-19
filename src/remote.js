@@ -139,14 +139,14 @@ async function flushPrefs() {
           Store.s.prefs[REMOTE.email] = JSON.parse(current);
         }
         observedPrefs = prefsFingerprint(Store.prefs());
-        if (observedPrefs !== current) render();
+        if (observedPrefs !== current) paintRemoteUpdate();
       }
     } else if (prefsEditVersion === editVersion && prefsFingerprint(Store.prefs()) === fingerprint) {
       // A newer complete snapshot already includes a subsequent preferences
       // write. Preserve any edits made after this request, otherwise use it.
       Store.s.prefs[REMOTE.email] = JSON.parse(savedPrefs);
       observedPrefs = savedPrefs;
-      render();
+      paintRemoteUpdate();
     }
     succeeded = true;
     prefsFailures = 0;
@@ -176,23 +176,50 @@ Store.persist = function persistRemote() {
   prefsTimer = setTimeout(flushPrefs, Math.max(1200, prefsRetryAfter - Date.now()));
 };
 
-async function sendOp(op, args, after, onError) {
+// A transport acknowledgment must precede success UI. Callers that own a
+// composer await this and decide how to paint without replacing its DOM.
+async function requestMutation(op, args) {
   REMOTE.pending++;
   try {
-    const out = await api('/mutate', { method: 'POST', body: JSON.stringify({ op, args }) });
+    const out = await api('/mutate', { method: 'POST', body: JSON.stringify({ op, args }), signal: AbortSignal.timeout(30000) });
+    if (!out.state || !Number.isFinite(out.version)) throw new Error('The save was not confirmed. Please retry.');
     adoptServer(out);
+    return out;
+  } catch (e) {
+    try {
+      const current = await api('/state', { signal: AbortSignal.timeout(8000) });
+      adoptServer(current);
+      // A create may have committed even when its response was lost. The
+      // original request token identifies that exact creation, not its title.
+      const created = op === 'createPage' && args.requestId && current.state?.pages.find((p) => p.createRequestId === args.requestId && p.owner === REMOTE.email);
+      if (created) return { ...current, result: { id: created.id } };
+    } catch (e2) { /* offline */ }
+    throw e;
+  } finally { REMOTE.pending--; }
+}
+
+function paintRemoteUpdate() {
+  // Editors and dialogs own live inputs, selections and native undo history.
+  // Their next explicit transition paints the newly adopted state.
+  if (!UI.editor && ((!UI.modal && !UI.palette && !UI.menu && !UI.searchHome?.composing) || !Store.me())) render();
+}
+
+async function sendOp(op, args, after, onError) {
+  try {
+    const out = await requestMutation(op, args);
     after?.(out);
-    render();
+    paintRemoteUpdate();
+    return out;
   } catch (e) {
     toast(e.status === 400 || e.status === 503 ? e.message : 'Sync failed. Check your connection and retry.');
     onError?.(e);
-    try { adoptServer(await api('/state')); render(); } catch (e2) { /* offline */ }
-  } finally { REMOTE.pending--; }
+    paintRemoteUpdate();
+    return null;
+  }
 }
 
 // name → how to serialize the client call into op args.
 const OP_MAP = {
-  createPage: (a) => ({ op: 'createPage', args: a[0] }),
   toggleTask: (a) => ({ op: 'toggleTask', args: { id: a[0], n: a[1] } }),
   restoreRev: (a) => ({ op: 'restoreRev', args: { id: a[0], revTs: a[1] } }),
   deletePage: (a) => ({ op: 'deletePage', args: { id: a[0] } }),
@@ -218,20 +245,18 @@ for (const [name, toOp] of Object.entries(OP_MAP)) {
   };
 }
 
-// Saves carry their base revision; a server-side edit conflict re-stashes the
-// attempted text as a draft so nothing the author wrote is lost.
-{
-  const orig = Store.savePage.bind(Store);
-  Store.savePage = (id, args) => {
-    const r = orig(id, args);
-    sendOp('savePage', { id, ...args }, null, () => {
-      draftStash.set(id, { title: args.title, body: args.body, section: args.section, origBody: Store.page(id)?.body ?? '' });
-      persistDrafts();
-      toast('Your version is saved as a draft', { label: 'Open draft', run: () => startEdit(id, false) });
-    });
-    return r;
-  };
+// Page writes keep the editor's durable draft until confirmation. Returning
+// the server's page also avoids independent random IDs when a slug is in Trash.
+async function writeRemotePage(op, args) {
+  const out = await requestMutation(op, args);
+  const id = out.result?.id || args.id;
+  const page = id ? out.state.pages.find((p) => p.id === id)
+    : out.state.pages.find((p) => p.title.toLowerCase() === args.title.trim().toLowerCase());
+  if (!page) throw new Error('The saved page could not be confirmed. Your draft is still available.');
+  return page;
 }
+Store.createPage = (args) => writeRemotePage('createPage', args);
+Store.savePage = (id, args) => writeRemotePage('savePage', { id, ...args });
 
 
 // Invites need the server's codes and email-send results.
@@ -290,7 +315,6 @@ viewLogin = function viewLoginRemote() {
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you. Once you're added, this same button will work.</div>` : ''}
-      <p class="login__welcome">Welcome to the CUPI knowledge base. Sign in with Google to access.</p>
       <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
     </div>
     ${loginFooter('')}
@@ -313,7 +337,7 @@ function noteActivity() {
 }
 
 async function pollOnce() {
-  if (document.hidden || Date.now() - lastActivity >= IDLE_POLL_PAUSE_MS || pollInFlight || Date.now() < pollAfter || !REMOTE.email || REMOTE.pending || UI.editor?.dirty) return;
+  if (document.hidden || Date.now() - lastActivity >= IDLE_POLL_PAUSE_MS || pollInFlight || Date.now() < pollAfter || !REMOTE.email || REMOTE.pending || UI.editor) return;
   pollInFlight = true;
   const version = REMOTE.version;
   try {
@@ -321,7 +345,7 @@ async function pollOnce() {
     pollFailures = 0;
     pollAfter = 0;
     // A save or edit may have begun while the request was in flight.
-    if (!REMOTE.pending && !UI.editor?.dirty) {
+    if (!REMOTE.pending && !UI.editor) {
       let changed = false;
       if (REMOTE.version === version) changed = adoptServer(out);
       else if (Number.isFinite(out.prefsVersion)) {
@@ -330,7 +354,9 @@ async function pollOnce() {
         const prefs = out.prefs ?? out.state?.prefs?.[REMOTE.email];
         if (prefs !== undefined) changed = adoptServer({ prefsVersion: out.prefsVersion, prefs });
       }
-      if (changed) render();
+      // A background sync must not remount an open dialog or its composer.
+      // The adopted state is rendered normally when the dialog closes.
+      if (changed) paintRemoteUpdate();
     }
   } catch (e) {
     pollFailures++;

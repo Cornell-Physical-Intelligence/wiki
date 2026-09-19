@@ -35,7 +35,7 @@ function persistDrafts() {
 function stashDraftIfDirty(silent) {
   const e = UI.editor;
   if (e && e.dirty) {
-    draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
+    draftStash.set(e.pageId || 'new', editorDraft(e));
     draftDeleted.delete(e.pageId || 'new');
     persistDrafts();
     if (!silent) toast('Draft kept', { label: 'Resume', run: () => nav(e.pageId ? '#/edit/' + e.pageId : '#/new') });
@@ -50,7 +50,7 @@ function autosaveDraft() {
   draftTimer = setTimeout(() => {
     const e = UI.editor;
     if (!e || !e.dirty) return;
-    draftStash.set(e.pageId || 'new', { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags, origBody: e.origBody });
+    draftStash.set(e.pageId || 'new', editorDraft(e));
     persistDrafts();
   }, 900);
 }
@@ -214,6 +214,7 @@ function captureModalFocus() {
 function mountModalFocus() {
   const dialog = $('.modal');
   if (!UI.modal || !dialog) return;
+  anchorSaveDialog(dialog);
   dialog.setAttribute('aria-modal', 'true');
   dialog.setAttribute('tabindex', '-1');
   const focusables = modalFocusables(dialog);
@@ -221,11 +222,26 @@ function mountModalFocus() {
   const target = (focusables.includes(prior) ? prior : null)
     || focusables.find((element) => element.matches('[data-m], .btn--primary'))
     || focusables[0] || dialog;
+  syncSidebarInteraction();
   target.focus({ preventScroll: true });
   if (target === prior && modalFocusState?.selection) target.setSelectionRange?.(...modalFocusState.selection);
 }
 
+function anchorSaveDialog(dialog = $('.save-summary')) {
+  if (UI.modal?.kind !== 'save-summary' || !dialog) return;
+  const veil = dialog.closest('.modal-veil');
+  if (!veil) return;
+  // Measure layout, not the entry animation's temporary transform.
+  const top = UI.modal._top ?? Math.max(20, (veil.clientHeight - dialog.offsetHeight) / 2);
+  UI.modal._top = top;
+  veil.style.alignItems = 'flex-start';
+  veil.style.paddingTop = top + 'px';
+  dialog.style.maxHeight = Math.max(120, innerHeight - top - 20) + 'px';
+}
+
 function closeModal(after) {
+  if (UI.editor?.saving) return;
+  const closing = UI.modal;
   const opener = modalFocusState?.opener;
   const pendingId = UI.modal?.kind === 'interest-pending' ? UI.modal.id : null;
   const restoreFocus = () => {
@@ -233,15 +249,18 @@ function closeModal(after) {
     if (pendingId) $$('[data-action="interest-pending-open"]').find((el) => el.dataset.id === pendingId)?.focus();
   };
   const veil = document.querySelector('.modal-veil');
-  if (!veil) { UI.modal = null; after ? after() : render(); restoreFocus(); return; }
+  if (!veil) { UI.modal = null; syncSidebarInteraction(); after ? after() : render(); restoreFocus(); return; }
   if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
   setTimeout(() => {
+    veil.remove();
+    if (UI.modal !== closing) return;
     UI.modal = null;
+    syncSidebarInteraction();
     if (after) after();
     // Keep-editing paths must not rebuild the textarea — a full render would
     // wipe the native undo stack the editor is built around.
-    else if (UI.editor) { veil.remove(); $('[data-ed="body"]')?.focus(); }
+    else if (UI.editor) { (resolveFocus(opener) || $('[data-ed="body"]'))?.focus({ preventScroll: true }); }
     else render();
     restoreFocus();
   }, 120);
@@ -260,7 +279,7 @@ function showModal(m) {
 
 function requestEditorClose() {
   const e = UI.editor;
-  if (!e) return;
+  if (!e || e.saving) return;
   if (!e.dirty) {
     const pid = e.pageId;
     UI.editor = null;
@@ -271,9 +290,38 @@ function requestEditorClose() {
   showModal({ kind: 'close-editor' });
 }
 
+// Keep offscreen navigation out of keyboard and screen-reader order. The
+// original sidebar layout stays unchanged; only its interaction state changes.
+function syncSidebarInteraction(moveFocus = false) {
+  const sidebar = $('.sidebar'), shell = $('.shell'), main = $('.main');
+  if (!sidebar) return;
+  const mobile = innerWidth <= 860, drawer = mobile && UI.navOpen;
+  const hidden = mobile ? !UI.navOpen : UI.navHidden;
+  const modal = Boolean(UI.modal || UI.palette || $('.lightbox'));
+  if (shell) shell.inert = modal;
+  sidebar.inert = Boolean(hidden);
+  if (main) main.inert = Boolean(drawer);
+  sidebar.setAttribute('aria-label', 'Wiki navigation');
+  sidebar.querySelectorAll('.tree-section').forEach((section) => {
+    const body = section.querySelector('.tree-section__body');
+    if (body) body.inert = section.classList.contains('collapsed');
+  });
+  const trigger = $('[data-action="nav-toggle"]');
+  trigger?.setAttribute('aria-expanded', String(mobile ? UI.navOpen : !UI.navHidden));
+  if (!modal && moveFocus) {
+    if (drawer) sidebar.querySelector('a, button')?.focus({ preventScroll: true });
+    else trigger?.focus({ preventScroll: true });
+  }
+}
+
 function mountMenu(host, anchor) {
   document.body.appendChild(host);
   const r = anchor.getBoundingClientRect();
+  if (anchor.classList.contains('sidebar__user')) {
+    host.classList.add('menu--account');
+    host.style.minWidth = '0';
+    host.style.width = Math.min(r.width, innerWidth - 20) + 'px';
+  }
   const mw = host.offsetWidth, mh = host.offsetHeight;
   host.style.left = Math.max(10, Math.min(r.left, innerWidth - mw - 10)) + 'px';
   const top = r.bottom + mh + 10 > innerHeight ? r.top - mh - 6 : r.bottom + 6;
@@ -286,15 +334,26 @@ function mountMenu(host, anchor) {
     host.remove(); UI.menu = null;
     document.removeEventListener('pointerdown', onAway, true);
     document.removeEventListener('focusin', onFocusAway);
+    document.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('resize', onResize);
     anchor.setAttribute('aria-expanded', 'false');
     window.__closeMenu = null;
     if (restoreFocus && anchor.isConnected) anchor.focus?.();
+    setTimeout(() => { if (UI._backgroundRoute) renderBackground(UI._backgroundRoute); }, 0);
   };
   window.__closeMenu = close; // render() and Esc both close through this
-  const onAway = (ev) => { if (!host.contains(ev.target)) close(); };
+  const onAway = (ev) => {
+    if (anchor.contains(ev.target)) return; // The trigger's click toggles it closed.
+    if (!host.contains(ev.target)) close(false);
+  };
   const onFocusAway = (ev) => { if (!host.contains(ev.target) && ev.target !== anchor) close(false); };
+  const onScroll = (ev) => { if (!host.contains(ev.target)) close(false); };
+  const onResize = () => close(false);
   document.addEventListener('pointerdown', onAway, true);
   document.addEventListener('focusin', onFocusAway);
+  document.addEventListener('scroll', onScroll, true);
+  window.addEventListener('resize', onResize);
+  window.__menuAnchor = anchor;
   // Menus are keyboard-first like everything else: focus lands inside,
   // arrows move it, Escape (global) hands it back to the trigger.
   host.addEventListener('keydown', (ev) => {
@@ -315,13 +374,14 @@ function mountMenu(host, anchor) {
 }
 
 function openMenu(items, anchor) {
+  if (UI.menu && window.__menuAnchor === anchor) { window.__closeMenu?.(); return; }
   window.__closeMenu?.();
   UI.menu = { items };
   const host = document.createElement('div');
   host.className = 'menu';
   host.setAttribute('role', 'menu');
   host.innerHTML = items.map((it, i) => it === '-' ? '<hr>' :
-    `<button type="button" role="${typeof it.selected === 'boolean' ? 'menuitemradio' : 'menuitem'}" ${typeof it.selected === 'boolean' ? `aria-checked="${it.selected}"` : ''} data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon || ''}${MD.esc(it.label)}${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
+    `<button type="button" role="${typeof it.selected === 'boolean' ? 'menuitemradio' : 'menuitem'}" ${typeof it.selected === 'boolean' ? `aria-checked="${it.selected}"` : ''} data-menu-i="${i}" class="${it.danger ? 'danger' : ''}">${it.icon ? `<span class="menu__icon" aria-hidden="true">${it.icon}</span>` : ''}<span class="menu__label">${MD.esc(it.label)}</span>${it.hint ? `<span class="menu__hint">${it.hint}</span>` : ''}</button>`).join('');
   const close = mountMenu(host, anchor);
   host.querySelector('[aria-checked="true"]')?.focus();
   host.addEventListener('click', (ev) => {
@@ -333,6 +393,7 @@ function openMenu(items, anchor) {
 }
 
 function openEmojiPop(anchor, pageId) {
+  if (UI.menu && window.__menuAnchor === anchor) { window.__closeMenu?.(); return; }
   window.__closeMenu?.();
   UI.menu = { emoji: true };
   const mine = Store.page(pageId)?.reactions || {};
@@ -395,8 +456,9 @@ function edFindOpen() {
 
   input.addEventListener('input', () => { at = -1; jump('next'); });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? 'prev' : 'next'); }
-    if (e.key === 'Escape') { e.preventDefault(); bar.remove(); ta.focus(); }
+    if (e.isComposing) return;
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); jump(e.shiftKey ? 'prev' : 'next'); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); bar.remove(); ta.focus(); }
   });
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-find]');
@@ -409,21 +471,176 @@ function edFindOpen() {
 
 /* ------------------------------- click delegation ------------------------ */
 
-// Sheet rows are buttons: keyboard users open them the same way.
-document.addEventListener('keydown', (ev) => {
-  if (ev.key !== 'Enter' && ev.key !== ' ') return;
-  const row = ev.target.closest?.('[data-action="interest-open"]');
-  if (!row || ev.target !== row) return;
-  ev.preventDefault();
-  UI.modal = { kind: 'interest-row', id: row.dataset.id };
+function acceptInterestReview(row) {
+  const rows = UI.interest?.rows;
+  const index = rows?.findIndex((r) => r.id === row.id) ?? -1;
+  if (index >= 0 && (row.reviewVersion || 0) >= (rows[index].reviewVersion || 0)) rows[index] = row;
+}
+
+async function toggleInterestFlag(id) {
+  if (!Store.isAdmin() || UI.interestArchiveView) return;
+  const row = UI.interest?.rows?.find((r) => r.id === id);
+  UI.interestFlagBusy ||= new Set();
+  if (!row || UI.interestFlagBusy.has(id)) return;
+  UI.interestFlagBusy.add(id);
+  const paint = () => {
+    renderInterestRows(id);
+    const button = $('.interest-detail-flag');
+    if (button?.dataset.id === id) {
+      const focused = document.activeElement === button;
+      const current = UI.interest?.rows?.find((r) => r.id === id) || row;
+      button.outerHTML = interestFlagButton(current, { detail: true });
+      if (focused) $('.interest-detail-flag')?.focus();
+    }
+  };
+  paint();
+  try {
+    const out = await api(`/interest/${id}/review`, { method: 'PATCH', body: JSON.stringify({ flagged: !row.review?.flagged }), signal: AbortSignal.timeout(20000) });
+    acceptInterestReview(out.row);
+    toast(out.row.review.flagged ? 'Flagged for follow-up' : 'Flag removed');
+  } catch (e) { toast(e.name === 'TimeoutError' ? 'The flag request timed out. You can retry.' : `Could not update flag: ${e.message}`); }
+  finally { UI.interestFlagBusy.delete(id); paint(); }
+}
+
+async function postInterestComment(id) {
+  if (!Store.isAdmin() || UI.interestArchiveView) return;
+  const draft = interestDraft(id);
+  if (draft.sending || !draft.text.trim()) return;
+  // Keep the same ID when retrying a lost response so a comment is never
+  // duplicated. Editing after a failed attempt starts a new submission.
+  draft.id ||= 'ic-' + crypto.randomUUID();
+  draft.sending = true;
+  draft.error = '';
+  paintInterestDiscussion(id);
+  let posted = false;
+  try {
+    const out = await api(`/interest/${id}/comments`, { method: 'POST', body: JSON.stringify({ id: draft.id, text: draft.text }), signal: AbortSignal.timeout(20000) });
+    acceptInterestReview(out.row);
+    draft.text = ''; draft.id = null;
+    posted = true;
+    renderInterestRows(id);
+    toast('Comment posted');
+  } catch (e) { draft.error = e.name === 'TimeoutError'
+    ? 'The request timed out. Your comment is still here; retrying will not post it twice.'
+    : `Could not post: ${e.message}. Your comment is still here.`; }
+  finally { draft.sending = false; paintInterestDiscussion(id, { posted }); }
+}
+
+function confirmInterestCommentRemoval(id, commentId, cancel = false) {
+  if (!Store.isAdmin() || UI.interestArchiveView || UI.modal?.kind !== 'interest-row' || UI.modal.id !== id) return;
+  const row = UI.interest?.rows?.find((r) => r.id === id);
+  if (!row?.review?.comments?.some((c) => c.id === commentId)) return;
+  UI.interestCommentRemovals ||= {};
+  const key = id + '/' + commentId;
+  const removal = UI.interestCommentRemovals[key] ||= {};
+  if (removal.busy) return;
+  if (cancel) delete UI.interestCommentRemovals[key];
+  else { removal.confirming = true; removal.error = ''; }
+  paintInterestDiscussion(id);
+  const node = $$('[data-comment-id]', $('.interest-thread')).find((el) => el.dataset.commentId === commentId);
+  $(cancel ? '[data-action="interest-comment-delete"]' : '[data-action="interest-comment-delete-cancel"]', node)?.focus({ preventScroll: true });
+}
+
+async function deleteInterestComment(id, commentId) {
+  if (!Store.isAdmin() || UI.interestArchiveView) return;
+  const key = id + '/' + commentId;
+  const removal = UI.interestCommentRemovals?.[key];
+  if (!removal?.confirming || removal.busy) return;
+  const originalNode = $$('[data-comment-id]', $('.interest-thread')).find((el) => el.dataset.commentId === commentId);
+  const restoreFocus = originalNode?.contains(document.activeElement);
+  removal.busy = true; removal.error = '';
+  paintInterestDiscussion(id);
+  try {
+    const out = await api(`/interest/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE', signal: AbortSignal.timeout(20000) });
+    acceptInterestReview(out.row);
+    delete UI.interestCommentRemovals[key];
+    renderInterestRows(id);
+    toast('Comment deleted');
+  } catch (e) {
+    removal.error = e.name === 'TimeoutError' ? 'The request timed out. Retry to confirm deletion.' : `Could not delete: ${e.message}`;
+  } finally {
+    removal.busy = false;
+    paintInterestDiscussion(id);
+    if (restoreFocus && UI.modal?.kind === 'interest-row' && UI.modal.id === id && document.activeElement === document.body) {
+      const node = $$('[data-comment-id]', $('.interest-thread')).find((el) => el.dataset.commentId === commentId);
+      (removal.error ? $('[data-action="interest-comment-delete-confirm"]', node) : $('.interest-compose textarea'))?.focus({ preventScroll: true });
+    }
+  }
+}
+
+function refreshInterestAfterRemoval(ids) {
+  const removedOpenRow = !UI.interestArchiveView && UI.modal?.kind === 'interest-row' && ids.has(UI.modal.id);
+  if (removedOpenRow) closeModal(() => renderBackground('interest'));
+  else renderBackground('interest');
+}
+
+function confirmInterestRemoval(ids) {
+  if (!Store.isAdmin() || UI.interestArchiveView) return;
+  const rows = (UI.interest?.rows || []).filter((r) => ids.includes(r.id) && !UI.interestDeleting?.has(r.id));
+  if (!rows.length) { if (ids.length) toast('Deletion is already in progress'); return; }
+  const visible = new Set(interestVisible().map((r) => r.id));
+  const hidden = rows.filter((r) => !visible.has(r.id)).length;
+  UI.modal = {
+    kind: 'confirm', title: rows.length === 1 ? `Delete ${rows[0].name}?` : `Delete ${rows.length} submissions?`,
+    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including their comments and attachments. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
+    confirm: rows.length === 1 ? 'Delete submission' : `Delete ${rows.length} submissions`, danger: true,
+    onGo: async () => {
+      UI.interestDeleting ||= new Set();
+      const pending = rows.filter((r) => !UI.interestDeleting.has(r.id));
+      if (!pending.length) return;
+      pending.forEach((r) => UI.interestDeleting.add(r.id));
+      const results = await Promise.allSettled(pending.map((r) => api(`/interest/${r.id}`, { method: 'DELETE', signal: AbortSignal.timeout(20000) })));
+      pending.forEach((r) => UI.interestDeleting.delete(r.id));
+      const deleted = new Set(pending.filter((r, i) => results[i].status === 'fulfilled' || results[i].reason?.status === 404).map((r) => r.id));
+      if (UI.interest?.rows) UI.interest.rows = UI.interest.rows.filter((r) => !deleted.has(r.id));
+      for (const id of deleted) { UI.interestSelected?.delete(id); if (UI.interestDrafts) delete UI.interestDrafts[id]; }
+      refreshInterestAfterRemoval(deleted);
+      const failed = pending.length - deleted.size;
+      toast(failed ? `${deleted.size} deleted; ${failed} could not be deleted. Try again.` : `Deleted ${deleted.size} ${deleted.size === 1 ? 'submission' : 'submissions'}`);
+    },
+  };
   render();
-});
+}
+
+async function checkInterestStorage() {
+  try {
+    await api('/interest/storage-check', { method: 'POST', body: '{}' });
+    toast('Submission backup storage is working');
+  } catch (e) { toast(`Storage check failed: ${e.message}`); }
+}
+
+function archiveInterestList() {
+  if (UI.interestArchiving) { toast('Archiving is already in progress'); return; }
+  const n = (UI.interest?.rows || []).length;
+  if (!n) { toast('There is nothing to archive'); return; }
+  const year = new Date().getFullYear();
+  const season = new Date().getMonth() >= 6 ? 'Fall' : 'Spring';
+  UI.modal = {
+    kind: 'confirm', title: 'Archive the interest list?',
+    text: `Save all <b>${n}</b> submissions, comments, flags, and attachments in an archive for this recruiting cycle.`,
+    confirm: 'Archive list',
+    field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
+    onGo: (value) => {
+      const name = String(value ?? '').trim();
+      if (!name) { toast('An archive needs a name'); return; }
+      if (UI.interestArchiving) return;
+      UI.interestArchiving = true;
+      const ids = new Set((UI.interest?.rows || []).map((r) => r.id));
+      api('/interest/archive', { method: 'POST', body: JSON.stringify({ name }), signal: AbortSignal.timeout(30000) })
+        .then(() => { UI.interest = undefined; UI.interestArchives = undefined; refreshInterestAfterRemoval(ids); toast(`Archived as “${name}”`); })
+        .catch((e) => toast(`Could not archive: ${e.message}`))
+        .finally(() => { UI.interestArchiving = false; });
+    },
+  };
+  render();
+}
 
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el) return;
   const act = el.dataset.action;
   const stop = () => { ev.preventDefault(); ev.stopPropagation(); };
+  if (UI.editor?.saving) { stop(); return; }
 
   switch (act) {
     /* ---- login ---- */
@@ -440,8 +657,8 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- shell ---- */
-    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; Store.prefs().navHidden = UI.navHidden; Store.persist(); } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); } break;
-    case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); break;
+    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; Store.prefs().navHidden = UI.navHidden; Store.persist(); } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
+    case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); break;
     case 'sec-toggle': {
       if (ev.target.closest('[data-action="new-page"]')) break;
       stop();
@@ -451,6 +668,8 @@ document.addEventListener('click', async (ev) => {
       Store.persist();
       el.closest('.tree-section')?.classList.toggle('collapsed', i < 0);
       el.setAttribute('aria-expanded', String(i >= 0));
+      syncSidebarInteraction();
+      el.setAttribute('aria-label', (i >= 0 ? 'Collapse ' : 'Expand ') + (SECTIONS.find((s) => s.id === el.dataset.sec)?.name || 'section'));
       break;
     }
     case 'user-menu': stop(); openMenu([
@@ -462,7 +681,7 @@ document.addEventListener('click', async (ev) => {
         catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); }
       } },
       ...(typeof REMOTE === 'undefined' ? [
-        { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'This is the CUPI wiki preview. Everything works, but data lives in this browser only and sign-in is simulated. The production deployment adds Google OAuth (cornell.edu only), shared storage, real emails, and live Onshape/Altium embeds.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
+        { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'Sign-in is simulated and changes are stored in this browser.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
         '-',
         { icon: I.history, label: 'Restore sample content', danger: true, run: () => { UI.modal = { kind: 'confirm', title: 'Restore sample content?', text: 'Every page, member, and attachment returns to the sample content this preview ships with. Anything you changed in this browser is erased.', confirm: 'Restore', danger: true }; UI.modal.onGo = () => { Store.reset(); UI.editor = null; nav('#/home'); route(); render(); toast('Sample content restored'); }; render(); } },
       ] : ['-']),
@@ -499,6 +718,7 @@ document.addEventListener('click', async (ev) => {
     case 'dd': {
       stop();
       const host = el;
+      if (host.dataset.m === 'interest-filter') { openInterestFilter(host); break; }
       const options = JSON.parse(host.dataset.opts);
       openMenu(options.map((o) => ({
         selected: o.value === host.dataset.value,
@@ -506,18 +726,34 @@ document.addEventListener('click', async (ev) => {
         label: o.label,
         run: () => {
           host.dataset.value = o.value;
+          if (UI.route.name === 'admin' && host.closest('form')) host.closest('form').dataset.adminDirty = 'true';
           host.querySelector('.dd__label').textContent = o.label;
           if (host.dataset.m === 'ed-section' && UI.editor) { UI.editor.section = o.value; markDirty(); autosaveDraft(); }
+          if (host.dataset.m === 'ai-model') {
+            const form = host.closest('form'), current = $('[data-m="ai-effort"]', form);
+            const efforts = aiEffortOptions(o.value);
+            const effort = efforts.some((e) => e.value === current.dataset.value) ? current.dataset.value : efforts[0].value;
+            current.outerHTML = dd('ai-effort', efforts, effort);
+            $('[data-m="ai-effort"]', form).setAttribute('aria-labelledby', 'ai-effort-label');
+            UI.aiDraft = { model: o.value, effort };
+          }
+          if (host.dataset.m === 'ai-effort') UI.aiDraft = { model: $('[data-m="ai-model"]', host.closest('form')).dataset.value, effort: o.value };
           if (host.dataset.m === 'section' && UI.modal) UI.modal.sectionTouched = true;
           if (host.dataset.m === 'email-from') {
-            if (o.value === '__custom') { UI.emailFromCustom = true; render(); }
-            else {
-              const nm = $('form[data-action="email-settings-form"] [name="fromname"]')?.value || '';
-              Store.setEmailSettings({ key: '', from: o.value, name: nm });
-              UI.emailFromCustom = false;
-              render();
-              toast('Sender updated');
-            }
+            const form = host.closest('form');
+            form.dataset.adminDirty = 'true';
+            const field = form.elements.from;
+            if (o.value === '__custom') {
+              UI.emailFromCustom = true;
+              field.type = 'text';
+              field.className = 'text-input';
+              field.placeholder = 'wiki@yourdomain.com';
+              field.setAttribute('aria-label', 'From address');
+              field.autocomplete = 'off';
+              field.spellcheck = false;
+              host.remove();
+              field.focus();
+            } else field.value = o.value;
           }
         },
       })), host);
@@ -531,7 +767,7 @@ document.addEventListener('click', async (ev) => {
         { icon: I.edit, label: 'Edit', run: () => nav('#/edit/' + id) },
         { icon: I.history, label: 'History', run: () => nav('#/history/' + id) },
         '-',
-        { icon: I.copy, label: 'Duplicate', run: () => { const c = Store.duplicatePage(id); nav('#/page/' + c.id); toast('Duplicated. Edit away'); } },
+        { icon: I.copy, label: 'Duplicate', run: async () => { try { const c = await Store.duplicatePage(id); nav('#/page/' + c.id); toast('Page duplicated'); } catch (e) { toast(e.message || 'Could not duplicate this page'); } } },
         { icon: I.arrowL, label: 'Move…', run: () => { UI.modal = { kind: 'move', id }; render(); } },
         { icon: I.copy, label: 'Copy as Markdown', run: async () => { try { await navigator.clipboard.writeText(Store.page(id).body); toast('Markdown copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } },
         { icon: I.page, label: 'Print / PDF', run: () => window.print() },
@@ -574,15 +810,8 @@ document.addEventListener('click', async (ev) => {
     case 'react-add': stop(); openEmojiPop(el, el.dataset.id); break;
 
     case 'resume-new-draft': stop(); nav('#/new'); break;
-    case 'email-edit': stop(); UI.emailEdit = !UI.emailEdit; render(); break;
-    case 'resend-disconnect': stop(); {
-      if (typeof REMOTE === 'undefined') { toast('Preview build: connect and disconnect on the live wiki.'); break; }
-      el.disabled = true;
-      try { adoptServer(await api('/resend/disconnect', { method: 'POST', body: JSON.stringify({}) })); UI.resendDomains = undefined; toast('Resend disconnected'); }
-      catch (e) { toast(`Couldn't disconnect: ${e.message}`); }
-      render();
-      break;
-    }
+    case 'email-edit': stop(); if (!UI.emailBusy) { UI.emailEdit = !UI.emailEdit; render(); } break;
+    case 'resend-disconnect': stop(); runEmailIntegrationAction('disconnect'); break;
     case 'profile-save': stop(); {
       const name = ($('.modal [data-m="pname"]')?.value || '').trim();
       const subteam = ($('.modal [data-m="psub"]')?.value || '').trim();
@@ -593,16 +822,13 @@ document.addEventListener('click', async (ev) => {
       break;
     }
 
-    case 'email-test': stop(); {
-      if (typeof REMOTE === 'undefined') { toast('Preview build: emails only send from the live wiki.'); break; }
-      el.disabled = true;
-      try {
-        const out = await api('/test-email', { method: 'POST', body: JSON.stringify({}) });
-        toast(out.sent ? `Test sent to ${Store.me().email}. Check your inbox (and spam).` : `Not sent: ${out.reason || 'unknown reason'}`);
-      } catch (e) { toast(`Not sent: ${e.message}`); }
-      el.disabled = false;
-      break;
-    }
+    case 'ai-usage-refresh': stop(); loadAiUsage(); break;
+    case 'ai-configure': stop(); setAiConfiguration(true); break;
+    case 'ai-cancel': stop(); setAiConfiguration(false); break;
+    case 'ai-test': stop(); changeAiSettings(el.closest('form'), 'test'); break;
+    case 'ai-disconnect': stop(); changeAiSettings(el.closest('form'), 'disconnect'); break;
+
+    case 'email-test': stop(); runEmailIntegrationAction('test'); break;
 
     case 'help-menu': stop(); UI.modal = { kind: 'shortcuts' }; render(); break;
 
@@ -682,8 +908,33 @@ document.addEventListener('click', async (ev) => {
     case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/home'); route(); render(); } break;
     case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } break;
     case 'ed-save': stop(); edSave(); break;
+    case 'page-review-dismiss': {
+      stop();
+      const m = UI.modal;
+      if (m?.kind !== 'save-summary') return;
+      (m.reviewDismissed ||= new Set()).add(el.dataset.kind);
+      paintPageReview(m);
+      $('.modal [data-action="save-commit"]')?.focus();
+      break;
+    }
+    case 'page-review-section': {
+      stop();
+      const m = UI.modal;
+      if (m?.kind !== 'save-summary' || !UI.editor || !SECTIONS.some((s) => s.id === el.dataset.section)) return;
+      const manualSummary = m.summaryEdited ? m.summary : null;
+      UI.editor.section = el.dataset.section;
+      markDirty(); autosaveDraft();
+      UI.modal = null;
+      edSave();
+      if (manualSummary !== null && UI.modal?.kind === 'save-summary') {
+        UI.modal.summary = manualSummary; UI.modal.summaryEdited = true;
+        $('.modal [data-m="summary"]').value = manualSummary;
+        $('.modal [data-action="save-commit"]').disabled = false;
+      }
+      break;
+    }
     case 'ed-ac': stop(); edAcceptAc(el.dataset.title); break;
-    case 'save-commit': stop(); edCommit(($('.modal [data-m="summary"]')?.value || '').trim()); break;
+    case 'save-commit': stop(); if (!el.disabled) edCommit(edSummaryValue($('.modal [data-m="summary"]')?.value)); break;
 
     /* ---- history ---- */
     case 'rev-restore': stop(); Store.restoreRev(el.dataset.id, +el.dataset.ts); nav('#/page/' + el.dataset.id); route(); render(); toast('Version restored'); break;
@@ -695,19 +946,41 @@ document.addEventListener('click', async (ev) => {
     case 'palette-create': stop(); { const t = UI.palette.q.trim(); UI.palette = null; UI.modal = { kind: 'new-page', title: t, tpl: 'blank' }; render(); } break;
 
     /* ---- admin ---- */
+    case 'members-add': {
+      stop();
+      if (!Store.isAdmin()) break;
+      UI.memberInviteOpen = true;
+      const panel = $('[data-member-invite]');
+      if (panel) panel.hidden = false;
+      el.setAttribute('aria-expanded', 'true');
+      $('form[data-action="invite-form"] [name="emails"]')?.focus();
+      break;
+    }
+    case 'members-add-close': {
+      stop();
+      if (UI.adminFormPending?.has('invite-form')) break;
+      UI.memberInviteOpen = false;
+      const panel = $('[data-member-invite]');
+      if (panel) panel.hidden = true;
+      const trigger = $('[data-action="members-add"]');
+      trigger?.setAttribute('aria-expanded', 'false');
+      trigger?.focus({ preventScroll: true });
+      break;
+    }
     case 'invite-view': stop(); UI.modal = { kind: 'invite-mail', email: el.dataset.email }; render(); break;
     case 'role-toggle': {
       stop();
       const u = Store.user(el.dataset.email);
-      Store.setRole(u.email, u.role === 'admin' ? 'member' : 'admin');
-      render(); toast(`${u.name} is now ${u.role === 'admin' ? 'an admin' : 'a member'}`);
+      if (u) updateAdminMember(u.email, u.role === 'admin' ? 'member' : 'admin');
       break;
     }
     case 'user-remove': {
       stop();
       const email = el.dataset.email;
-      UI.modal = { kind: 'confirm', title: 'Remove member?', text: `<b>${email}</b> loses access immediately. Their pages and edits stay.`, confirm: 'Remove', danger: true };
-      UI.modal.onGo = () => { Store.removeUser(email); render(); toast('Removed from roster'); };
+      if (!Store.isAdmin() || !Store.user(email) || email === Store.me()?.email || UI.memberPending?.has(email)) break;
+      UI.modal = { kind: 'confirm', title: 'Remove member?', text: `<b>${MD.esc(email)}</b> loses access immediately. Their pages and edits stay.`, confirm: 'Remove', danger: true };
+      const returnFocus = focusReference(el);
+      UI.modal.onGo = () => updateAdminMember(email, null, returnFocus);
       render();
       break;
     }
@@ -759,28 +1032,29 @@ document.addEventListener('click', async (ev) => {
       render();
       break;
     }
-    case 'interest-storage-check': {
+    case 'interest-tools': {
       stop();
-      if (!Store.isAdmin() || el.disabled) return;
-      el.disabled = true;
-      el.textContent = 'Checking…';
-      try {
-        await api('/interest/storage-check', { method: 'POST', body: '{}' });
-        toast('Submission backup storage is working');
-      } catch (e) {
-        toast(`Storage check failed: ${e.message}`);
-      } finally {
-        el.disabled = false;
-        el.textContent = 'Check storage';
-      }
+      openMenu([
+        { label: 'Refresh list', run: () => { UI.interest = undefined; UI.interestArchives = undefined; render(); } },
+        { label: 'Archive list…', run: archiveInterestList },
+        '-',
+        { label: 'Check storage', run: checkInterestStorage },
+      ], el);
       break;
     }
+    case 'interest-storage-check': stop(); await checkInterestStorage(); break;
+    case 'interest-flag': stop(); await toggleInterestFlag(el.dataset.id); break;
+    case 'interest-comment-delete': stop(); confirmInterestCommentRemoval(el.dataset.id, el.dataset.cid); break;
+    case 'interest-comment-delete-cancel': stop(); confirmInterestCommentRemoval(el.dataset.id, el.dataset.cid, true); break;
+    case 'interest-comment-delete-confirm': stop(); await deleteInterestComment(el.dataset.id, el.dataset.cid); break;
+    case 'interest-remove-selected': stop(); confirmInterestRemoval([...interestSelection()]); break;
     case 'interest-open': {
-      // The file link inside the row keeps its own job.
-      if (ev.target.closest('[data-stop]')) return;
       stop();
+      if (!UI.interestArchiveView && UI.interestDeleting?.has(el.dataset.id)) { toast('Deletion is in progress'); break; }
       UI.modal = { kind: 'interest-row', id: el.dataset.id };
       render();
+      if (el.dataset.comments) $('.interest-compose textarea')?.focus();
+      else $('.interest-review [data-action="modal-close"]')?.focus();
       break;
     }
     case 'interest-pending-open': {
@@ -810,44 +1084,14 @@ document.addEventListener('click', async (ev) => {
       renderInterestRows();
       break;
     }
-    case 'interest-remove': {
-      stop();
-      const id = el.dataset.id;
-      UI.modal = { kind: 'confirm', title: 'Remove this submission?', text: `<b>${el.dataset.email}</b> comes off the interest list, along with any file they attached.`, confirm: 'Remove', danger: true };
-      UI.modal.onGo = () => {
-        api(`/interest/${id}`, { method: 'DELETE' })
-          .then(() => { UI.interest = undefined; render(); toast('Removed from the interest list'); })
-          .catch((e) => { toast(`Could not remove: ${e.message}`); });
-      };
-      render();
-      break;
-    }
-    case 'interest-archive': {
-      stop();
-      const n = (UI.interest?.rows || []).length;
-      const year = new Date().getFullYear();
-      const season = new Date().getMonth() >= 6 ? 'Fall' : 'Spring';
-      UI.modal = {
-        kind: 'confirm',
-        title: 'Archive the interest list?',
-        text: `All <b>${n}</b> submissions move into a named archive you can reopen and export any time, and the live list starts empty for the next cycle. Files come along.`,
-        confirm: 'Archive list',
-        field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
-      };
-      UI.modal.onGo = (value) => {
-        const name = String(value ?? '').trim();
-        if (!name) { toast('An archive needs a name'); return; }
-        api('/interest/archive', { method: 'POST', body: JSON.stringify({ name }) })
-          .then(() => { UI.interest = undefined; UI.interestArchives = undefined; render(); toast(`Archived as “${name}”`); })
-          .catch((e) => { toast(`Could not archive: ${e.message}`); });
-      };
-      render();
-      break;
-    }
+    case 'interest-remove': stop(); confirmInterestRemoval([el.dataset.id]); break;
+    case 'interest-archive': stop(); archiveInterestList(); break;
     case 'interest-archive-open': {
       stop();
       UI.interestArchiveView = { id: el.dataset.id, loading: true };
       UI.interestQuery = '';
+      UI.interestFilter = 'all';
+      UI.interestSubteam = '';
       render();
       break;
     }
@@ -855,6 +1099,8 @@ document.addEventListener('click', async (ev) => {
       stop();
       UI.interestArchiveView = null;
       UI.interestQuery = '';
+      UI.interestFilter = 'all';
+      UI.interestSubteam = '';
       render();
       break;
     }
@@ -871,8 +1117,15 @@ document.addEventListener('click', async (ev) => {
         typed: 'delete archive',
       };
       UI.modal.onGo = () => {
-        api(`/interest/archives/${id}`, { method: 'DELETE' })
-          .then(() => { UI.interestArchiveView = null; UI.interestArchives = undefined; render(); toast('Archive deleted'); })
+        api(`/interest/archives/${id}`, { method: 'DELETE', signal: AbortSignal.timeout(20000) })
+          .then(() => {
+            const removedView = UI.interestArchiveView?.id === id;
+            if (removedView) UI.interestArchiveView = null;
+            UI.interestArchives = undefined;
+            if (removedView && UI.modal?.kind === 'interest-row') closeModal(() => renderBackground('interest'));
+            else renderBackground('interest');
+            toast('Archive deleted');
+          })
           .catch((e) => { toast(`Could not delete: ${e.message}`); });
       };
       render();
@@ -909,52 +1162,236 @@ document.addEventListener('click', async (ev) => {
 
 /* ------------------------------- forms ----------------------------------- */
 
+function adminFormMessage(form, message) {
+  let error = $('[data-admin-error]', form);
+  if (!error && !message) return;
+  if (!error) {
+    error = document.createElement('p');
+    error.className = 'field-error';
+    error.dataset.adminError = '';
+    error.setAttribute('role', 'alert');
+    error.style.flexBasis = '100%';
+    error.style.margin = '0';
+    form.style.flexWrap = 'wrap';
+    form.append(error);
+  }
+  error.textContent = message;
+  error.hidden = !message;
+  if (message && !form.isConnected) toast(message);
+}
+
+async function updateAdminMember(email, role, returnFocus = null) {
+  const user = Store.user(email);
+  if (!Store.isAdmin() || !user || email === Store.me()?.email) return;
+  UI.memberPending ||= new Set();
+  if (UI.memberPending.has(email)) return;
+  const name = user.name || email;
+  const focus = returnFocus || ($('[data-member-rows]')?.contains(document.activeElement) ? focusReference(document.activeElement) : null);
+  UI.memberPending.add(email);
+  renderMemberRows();
+  try {
+    if (typeof REMOTE === 'undefined') {
+      if (role) Store.setRole(email, role);
+      else Store.removeUser(email);
+    } else await requestMutation(role ? 'setRole' : 'removeUser', role ? { email, role } : { email });
+    toast(role ? `${name} is now ${role === 'admin' ? 'an admin' : 'a member'}` : 'Member removed');
+  } catch (e) {
+    toast(e.name === 'TimeoutError' ? 'The request timed out. Check the current member list before retrying.' : e.message || 'Could not update this member.');
+  } finally {
+    UI.memberPending.delete(email);
+    if (UI.route?.name === 'admin' && !UI.editor) {
+      renderMemberRows();
+      if (focus && !UI.modal && document.activeElement === document.body) {
+        (resolveFocus(focus) || $('[data-m="member-q"]'))?.focus({ preventScroll: true });
+      }
+    }
+  }
+}
+
+function syncEmailPending() {
+  const busy = Boolean(UI.emailBusy || UI.adminFormPending?.has('email-settings-form'));
+  $('.email-integration')?.setAttribute('aria-busy', String(busy));
+  $$('.email-integration [data-action="email-test"], .email-integration [data-action="resend-disconnect"], .email-integration [data-action="email-edit"], .email-integration form button[type="submit"]').forEach((el) => { el.disabled = busy; });
+}
+
+function paintEmailIntegration() {
+  if (UI.route?.name !== 'admin' || UI.editor || UI.modal) return;
+  const section = $('.email-integration');
+  if (!section) return;
+  const forms = $$('form[data-action="email-settings-form"]', section).filter((form) => form.dataset.adminDirty === 'true' || form.dataset.adminPending === 'true');
+  const active = document.activeElement;
+  if (forms.some((form) => form.classList.contains('integration__editor'))) UI.emailEdit = true;
+  section.outerHTML = viewEmailSettings();
+  const next = $('.email-integration');
+  for (const form of forms) {
+    const target = $(form.classList.contains('integration__editor') ? 'form.integration__editor' : 'form:not(.integration__editor)', next);
+    if (target) { target.replaceWith(form); const disclosure = form.closest('details'); if (disclosure) disclosure.open = true; }
+  }
+  if (active?.isConnected && document.activeElement === document.body) active.focus({ preventScroll: true });
+}
+
+async function runEmailIntegrationAction(action) {
+  if (!Store.isAdmin() || UI.emailBusy || UI.adminFormPending?.has('email-settings-form')) return;
+  if (typeof REMOTE === 'undefined') { toast('Configure email on the live wiki.'); return; }
+  const origin = $('.email-integration');
+  const active = document.activeElement, recipient = Store.me()?.email;
+  UI.emailBusy = action;
+  origin?.setAttribute('aria-busy', 'true');
+  const controls = $$('[data-action="email-test"], [data-action="resend-disconnect"], [data-action="email-edit"], form button[type="submit"]', origin || document);
+  controls.forEach((el) => { el.disabled = true; });
+  syncEmailPending();
+  try {
+    const out = await api(action === 'disconnect' ? '/resend/disconnect' : '/test-email', {
+      method: 'POST', body: JSON.stringify({}), signal: AbortSignal.timeout(30000),
+    });
+    if (action === 'disconnect') {
+      adoptServer(out);
+      UI.resendDomains = undefined;
+      UI.emailBusy = false;
+      paintEmailIntegration();
+      toast('Resend disconnected');
+    } else toast(out.sent ? `Test sent to ${recipient}.` : `Not sent: ${out.reason || 'delivery was not confirmed'}`);
+  } catch (e) {
+    toast(e.name === 'TimeoutError' ? (action === 'test' ? 'The test timed out. Delivery was not confirmed.' : 'The disconnect timed out. Check the connection before retrying.') : e.message || 'The email request failed.');
+  } finally {
+    UI.emailBusy = false;
+    controls.forEach((el) => { el.disabled = false; });
+    syncEmailPending();
+    if (!UI.modal && UI.route?.name === 'admin' && !UI.editor && document.activeElement === document.body) {
+      if (active?.isConnected) active.focus({ preventScroll: true });
+      else if (origin?.isConnected === false) $('.email-integration .integration__actions button, .email-integration .integration__actions a')?.focus({ preventScroll: true });
+    }
+  }
+}
+
+async function runAdminForm(form, submit) {
+  UI.adminFormPending ||= new Set();
+  const kind = form.dataset.action;
+  if (UI.adminFormPending.has(kind)) return;
+  UI.adminFormPending.add(kind);
+  form.dataset.adminPending = 'true';
+  const active = document.activeElement;
+  const controls = $$('button, input, textarea', form).map((el) => [el, el.disabled]);
+  controls.forEach(([el]) => { el.disabled = true; });
+  if (kind === 'email-settings-form') syncEmailPending();
+  adminFormMessage(form, '');
+  try { await submit(); }
+  catch (e) {
+    form.dataset.adminDirty = 'true';
+    adminFormMessage(form, e.name === 'TimeoutError' ? 'The request timed out. Your entries are still here. Check the saved result before retrying.' : e.message || 'Could not save. Your entries are still here.');
+  } finally {
+    UI.adminFormPending.delete(kind);
+    form.dataset.adminPending = 'false';
+    controls.forEach(([el, disabled]) => { el.disabled = disabled; });
+    if (kind === 'email-settings-form') syncEmailPending();
+    if (form.isConnected && active?.isConnected && document.activeElement === document.body) active.focus({ preventScroll: true });
+  }
+}
+
+function paintAdminFormSuccess(form) {
+  form.dataset.adminDirty = 'false';
+  form.dataset.adminPending = 'false';
+  if (UI.route?.name === 'admin' && !UI.editor && !UI.modal && form.isConnected) {
+    render();
+    return $(`form[data-action="${form.dataset.action}"]`);
+  }
+  return form.isConnected ? form : null;
+}
+
+async function submitEmailSettings(form) {
+  if (UI.emailBusy) return;
+  const values = { from: form.elements.from.value.trim(), key: form.elements.key?.value.trim() || '', name: form.elements.fromname.value.trim() };
+  await runAdminForm(form, async () => {
+    if (typeof REMOTE === 'undefined') Store.setEmailSettings(values);
+    else await requestMutation('setEmailSettings', values);
+    if (form.elements.key) form.elements.key.value = '';
+    UI.emailFromCustom = false;
+    UI.emailEdit = false;
+    paintAdminFormSuccess(form);
+    toast('Email settings saved');
+  });
+}
+
+async function submitInvites(form) {
+  const emails = [...new Set((form.elements.emails.value.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || []).map((e) => e.toLowerCase()))];
+  if (!emails.length) { if (form.elements.emails.value.trim()) adminFormMessage(form, 'No email addresses found in that.'); return; }
+  const role = $('[data-m="invite-role"]', form)?.dataset.value || 'member';
+  await runAdminForm(form, async () => {
+    const preview = typeof REMOTE === 'undefined';
+    const out = preview ? { result: Store.addMembers(emails, role), emailed: [] } : await requestMutation('addMembers', { emails, role });
+    const results = out.result || [], added = results.filter((r) => r.ok), rejected = results.filter((r) => !r.ok);
+    form.elements.emails.value = rejected.map((r) => r.email).join(', ');
+    const completedForm = paintAdminFormSuccess(form);
+    if (preview && added.length === 1 && UI.route?.name === 'admin' && !UI.editor && !UI.modal) {
+      UI.modal = { kind: 'invite-mail', email: added[0].email }; render();
+    } else if (added.length) {
+      const sent = (out.emailed || []).filter((r) => r.sent).length;
+      toast(`Added ${added.length} ${added.length === 1 ? 'member' : 'members'}${sent ? `; ${sent} welcome ${sent === 1 ? 'email' : 'emails'} sent` : ''}`);
+    }
+    const issues = [
+      ...rejected.map((r) => `${r.email}: ${r.reason}`),
+      ...(out.emailed || []).filter((r) => !r.sent).map((r) => `${r.email} was added. Welcome email not sent: ${r.reason || 'delivery was not confirmed'}.`),
+    ];
+    if (issues.length) {
+      const current = completedForm;
+      if (current) {
+        current.elements.emails.value = form.elements.emails.value;
+        current.dataset.adminDirty = rejected.length ? 'true' : 'false';
+        adminFormMessage(current, issues.join(' '));
+      } else toast(issues.join(' '));
+    }
+  });
+}
+
 document.addEventListener('submit', (ev) => {
   const form = ev.target.closest('[data-action]');
   if (!form) return;
   ev.preventDefault();
   const act = form.dataset.action;
 
+  if (act === 'interest-comment-form') { postInterestComment(form.dataset.id); return; }
+
+  if (act === 'ai-settings-form') { changeAiSettings(form); return; }
+
   if (act === 'email-settings-form') {
-    UI.emailFromCustom = false;
-    UI.emailEdit = false;
-    const from = form.from.value.trim();
-    const key = form.key ? form.key.value.trim() : '';
-    const name = form.fromname.value.trim();
-    const ok = Store.setEmailSettings({ key, from, name });
-    if (ok !== false) { render(); toast('Email settings saved'); }
+    submitEmailSettings(form);
     return;
   }
 
   if (act === 'invite-form') {
-    // Take whatever was pasted: bare addresses, "Name <addr>" To: lines,
-    // spreadsheet columns, mailto: links. Every email-shaped token counts,
-    // everything else is ignored, duplicates collapse.
-    const seen = new Set();
-    const emails = (form.emails.value.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || [])
-      .map((e) => e.toLowerCase())
-      .filter((e) => !seen.has(e) && seen.add(e));
-    if (!emails.length) { if (form.emails.value.trim()) toast('No email addresses found in that'); return; }
-    const results = Store.addMembers(emails, form.querySelector('[data-m="invite-role"]')?.dataset.value || 'member');
-    const ok = results.filter((r) => r.ok);
-    const bad = results.filter((r) => !r.ok);
-    render();
-    if (typeof REMOTE === 'undefined') {
-      // Preview only: show the simulated email so the flow can be judged.
-      if (ok.length === 1) { UI.modal = { kind: 'invite-mail', email: ok[0].email }; render(); }
-      else if (ok.length > 1) toast(`Added ${ok.length} members; each gets a welcome email`);
-    } else if (ok.length) {
-      toast(ok.length === 1 ? `Added ${ok[0].email}; welcome email sent` : `Added ${ok.length} members; welcome emails sent`);
-    }
-    bad.forEach((b) => toast(`${b.email}: ${b.reason}`));
+    submitInvites(form);
   }
 });
 
 /* ------------------------------- inputs ---------------------------------- */
 
+// Composition and hidden tabs must not spend requests on unfinished input.
+document.addEventListener('compositionstart', (ev) => {
+  if (UI.editor && ev.target.matches('[data-ed="body"], [data-ed="title"]')) {
+    UI.editor.composing = true;
+    clearTimeout(UI.editor.summaryTimer); UI.editor.summaryTimer = null;
+  }
+});
+document.addEventListener('compositionend', (ev) => {
+  if (UI.editor && ev.target.matches('[data-ed="body"], [data-ed="title"]')) {
+    UI.editor.composing = false;
+    scheduleChangeSummary();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { syncChangeSummary(); syncAiUsage(); }
+});
+
 let previewTimer = null;
 document.addEventListener('input', (ev) => {
   const t = ev.target;
+  if (UI.route.name === 'admin' && t.closest('form[data-action]')) t.closest('form[data-action]').dataset.adminDirty = 'true';
+
+  if (t.matches('[data-m="member-q"]')) {
+    UI.memberQuery = t.value;
+    renderMemberRows();
+    return;
+  }
 
   if (t.matches('.palette input')) {
     UI.palette.q = t.value;
@@ -968,6 +1405,22 @@ document.addEventListener('input', (ev) => {
   if (t.matches('[data-m="modal-typed"]')) {
     const go = document.querySelector('.modal [data-action="confirm-go"]');
     if (go) go.disabled = t.value.trim() !== t.dataset.phrase;
+    return;
+  }
+
+  if (t.matches('[data-m="summary"]') && UI.modal?.kind === 'save-summary') {
+    UI.modal.summary = t.value;
+    UI.modal.summaryEdited = true;
+    $('.modal [data-action="save-commit"]').disabled = false;
+    return;
+  }
+
+  if (t.matches('[data-m="interest-comment"]')) {
+    const draft = interestDraft(t.dataset.id);
+    draft.text = t.value;
+    if (!draft.sending) draft.id = null;
+    const button = t.closest('form').querySelector('[type="submit"]');
+    button.disabled = draft.sending || !draft.text.trim();
     return;
   }
 
@@ -1212,7 +1665,7 @@ document.addEventListener('change', (ev) => {
       const checked = t.checked;
       Store.toggleTask(pageId, n);
       const title = Store.page(pageId)?.title || 'this page';
-      toast(`${checked ? 'Checked' : 'Unchecked'} on “${title}”, saved for everyone`, { label: 'Undo', run: () => { Store.toggleTask(pageId, n); render(); } });
+      toast('Saved', { label: 'Undo', run: () => { Store.toggleTask(pageId, n); render(); } });
       render();
     }
     return;
@@ -1224,6 +1677,8 @@ document.addEventListener('change', (ev) => {
 });
 
 function markDirty() {
+  schedulePageReview();
+  scheduleChangeSummary();
   if (!UI.editor || UI.editor.dirty) return;
   UI.editor.dirty = true;
   const crumb = $('.crumbs');
@@ -1254,6 +1709,7 @@ document.addEventListener('paste', (ev) => {
 /* ------------------------------- keyboard -------------------------------- */
 
 document.addEventListener('keydown', (ev) => {
+  if (ev.isComposing || ev.keyCode === 229) return;
   const mod = ev.metaKey || ev.ctrlKey;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;
 
@@ -1270,6 +1726,15 @@ document.addEventListener('keydown', (ev) => {
       if (ev.shiftKey && (document.activeElement === first || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); last.focus(); }
       else if (!ev.shiftKey && (document.activeElement === last || !$('.modal').contains(document.activeElement))) { ev.preventDefault(); first.focus(); }
     } else { ev.preventDefault(); $('.modal').focus(); }
+    return;
+  }
+
+  if (ev.key === 'Tab' && UI.navOpen && innerWidth <= 860 && !UI.modal && !UI.palette) {
+    const sidebar = $('.sidebar');
+    const controls = modalFocusables(sidebar).filter((el) => !el.closest('[inert]'));
+    const first = controls[0], last = controls[controls.length - 1];
+    if (ev.shiftKey && (document.activeElement === first || !sidebar.contains(document.activeElement))) { ev.preventDefault(); last?.focus(); }
+    else if (!ev.shiftKey && (document.activeElement === last || !sidebar.contains(document.activeElement))) { ev.preventDefault(); first?.focus(); }
     return;
   }
 
@@ -1312,12 +1777,12 @@ document.addEventListener('keydown', (ev) => {
     if (ac && !ac.hidden) { ac.hidden = true; return; }
     // Esc asks before leaving a dirty editor; a clean one closes straight away.
     if (UI.editor) { requestEditorClose(); return; }
-    if (UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); return; }
+    if (UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); return; }
   }
 
   // Save-summary dialog: Enter saves (checked before the editor block, which
   // otherwise swallows plain Enter for list continuation).
-  if (UI.modal?.kind === 'save-summary' && ev.key === 'Enter' && !ev.shiftKey) {
+  if (UI.modal?.kind === 'save-summary' && ev.key === 'Enter' && !ev.shiftKey && (ev.target.matches('[data-m="summary"]') || mod)) {
     ev.preventDefault();
     $('.modal [data-action="save-commit"]')?.click();
     return;
@@ -1326,6 +1791,7 @@ document.addEventListener('keydown', (ev) => {
   if (UI.modal) return; // Editor shortcuts must not steal focus from a dialog.
 
   if (UI.editor) {
+    if (UI.editor.saving) return;
     const inBody = ev.target.matches('[data-ed="body"]');
     // The [[ autocomplete is keyboard-first: arrows move, Enter/Tab accept.
     const acPop = $('.ed-autocomplete');
@@ -1378,7 +1844,6 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
-  if (UI.modal?.kind === 'save-summary' && ev.key === 'Enter' && typing) { ev.preventDefault(); $('.modal [data-action="save-commit"]')?.click(); return; }
   if (UI.modal || typing || mod || ev.altKey) return;
 
   if (ev.key === '?') { ev.preventDefault(); UI.modal = { kind: 'shortcuts' }; render(); return; }
@@ -1386,7 +1851,7 @@ document.addEventListener('keydown', (ev) => {
 });
 
 window.addEventListener('beforeunload', (ev) => {
-  if (UI.editor?.dirty) { ev.preventDefault(); ev.returnValue = ''; }
+  if (UI.editor?.dirty || UI.editor?.saving || UI.editor?.uploads) { ev.preventDefault(); ev.returnValue = ''; }
 });
 
 /* ------------------------------- routing + boot -------------------------- */
@@ -1403,10 +1868,12 @@ function smoothAnchor(el) {
   el.classList.add('anchor-flash');
   setTimeout(() => { if (el.isConnected) el.classList.remove('anchor-flash'); }, 950);
   const c = $('.content');
-  if (!c) { el.scrollIntoView({ behavior: 'smooth' }); return; }
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!c) { el.scrollIntoView({ behavior: reduced ? 'instant' : 'smooth' }); return; }
   const from = c.scrollTop;
   const d = Math.max(0, Math.min(from + el.getBoundingClientRect().top - c.getBoundingClientRect().top - 68, c.scrollHeight - c.clientHeight)) - from;
   if (Math.abs(d) < 2) return;
+  if (reduced) { c.scrollTop = from + d; return; }
   const t0 = performance.now();
   const dur = Math.min(420, 180 + Math.abs(d) * 0.08);
   const step = (now) => {
@@ -1437,6 +1904,31 @@ document.addEventListener('click', (ev) => {
   UI._tocPin = el.id; // the clicked entry stays lit even if the scroll clamps
   history.pushState(null, '', location.pathname + location.search + href);
   UI.route.params.anchor = href.slice(hi + 1);
+  UI._landedAnchor = UI.route.params.id + '#' + UI.route.params.anchor;
+});
+
+document.addEventListener('click', (ev) => {
+  const link = ev.target.closest?.('.sidebar a[href]');
+  if (!link || !UI.navOpen || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+  UI.navOpen = false;
+  $('.shell')?.classList.remove('nav-open');
+  syncSidebarInteraction(true);
+});
+window.addEventListener('resize', () => {
+  syncSidebarInteraction();
+  if (UI.modal?.kind === 'save-summary') {
+    const dialog = $('.save-summary'), veil = dialog?.closest('.modal-veil');
+    if (veil) { veil.style.alignItems = ''; veil.style.paddingTop = ''; dialog.style.maxHeight = ''; }
+    UI.modal._top = undefined;
+    anchorSaveDialog(dialog);
+  }
+});
+for (const type of ['wheel', 'touchstart']) document.addEventListener(type, () => { anchorAnim++; }, { passive: true });
+document.addEventListener('keydown', (ev) => {
+  if (['PageDown', 'PageUp', 'Home', 'End', 'ArrowDown', 'ArrowUp', ' '].includes(ev.key) && !/^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) {
+    anchorAnim++;
+    UI._tocPin = null;
+  }
 });
 
 window.addEventListener('hashchange', () => {
@@ -1446,6 +1938,8 @@ window.addEventListener('hashchange', () => {
     const el = document.getElementById(location.hash.slice(1));
     if (el) { smoothAnchor(el); return; }
   }
+  if (UI.editor?.saving) { history.replaceState(null, '', UI._editorLocation || location.pathname); return; }
+  anchorAnim++;
   const wasEditing = !!UI.editor;
   if (wasEditing) stashDraftIfDirty();
   UI.navOpen = false;
@@ -1478,9 +1972,34 @@ function syncViewerTheme() {
   document.body.dataset.viewerDark = dark ? '1' : '0';
 }
 
+// Flies the boot-splash mark onto the sidebar brand (or just fades the splash
+// when there is no sidebar to land on: login, hidden nav, reduced motion).
+function settleBoot(el) {
+  if (!el) return;
+  const mark = el.querySelector('svg');
+  const target = $('.sidebar__logo svg');
+  const finish = () => { document.body.classList.remove('boot-settling'); el.remove(); };
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const b = target && target.getBoundingClientRect();
+  const canFly = mark && b && !reduced && b.width > 0 && b.left >= 0;
+  el.classList.add('is-done');
+  if (!canFly) { setTimeout(finish, reduced ? 0 : 400); return; }
+  const a = mark.getBoundingClientRect();
+  document.body.classList.add('boot-settling');
+  mark.style.transformOrigin = '0 0';
+  mark.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1)';
+  requestAnimationFrame(() => {
+    mark.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(${b.width / a.width})`;
+  });
+  setTimeout(finish, 520);
+}
+
 (async function boot() {
   Store.onError = (msg) => toast(msg);
-  await Store.boot();
+  const splash = document.getElementById('boot');
+  // Let the mark finish drawing even when the store boots instantly.
+  const drawn = new Promise((r) => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1250));
+  await Promise.all([Store.boot(), drawn]);
   hydrateDrafts();
   if (Store.me()) UI.navHidden = !!Store.prefs().navHidden;
   syncViewerTheme();
@@ -1488,6 +2007,7 @@ function syncViewerTheme() {
   new MutationObserver(() => { syncViewerTheme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   route();
   render();
+  settleBoot(splash);
   {
     const flag = UI.route.params.resend;
     if (flag) {

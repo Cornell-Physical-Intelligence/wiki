@@ -167,6 +167,9 @@ let searchReturnFocus = null;
 let searchHomeFocus = null;
 let searchFilterMenu = null;
 let searchFilterDismissedTrigger = null;
+const searchMeaningWork = new Map();
+let searchPointerGesture = null;
+const searchDeferredPaint = new Map();
 
 function searchHomeState() {
   const user = Store.me()?.email || '';
@@ -183,6 +186,13 @@ function searchPrefix(mode) { return mode === 'home' ? 'wiki-search-home' : 'wik
 
 function openPalette(query, filters) {
   if (!Store.me()) return;
+  // Home uses its existing input. Close the mobile drawer before focusing it,
+  // otherwise the input and any software keyboard sit behind the scrim.
+  if (UI.navOpen) {
+    UI.navOpen = false;
+    $('.shell')?.classList.remove('nav-open');
+    if (typeof syncSidebarInteraction === 'function') syncSidebarInteraction();
+  }
   const home = $('.search-home');
   if (home && !UI.editor && !UI.modal) {
     const state = searchHomeState();
@@ -204,7 +214,98 @@ function searchResults(state) {
   if (!Store.me()) return { items: [], total: 0, kind: 'browse', partial: false };
   const documents = WikiSearch.documents(Store.s.pages, (id) => Store.att(id), (body) => MD.mdToText(body));
   const discovering = !state.q.trim() && !Object.values(state.filters || {}).some(Boolean);
-  return WikiSearch.run(documents, state.q, state.filters || {}, Store.prefs().recents || [], discovering ? 4 : 30);
+  const local = WikiSearch.run(documents, state.q, state.filters || {}, Store.prefs().recents || [], discovering ? 4 : 30);
+  if (state.meaning?.key === searchMeaningKey(state) && state.meaning.available && state.meaning.ids?.length) {
+    const eligible = WikiSearch.run(documents, '', state.filters || {}, [], documents.length).items;
+    const suggested = state.meaning.ids.map((id) => eligible.find((doc) => doc.page.id === id)).filter(Boolean).map((doc) => ({ ...doc, meaning: true }));
+    // An exact page title is an intentional destination. Background meaning
+    // matches may improve discovery without displacing that destination.
+    const query = WikiSearch.normalize(state.q).trim();
+    const exact = local.items.filter((doc) => WikiSearch.normalize(doc.page.title).trim() === query);
+    const exactIds = new Set(exact.map((doc) => doc.page.id));
+    const ids = new Set([...exactIds, ...suggested.map((doc) => doc.page.id)]);
+    const ranked = [...exact, ...suggested.filter((doc) => !exactIds.has(doc.page.id)), ...local.items.filter((doc) => !ids.has(doc.page.id))];
+    const pinned = state.meaning.pinnedIds || [];
+    const items = [...pinned.map((id) => ranked.find((doc) => doc.page.id === id)).filter(Boolean), ...ranked.filter((doc) => !pinned.includes(doc.page.id))].slice(0, 30);
+    return { ...local, items, total: items.length, partial: false, semantic: true };
+  }
+  return local;
+}
+
+function searchMeaningKey(state) {
+  return JSON.stringify([state.q.trim(), state.filters || {}, Store.s.pages.map((p) => [p.id, p.updated, p.section, p.tags])]);
+}
+
+function stopMeaningSearch(mode) {
+  const work = searchMeaningWork.get(mode);
+  if (!work) return;
+  clearTimeout(work.timer);
+  work.controller.abort();
+  if (work.state.meaning === work.result && work.result.loading) work.state.meaning = null;
+  searchMeaningWork.delete(mode);
+}
+
+function meaningSearchVisible(mode) {
+  return typeof REMOTE !== 'undefined' && Store.me() && !document.hidden && !UI.modal && (!UI.editor || mode === 'modal')
+    && (mode === 'modal' ? !!UI.palette : !UI.palette) && searchSurface(mode);
+}
+
+function scheduleMeaningSearch(mode) {
+  const state = searchState(mode);
+  if (!state || !meaningSearchVisible(mode) || state.composing || state.q.trim().length < 3) { stopMeaningSearch(mode); return; }
+  const key = searchMeaningKey(state), work = searchMeaningWork.get(mode);
+  if (work?.state === state && work.key === key) return;
+  stopMeaningSearch(mode);
+  // Completed and failed requests both settle this query. Rendering and remote
+  // polling must not turn a provider outage into a background retry loop.
+  if (state.meaning?.key === key && !state.meaning.loading) return;
+  const next = { state, key, controller: new AbortController(), result: { key, loading: true } };
+  state.meaning = next.result;
+  searchMeaningWork.set(mode, next);
+  next.timer = setTimeout(() => searchByMeaning(mode, next), 350);
+}
+
+function syncMeaningSearch() {
+  scheduleMeaningSearch('home');
+  scheduleMeaningSearch('modal');
+}
+
+async function searchByMeaning(mode, work) {
+  const { state, key, result } = work;
+  if (searchMeaningWork.get(mode) !== work || searchState(mode) !== state || searchMeaningKey(state) !== key || !meaningSearchVisible(mode)) {
+    if (searchMeaningWork.get(mode) === work) stopMeaningSearch(mode);
+    return;
+  }
+  const docs = WikiSearch.documents(Store.s.pages, (id) => Store.att(id), (body) => MD.mdToText(body));
+  const eligible = WikiSearch.run(docs, '', state.filters || {}, [], docs.length).items;
+  // Mix keyword candidates with pages from every section, keeping requests small.
+  const literal = WikiSearch.run(docs, state.q, state.filters || {}, [], 16).items;
+  const chosen = new Map(literal.map((doc) => [doc.page.id, doc]));
+  const groups = SECTIONS.map((section) => eligible.filter((doc) => doc.page.section === section.id));
+  for (let i = 0; chosen.size < 32 && groups.some((group) => i < group.length); i++) {
+    for (const group of groups) if (group[i] && chosen.size < 32) chosen.set(group[i].page.id, group[i]);
+  }
+  const candidates = [...chosen.values()].map((doc) => ({ id: doc.page.id, title: doc.page.title,
+    excerpt: (doc.text.slice(0, 500) + (doc.text.length > 500 ? '\n' + doc.snip : '')).slice(0, 700) }));
+  let out = { available: true, ids: [] };
+  if (candidates.length) {
+    try {
+      out = await api('/meaning-search', { method: 'POST', body: JSON.stringify({ query: state.q.trim().slice(0, 300), candidates }),
+        signal: AbortSignal.any([work.controller.signal, AbortSignal.timeout(8000)]) });
+    } catch { out = { available: false, ids: [] }; }
+  }
+  if (searchMeaningWork.get(mode) !== work || searchState(mode) !== state || state.meaning !== result || searchMeaningKey(state) !== key || !meaningSearchVisible(mode)) return;
+  // Once someone starts choosing a result, keep those rows in place. Newly
+  // discovered pages can append without moving the target under their pointer.
+  const previous = searchResults(state).items;
+  const surface = searchSurface(mode);
+  const focused = document.activeElement?.closest?.('[data-search-page]');
+  const hovered = $('.search-list', surface)?.matches?.(':hover');
+  const pinnedIds = state.navigationKey === key || focused || hovered ? previous.map((item) => item.page.id) : [];
+  Object.assign(result, { loading: false, available: !!out.available, pinnedIds,
+    ids: Array.isArray(out.ids) ? [...new Set(out.ids.filter((id) => chosen.has(id)))] : [] });
+  searchMeaningWork.delete(mode);
+  renderSearchList(mode);
 }
 
 function paletteResults() { return searchResults(UI.palette); }
@@ -292,7 +393,7 @@ function searchControlsHtml(state) {
 }
 
 function searchListHtml(state, mode = 'modal') {
-  const { items, total, partial } = searchResults(state);
+  const { items, total } = searchResults(state);
   const query = state.q.trim(), filters = state.filters || {};
   const filtered = Object.values(filters).some(Boolean);
   const compact = mode === 'home' && !query && !filtered;
@@ -300,32 +401,33 @@ function searchListHtml(state, mode = 'modal') {
   const prefix = searchPrefix(mode);
   state.count = items.length;
   state.sel = Math.max(0, Math.min(state.sel || 0, items.length - 1));
-  const description = query ? (partial ? 'Partial matches' : 'Search results') : (filtered ? 'Matching pages' : 'Recent pages');
+  const description = query ? 'Search results' : (filtered ? 'Matching pages' : 'Recent pages');
+  const meaning = state.meaning?.key === searchMeaningKey(state) ? state.meaning : null;
+  const pending = typeof REMOTE !== 'undefined' && query.length >= 3 && (!meaning || meaning.loading);
   const status = total ? `${total} ${total === 1 ? 'page' : 'pages'}${total > items.length ? ` · showing ${items.length}` : ''}` : 'No matches';
-  state.announcement = `${status}. ${description}.`;
+  state.announcement = pending && !items.length ? 'Searching…' : `${status}. ${description}.`;
   if (!items.length && !query && !filtered) return `<div id="${prefix}-results" role="listbox" aria-label="Wiki search results"></div>`;
-  return `<div class="search-results-head"><span>${description}</span><span>${status}</span></div>
-    ${partial ? '<p class="search-partial">No page matches every word. These match part of your search.</p>' : ''}
+  return `<div class="search-results-head"><span>${description}</span><span>${pending && !items.length ? '' : status}</span></div>
     <div id="${prefix}-results" role="listbox" aria-label="Wiki search results">${items.map((item, index) => {
       const element = mode === 'home' ? 'a' : 'button';
       const action = mode === 'home' ? `href="#/page/${encodeURIComponent(item.page.id)}"` : `data-action="palette-go" data-id="${MD.esc(item.page.id)}"`;
-      return `<${element} id="${prefix}-result-${index}" class="palette__item search-result ${compact ? 'search-result--recent' : ''} ${index === state.sel ? 'sel' : ''}" ${action} role="option" aria-selected="${index === state.sel}" tabindex="${mode === 'home' ? '0' : '-1'}">
+      return `<${element} id="${prefix}-result-${index}" class="palette__item search-result ${compact ? 'search-result--recent' : ''} ${index === state.sel ? 'sel' : ''}" ${action} role="option" data-search-page="${MD.esc(item.page.id)}" aria-selected="${index === state.sel}" tabindex="${mode === 'home' ? '0' : '-1'}">
       <span class="search-result-icon" aria-hidden="true">${item.type.id === 'project' ? I.cube : item.type.id === 'procedure' ? I.check : item.type.id === 'test' ? I.bolt : item.type.id === 'decision' ? I.link : I.page}</span>
       <span class="search-result-content">${!compact ? `<span class="search-result-meta"><span>${MD.esc(SECTIONS.find((section) => section.id === item.page.section)?.name || 'Wiki')}</span><span aria-hidden="true">/</span><span>${item.type.single}</span>${item.status.id !== 'unreviewed' ? `<span class="search-status search-status--${item.status.id}">${item.status.id === 'reviewed' ? I.check : ''}${item.status.label}</span>` : ''}</span>` : ''}
       <span class="palette__title">${mark(item.page.title)}</span>
       ${item.matchedFiles.length ? `<span class="search-result-file">${I.paperclip}<span>${mark(item.matchedFiles.join(' · '))}</span></span>` : ''}
       ${item.snip && !compact ? `<span class="palette__snip">${mark(item.snip)}</span>` : ''}
-      ${item.approximate ? '<span class="search-result-hint">Close spelling match</span>' : ''}</span>
+      ${item.approximate && !item.meaning ? '<span class="search-result-hint">Close spelling match</span>' : ''}</span>
       ${compact ? `<span class="search-recent-section">${MD.esc(SECTIONS.find((section) => section.id === item.page.section)?.name || '')}</span>` : ''}<span class="search-result-enter" aria-hidden="true">↵</span></${element}>`;
     }).join('')}</div>
-    ${!items.length ? `<div class="search-empty"><span class="search-empty-icon" aria-hidden="true">${I.search}</span><strong>${query ? `No pages found for “${MD.esc(query)}”` : 'No pages match these filters'}</strong><div class="search-empty-actions">${filtered ? '<button class="btn btn--sm" data-search-reset="filters">Clear filters</button>' : ''}${query ? '<button class="btn btn--sm" data-search-reset="query">Clear search</button>' : ''}</div></div>` : ''}`;
+    ${!items.length && pending ? '<div class="search-empty"><strong>Searching…</strong></div>' : !items.length ? `<div class="search-empty"><span class="search-empty-icon" aria-hidden="true">${I.search}</span><strong>${query ? `No pages found for “${MD.esc(query)}”` : 'No pages match these filters'}</strong><div class="search-empty-actions">${filtered ? '<button class="btn btn--sm" data-search-reset="filters">Clear filters</button>' : ''}${query ? '<button class="btn btn--sm" data-search-reset="query">Clear search</button>' : ''}</div></div>` : ''}`;
 }
 
 function paletteListHtml() { return searchListHtml(UI.palette); }
 
 function searchInputHtml(state, mode) {
   const prefix = searchPrefix(mode);
-  return `${I.search}<input type="text" placeholder="Search…" value="${MD.esc(state.q)}" spellcheck="false" autocomplete="off" aria-label="Search wiki" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="${prefix}-results" ${state.count ? `aria-activedescendant="${prefix}-result-${state.sel}"` : ''}>`;
+  return `${I.search}<input type="text" placeholder="Search pages or describe what you need…" value="${MD.esc(state.q)}" spellcheck="false" autocomplete="off" aria-label="Search wiki" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="${prefix}-results" ${state.count ? `aria-activedescendant="${prefix}-result-${state.sel}"` : ''}>`;
 }
 
 function viewSearchHome() {
@@ -333,7 +435,7 @@ function viewSearchHome() {
   searchHomeFocus = !UI.modal && !UI.editor && !UI.palette && active?.matches?.('.search-home input')
     ? { start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection } : null;
   const state = searchHomeState(), list = searchListHtml(state, 'home');
-  return `<section class="search-home search-surface" data-search-mode="home" aria-labelledby="wiki-search-home-title"><header class="search-home-heading"><h1 id="wiki-search-home-title">Search the wiki</h1></header><div class="search-home-input">${searchInputHtml(state, 'home')}</div>${searchControlsHtml(state)}<div class="search-list">${list}</div><span class="search-sr" data-search-announcement role="status" aria-live="polite" aria-atomic="true">${MD.esc(state.announcement)}</span></section>`;
+  return `<section class="search-home search-surface" data-search-mode="home" aria-labelledby="wiki-search-home-title"><header class="search-home-heading"><h1 id="wiki-search-home-title">Search the CUPI Knowledge base</h1></header><div class="search-home-input">${searchInputHtml(state, 'home')}</div>${searchControlsHtml(state)}<div class="search-list">${list}</div><span class="search-sr" data-search-announcement role="status" aria-live="polite" aria-atomic="true">${MD.esc(state.announcement)}</span></section>`;
 }
 
 function mountSearchHome() {
@@ -354,7 +456,7 @@ function viewPalette() {
   if (!UI.palette) return '';
   const list = paletteListHtml();
   return `<div class="palette-veil search-veil" data-action="palette-close"><div class="palette search-palette search-surface" data-search-mode="modal" role="dialog" aria-modal="true" aria-labelledby="wiki-search-title">
-    <div class="search-palette-caption"><span id="wiki-search-title">Search the wiki</span></div>
+    <div class="search-palette-caption"><span id="wiki-search-title">Search the CUPI Knowledge base</span></div>
     <div class="palette__head">${searchInputHtml(UI.palette, 'modal')}<button class="search-close" data-search-close aria-label="Close search">${I.x}</button></div>
     ${searchControlsHtml(UI.palette)}<div class="palette__list search-list">${list}</div>
     <span class="search-sr" data-search-announcement role="status" aria-live="polite" aria-atomic="true">${MD.esc(UI.palette.announcement)}</span>
@@ -378,6 +480,15 @@ function searchSyncSelection(mode = 'modal') {
 function renderSearchList(mode = 'modal') {
   const state = searchState(mode), surface = searchSurface(mode);
   if (!state || !surface) return;
+  // Keep the pressed element alive until the browser dispatches its click.
+  // Preserving only row order is insufficient: innerHTML replaces its target.
+  const key = searchMeaningKey(state);
+  if (searchPointerGesture?.state === state && searchPointerGesture.key === key) {
+    searchDeferredPaint.set(mode, { state, key });
+    return;
+  }
+  searchDeferredPaint.delete(mode);
+  const focusedPage = document.activeElement?.closest?.('[data-search-page]')?.dataset.searchPage;
   const list = $('.search-list', surface);
   if (list) list.innerHTML = searchListHtml(state, mode);
   const count = Object.values(state.filters || {}).filter(Boolean).length;
@@ -388,6 +499,8 @@ function renderSearchList(mode = 'modal') {
   const announcement = $('[data-search-announcement]', surface);
   if (announcement) announcement.textContent = state.announcement;
   searchSyncSelection(mode);
+  if (focusedPage) $$('.search-result', surface).find((item) => item.dataset.searchPage === focusedPage)?.focus({ preventScroll: true });
+  scheduleMeaningSearch(mode);
 }
 
 function renderPaletteList() { if (UI.palette) renderSearchList(); }
@@ -485,7 +598,15 @@ document.addEventListener('click', (event) => {
 // A filter menu owns navigation before the palette. Closing it with Escape
 // returns to its trigger; a second Escape can close the search dialog.
 document.addEventListener('keydown', (event) => {
-  if (UI.modal || UI.editor) return;
+  const composing = event.isComposing || event.keyCode === 229
+    || (event.target.matches?.('.search-surface input') && searchState(UI.palette ? 'modal' : 'home')?.composing);
+  if (composing) {
+    // Let the input method handle candidate selection/cancellation. Stop the
+    // legacy global palette handler from treating those keys as navigation.
+    if (UI.palette || event.target.closest?.('.search-surface')) event.stopImmediatePropagation();
+    return;
+  }
+  if (UI.modal || (UI.editor && !UI.palette)) return;
   const menu = searchFilterMenu?.host.isConnected ? searchFilterMenu : null;
   const trigger = event.target.closest?.('[data-search-filter]');
   if (!menu && trigger && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
@@ -555,7 +676,50 @@ document.addEventListener('keydown', (event) => {
   const count = state.count || 0;
   if (event.key === 'Enter') { $$('.search-result', surface)[state.sel]?.click(); return; }
   if (!count) return;
+  state.navigationKey = searchMeaningKey(state);
   state.sel = (state.sel + (event.key === 'ArrowDown' ? 1 : count - 1)) % count;
   searchSyncSelection(mode);
   $$('.search-result', surface)[state.sel]?.scrollIntoView({ block: 'nearest' });
 }, true);
+
+// Composition and pointer interaction belong to the user's current query.
+for (const type of ['compositionstart', 'compositionend']) document.addEventListener(type, (event) => {
+  if (!event.target.matches?.('.search-surface input')) return;
+  const mode = event.target.closest('[data-search-mode]').dataset.searchMode;
+  searchState(mode).composing = type === 'compositionstart';
+  scheduleMeaningSearch(mode);
+});
+document.addEventListener('pointerover', (event) => {
+  const list = event.target.closest?.('.search-list');
+  const mode = list?.closest('[data-search-mode]')?.dataset.searchMode;
+  const state = mode && searchState(mode);
+  if (state) state.navigationKey = searchMeaningKey(state);
+}, true);
+document.addEventListener('pointerdown', (event) => {
+  const result = event.target.closest?.('[data-search-page]');
+  if (!result) return;
+  const mode = result.closest('[data-search-mode]').dataset.searchMode;
+  const state = searchState(mode);
+  const key = searchMeaningKey(state);
+  state.navigationKey = key;
+  searchPointerGesture = { state, key, pointerId: event.pointerId };
+}, true);
+function finishSearchPointer(event) {
+  const gesture = searchPointerGesture;
+  if (!gesture || (event.pointerId !== undefined && gesture.pointerId !== event.pointerId)) return;
+  // pointerup precedes click. Defer until the full activation sequence ends.
+  setTimeout(() => {
+    if (searchPointerGesture === gesture) searchPointerGesture = null;
+    for (const [mode, paint] of [...searchDeferredPaint]) {
+      searchDeferredPaint.delete(mode);
+      if (searchState(mode) === paint.state && searchMeaningKey(paint.state) === paint.key) renderSearchList(mode);
+    }
+  }, 0);
+}
+document.addEventListener('pointerup', finishSearchPointer, true);
+document.addEventListener('pointercancel', finishSearchPointer, true);
+if (typeof window !== 'undefined') window.addEventListener('blur', finishSearchPointer);
+document.addEventListener('visibilitychange', (event) => {
+  if (document.hidden) finishSearchPointer(event);
+  syncMeaningSearch();
+});

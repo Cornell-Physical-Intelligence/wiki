@@ -15,7 +15,7 @@ function fixture({ independent = false, initialPrefsVersion = 0 } = {}) {
   const timers = new Map(), calls = [], errors = [], documentEvents = new Map(), windowEvents = new Map();
   const listen = (events) => (type, handler) => events.set(type, [...(events.get(type) || []), handler]);
   const store = {
-    s: state(), reindex() {}, session: () => EMAIL,
+    s: state(), reindex() {}, me: () => ({ email: EMAIL }), session: () => EMAIL,
     prefs() {
       const p = this.s.prefs[this.session()] ||= {};
       for (const key of ['starred', 'recents', 'collapsed']) if (!Array.isArray(p[key])) p[key] = [];
@@ -307,6 +307,20 @@ for (const returnToSent of [false, true]) {
   f.run(`adoptServer(${JSON.stringify({ version: 5, unchanged: true, prefsVersion: 1, prefs: prefs('B') })})`);
   assert.equal(f.run('REMOTE.version'), 1);
   assert.deepEqual(f.values().starred, ['B']);
+}
+
+// A live response is adopted without rebuilding an open discussion/composer.
+{
+  const f = fixture();
+  f.context.UI.modal = { kind: 'interest-row', id: 'synthetic' };
+  f.run('pollOnce()');
+  await f.reply(0, { version: 2, state: state('', 'Updated while discussing') });
+  assert.equal(f.renders, 0, 'background sync cannot flash or remount a dialog');
+  assert.equal(f.context.Store.s.pages[0].body, 'Updated while discussing');
+  f.context.Store.me = () => null;
+  f.run('pollOnce()');
+  await f.reply(1, { version: 3, state: state('', 'Revoked access') });
+  assert.equal(f.renders, 1, 'lost membership still redraws immediately');
 }
 
 console.log('PASS: hidden/idle/resumed polling, backoff, independent content/preferences versions, legacy fallback, serialization, adoption races and durable acknowledgments.');

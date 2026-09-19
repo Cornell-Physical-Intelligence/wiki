@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 358 82" fill="none" stroke="currentColor" stroke-width="2.5">
+  <!-- CUPI mark, row form. Four circles: left half, bottom half, upper-right quarter, vertical divider. -->
+  <circle class="mark__ring" cx="41" cy="41" r="37"/>
+  <path class="mark__fill" d="M41 4A37 37 0 0 0 41 78Z" fill="currentColor" stroke="none"/>
+  <circle class="mark__ring" cx="133" cy="41" r="37"/>
+  <path class="mark__fill" d="M96 41A37 37 0 0 0 170 41Z" fill="currentColor" stroke="none"/>
+  <circle class="mark__ring" cx="225" cy="41" r="37"/>
+  <path class="mark__fill" d="M225 4A37 37 0 0 1 262 41L225 41Z" fill="currentColor" stroke="none"/>
+  <circle class="mark__ring" cx="317" cy="41" r="37"/>
+  <line class="mark__bar" x1="317" y1="4" x2="317" y2="78"/>
+</svg>

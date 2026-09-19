@@ -5,3 +5,5 @@ public/
 .vercel
 .DS_Store
 .env*
+
+.devaiusage.json*
