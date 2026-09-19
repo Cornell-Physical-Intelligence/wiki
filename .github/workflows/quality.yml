@@ -39,5 +39,6 @@ jobs:
           node scripts/test-remote-sync.mjs
           node scripts/test-overlay-keyboard.mjs
           node scripts/test-interest-archive-load.mjs
+          node scripts/test-session.mjs
       - name: Verify the committed preview build is current
         run: git diff --exit-code -- docs

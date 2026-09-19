@@ -71,6 +71,7 @@ function viewAiSettings() {
   const busy = UI.aiBusy ? ' disabled' : '';
   return `<section class="admin-block ai-integration" aria-busy="${Boolean(UI.aiBusy)}">
     <div class="admin-block__head"><h2>AI</h2></div>
+    <div class="integration-card">
     <div class="integration">
       <span class="integration__tile ai-integration__tile${settings.connected ? '' : ' integration__tile--off'}" aria-hidden="true">${OPENAI_MARK}</span>
       <span class="integration__meta">
@@ -87,7 +88,7 @@ function viewAiSettings() {
       <div data-ai-usage>${viewAiUsage()}</div>
     </div>
     <p class="field-error" data-ai-connection-error role="alert" ${UI.aiConnectionError ? '' : 'hidden'}>${MD.esc(UI.aiConnectionError || '')}</p>
-    ${UI.aiEdit ? `<form class="ai-settings integration__editor" id="ai-configuration" data-action="ai-settings-form">
+    ${UI.aiEdit ? `<form class="ai-settings integration__editor integration-card__editor" id="ai-configuration" data-action="ai-settings-form">
       <fieldset class="ai-settings__fields"${busy}>
       <label class="ai-settings__key">OpenAI API key
         <input class="text-input" type="password" name="key" autocomplete="new-password" spellcheck="false" autocapitalize="none" placeholder="${settings.keySet ? 'Saved key ending in ' + MD.esc(settings.keyTail) + ' · enter to replace' : settings.source === 'environment' ? 'Server key available · enter to replace' : 'sk-…'}">
@@ -104,6 +105,7 @@ function viewAiSettings() {
       </div>
       </fieldset>
     </form>` : ''}
+    </div>
   </section>`;
 }
 
@@ -170,7 +172,7 @@ async function changeAiSettings(form, action = 'save') {
     toast(action === 'test' ? 'Connection verified' : action === 'disconnect' ? 'AI disconnected' : 'AI settings saved');
   } catch (e) {
     if (form) form.dataset.adminDirty = 'true';
-    const message = e.name === 'TimeoutError' ? 'The request timed out. Try again.' : e.message || 'Unable to update AI settings.';
+    const message = e.name === 'TimeoutError' ? 'The request timed out. Try again.' : e.status === 401 ? 'Your session expired. Sign in again.' : e.message || 'Unable to update AI settings.';
     if (form && error) { error.textContent = message; error.hidden = false; }
     else {
       UI.aiConnectionError = message;

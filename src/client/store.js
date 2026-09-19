@@ -198,7 +198,9 @@ const Store = {
   },
   me() {
     const email = Store.session();
-    return email ? Store.s.users.find((u) => u.email === email && u.status === 'active') || null : null;
+    // On the live wiki the session is known before the state arrives; events
+    // that fire in that window (visibility, focus) must not read a null state.
+    return email && Store.s ? Store.s.users.find((u) => u.email === email && u.status === 'active') || null : null;
   },
   isAdmin: () => Store.me()?.role === 'admin',
 

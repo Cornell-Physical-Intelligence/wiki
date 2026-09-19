@@ -77,6 +77,6 @@ npm run dev     # builds the client and serves on :4870 with fake auth + in-memo
 
 ## Security model
 
-Google proves the email (domain re-verified server-side — the `hd` hint is not trusted); the allowlist in state decides membership; every mutation is re-applied server-side with role checks; invite codes are one-time, admin-visible only; sessions are HMAC-signed HttpOnly cookies. Attachments are served only to signed-in members.
+Google proves the email (domain re-verified server-side — the `hd` hint is not trusted); the allowlist in state decides membership; every mutation is re-applied server-side with role checks; invite codes are one-time, admin-visible only; sessions are HMAC-signed HttpOnly cookies that last 30 days and renew on use (a page load or poll in the second half of a session issues a fresh cookie). When a session does end, the open tab asks the member to sign in again instead of failing quietly on the next save or AI call. Attachments are served only to signed-in members.
 
 The workspace uses restrained navigation and reference-wiki article structure. Floating surfaces share a custom WebGL fragment shader for curved edge lighting and shading, with CSS backdrop blur. One shared renderer draws only on open, resize or theme change. Reduced-transparency/high-contrast preferences and unavailable WebGL use a readable fallback.

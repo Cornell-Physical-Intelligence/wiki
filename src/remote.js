@@ -41,8 +41,25 @@ function responsePrefsVersion(payload) {
 async function api(path, opts) {
   const r = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts });
   const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && REMOTE.ready) sessionExpired();
   if (!r.ok) throw Object.assign(new Error(data.error || `HTTP ${r.status}`), { status: r.status });
   return data;
+}
+
+// The server signs a member out when their session ends (30 days without use,
+// or a rotated server secret). An open tab keeps rendering the state it already
+// has, so without this the first sign would be a raw "Not signed in" on the
+// next save or AI call. Ask once, in place; Cancel keeps the tab as it is.
+function sessionExpired() {
+  if (REMOTE.expired) return;
+  REMOTE.expired = true;
+  UI.modal = {
+    kind: 'confirm', title: 'Signed out',
+    text: 'Your session has expired. Sign in again to keep working. Anything you are editing stays in this tab until you leave it.',
+    confirm: 'Sign in',
+    onGo: () => { location.href = '/api/auth/login'; },
+  };
+  render();
 }
 
 function adoptServer(payload) {
@@ -94,6 +111,7 @@ Store.boot = async function bootRemote() {
   }
   try {
     adoptServer(await api('/state'));
+    REMOTE.ready = true;
   } catch (e) {
     REMOTE.email = null;
     Store.s = { users: [], pages: [], activity: [], trash: [], prefs: {} };
@@ -211,7 +229,7 @@ async function sendOp(op, args, after, onError) {
     paintRemoteUpdate();
     return out;
   } catch (e) {
-    toast(e.status === 400 || e.status === 503 ? e.message : 'Sync failed. Check your connection and retry.');
+    toast(e.status === 401 ? 'Your session expired. Sign in again.' : e.status === 400 || e.status === 503 ? e.message : 'Sync failed. Check your connection and retry.');
     onError?.(e);
     paintRemoteUpdate();
     return null;

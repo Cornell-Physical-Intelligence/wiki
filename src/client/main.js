@@ -324,6 +324,8 @@ function syncSidebarInteraction(moveFocus = false) {
 function mountMenu(host, anchor) {
   document.body.appendChild(host);
   const r = anchor.getBoundingClientRect();
+  // Option menus open at least as wide as the control they belong to.
+  if (anchor.classList.contains('dd')) host.style.minWidth = Math.min(r.width, innerWidth - 20) + 'px';
   if (anchor.classList.contains('sidebar__user')) {
     host.classList.add('menu--account');
     host.style.minWidth = '0';

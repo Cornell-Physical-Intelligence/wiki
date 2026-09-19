@@ -1881,3 +1881,15 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .ai-usage__track > span { display: block; height: 100%; background: var(--muted); }
 .ai-usage__note { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
 .ai-usage__notice { margin: 10px 0; color: var(--bad); font-size: 12px; }
+
+/* Integration card: the status row, spend readout, and configuration form
+   share one bounded box, so the section reads as a single control surface
+   and its menus and fields stay inside it. */
+.integration-card { border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--page); }
+.integration-card > * + * { border-top: 1px solid var(--hairline); }
+.integration-card > .integration { padding: 14px 18px; }
+.integration-card > .ai-usage { margin: 0; padding: 14px 18px 16px; max-width: none; }
+.integration-card > .field-error { margin: 0; padding: 12px 18px; }
+.integration-card > .email-adv { margin: 0; padding: 12px 18px 14px; }
+.integration-card__editor { margin: 0; padding: 16px 18px 18px; background: var(--hover); border-radius: 0 0 var(--radius) var(--radius); }
+.integration-card .ai-settings { max-width: none; }

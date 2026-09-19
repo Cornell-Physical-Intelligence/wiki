@@ -1886,6 +1886,18 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .ai-usage__note { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
 .ai-usage__notice { margin: 10px 0; color: var(--bad); font-size: 12px; }
 
+/* Integration card: the status row, spend readout, and configuration form
+   share one bounded box, so the section reads as a single control surface
+   and its menus and fields stay inside it. */
+.integration-card { border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--page); }
+.integration-card > * + * { border-top: 1px solid var(--hairline); }
+.integration-card > .integration { padding: 14px 18px; }
+.integration-card > .ai-usage { margin: 0; padding: 14px 18px 16px; max-width: none; }
+.integration-card > .field-error { margin: 0; padding: 12px 18px; }
+.integration-card > .email-adv { margin: 0; padding: 12px 18px 14px; }
+.integration-card__editor { margin: 0; padding: 16px 18px 18px; background: var(--hover); border-radius: 0 0 var(--radius) var(--radius); }
+.integration-card .ai-settings { max-width: none; }
+
 /* Search retains CUPI's quiet monochrome language, with space for context. */
 .search-veil { padding-top: min(9vh, 88px); }
 .search-palette {
@@ -5042,7 +5054,9 @@ const Store = {
   },
   me() {
     const email = Store.session();
-    return email ? Store.s.users.find((u) => u.email === email && u.status === 'active') || null : null;
+    // On the live wiki the session is known before the state arrives; events
+    // that fire in that window (visibility, focus) must not read a null state.
+    return email && Store.s ? Store.s.users.find((u) => u.email === email && u.status === 'active') || null : null;
   },
   isAdmin: () => Store.me()?.role === 'admin',
 
@@ -7506,14 +7520,14 @@ function viewEmailSettings() {
           if (es.from && !opts.some((o) => o.value === es.from)) opts.unshift({ value: es.from, label: `${es.from} (unverified domain)` });
           opts.push({ value: '__custom', label: 'Custom address…' });
           const current = es.from || (opts[0] && opts[0].value !== '__custom' ? opts[0].value : '');
-          const editor = `<form class="invite-add integration__editor" data-action="email-settings-form">
+          const editor = `<form class="invite-add integration__editor integration-card__editor" data-action="email-settings-form">
               <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" spellcheck="false" aria-label="From name">
               ${useDd
                 ? `${dd('email-from', opts, current, {})}<input type="hidden" name="from" value="${MD.esc(current)}">`
                 : `<input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">`}
               <button class="btn" type="submit"${busy}>Save</button>
             </form>`;
-          return `<div class="integration">
+          return `<div class="integration-card"><div class="integration">
             <span class="integration__tile${connected ? '' : ' integration__tile--off'}">${RESEND_MARK}</span>
             <span class="integration__meta">
               <span class="integration__name">Resend
@@ -7541,7 +7555,7 @@ function viewEmailSettings() {
               <input class="text-input" name="key" type="password" placeholder="${es.keySet ? `Key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">
               <button class="btn" type="submit"${busy}>Save</button>
             </form>
-          </details>`}`;
+          </details>`}</div>`;
         })()}
       </section>`;
 }
@@ -9210,6 +9224,7 @@ function viewAiSettings() {
   const busy = UI.aiBusy ? ' disabled' : '';
   return `<section class="admin-block ai-integration" aria-busy="${Boolean(UI.aiBusy)}">
     <div class="admin-block__head"><h2>AI</h2></div>
+    <div class="integration-card">
     <div class="integration">
       <span class="integration__tile ai-integration__tile${settings.connected ? '' : ' integration__tile--off'}" aria-hidden="true">${OPENAI_MARK}</span>
       <span class="integration__meta">
@@ -9226,7 +9241,7 @@ function viewAiSettings() {
       <div data-ai-usage>${viewAiUsage()}</div>
     </div>
     <p class="field-error" data-ai-connection-error role="alert" ${UI.aiConnectionError ? '' : 'hidden'}>${MD.esc(UI.aiConnectionError || '')}</p>
-    ${UI.aiEdit ? `<form class="ai-settings integration__editor" id="ai-configuration" data-action="ai-settings-form">
+    ${UI.aiEdit ? `<form class="ai-settings integration__editor integration-card__editor" id="ai-configuration" data-action="ai-settings-form">
       <fieldset class="ai-settings__fields"${busy}>
       <label class="ai-settings__key">OpenAI API key
         <input class="text-input" type="password" name="key" autocomplete="new-password" spellcheck="false" autocapitalize="none" placeholder="${settings.keySet ? 'Saved key ending in ' + MD.esc(settings.keyTail) + ' · enter to replace' : settings.source === 'environment' ? 'Server key available · enter to replace' : 'sk-…'}">
@@ -9243,6 +9258,7 @@ function viewAiSettings() {
       </div>
       </fieldset>
     </form>` : ''}
+    </div>
   </section>`;
 }
 
@@ -9309,7 +9325,7 @@ async function changeAiSettings(form, action = 'save') {
     toast(action === 'test' ? 'Connection verified' : action === 'disconnect' ? 'AI disconnected' : 'AI settings saved');
   } catch (e) {
     if (form) form.dataset.adminDirty = 'true';
-    const message = e.name === 'TimeoutError' ? 'The request timed out. Try again.' : e.message || 'Unable to update AI settings.';
+    const message = e.name === 'TimeoutError' ? 'The request timed out. Try again.' : e.status === 401 ? 'Your session expired. Sign in again.' : e.message || 'Unable to update AI settings.';
     if (form && error) { error.textContent = message; error.hidden = false; }
     else {
       UI.aiConnectionError = message;
@@ -9653,6 +9669,8 @@ function syncSidebarInteraction(moveFocus = false) {
 function mountMenu(host, anchor) {
   document.body.appendChild(host);
   const r = anchor.getBoundingClientRect();
+  // Option menus open at least as wide as the control they belong to.
+  if (anchor.classList.contains('dd')) host.style.minWidth = Math.min(r.width, innerWidth - 20) + 'px';
   if (anchor.classList.contains('sidebar__user')) {
     host.classList.add('menu--account');
     host.style.minWidth = '0';

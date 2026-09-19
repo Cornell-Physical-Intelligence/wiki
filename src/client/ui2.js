@@ -1314,14 +1314,14 @@ function viewEmailSettings() {
           if (es.from && !opts.some((o) => o.value === es.from)) opts.unshift({ value: es.from, label: `${es.from} (unverified domain)` });
           opts.push({ value: '__custom', label: 'Custom address…' });
           const current = es.from || (opts[0] && opts[0].value !== '__custom' ? opts[0].value : '');
-          const editor = `<form class="invite-add integration__editor" data-action="email-settings-form">
+          const editor = `<form class="invite-add integration__editor integration-card__editor" data-action="email-settings-form">
               <input class="text-input" name="fromname" placeholder="From name" value="${MD.esc(es.name || '')}" style="width:150px;flex:none" spellcheck="false" aria-label="From name">
               ${useDd
                 ? `${dd('email-from', opts, current, {})}<input type="hidden" name="from" value="${MD.esc(current)}">`
                 : `<input class="text-input" name="from" placeholder="wiki@yourdomain.com" value="${MD.esc(es.from)}" autocomplete="off" spellcheck="false" aria-label="From address">`}
               <button class="btn" type="submit"${busy}>Save</button>
             </form>`;
-          return `<div class="integration">
+          return `<div class="integration-card"><div class="integration">
             <span class="integration__tile${connected ? '' : ' integration__tile--off'}">${RESEND_MARK}</span>
             <span class="integration__meta">
               <span class="integration__name">Resend
@@ -1349,7 +1349,7 @@ function viewEmailSettings() {
               <input class="text-input" name="key" type="password" placeholder="${es.keySet ? `Key ends in …${MD.esc(es.keyTail)} (blank keeps it)` : 'Resend API key (re_…)'}" autocomplete="new-password" aria-label="Resend API key">
               <button class="btn" type="submit"${busy}>Save</button>
             </form>
-          </details>`}`;
+          </details>`}</div>`;
         })()}
       </section>`;
 }

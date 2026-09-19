@@ -3,7 +3,7 @@
 
 import { getState, getMember, getEmailSettings, savePreferences, updateState, putFile, getFile, deleteFile, listFiles, putPart, finishUpload, StorageNotConfigured } from '../lib/db.js';
 import { applyOp, cleanPreferences, healWelcomeCrab } from '../lib/ops.js';
-import { makeSession, readSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
+import { makeSession, readSession, readSessionInfo, renewSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
 import { handleInterest } from '../lib/interest.js';
 import { fileBugPR } from '../lib/github.js';
@@ -148,8 +148,12 @@ export default async function handler(req, res) {
     /* ------------------------------ session -------------------------------- */
 
     const devAuth = process.env.DEV_FAKE_AUTH; // local dev only
-    const email = devAuth || readSession(req.headers.cookie);
+    const session = devAuth ? null : readSessionInfo(req.headers.cookie);
+    const email = devAuth || session?.email;
     if (!email) return json(res, 401, { error: 'Not signed in' });
+    // Page loads and polls carry a fresh cookie once a session is half over.
+    const renewed = renewSession(session);
+    const sessionHeaders = renewed ? { 'set-cookie': renewed } : {};
     const syncing = ['/state', '/mutate', '/resend/disconnect'].includes(path);
     const sync = await getMember(email, syncing ? {
       prefsSince: Number.isFinite(Number(q.prefsSince)) ? Number(q.prefsSince) : -1,
@@ -160,7 +164,7 @@ export default async function handler(req, res) {
 
     if (path === '/me') {
       if (!me) return json(res, 401, { error: 'Not signed in' });
-      return json(res, 200, { email: me.email, name: me.name, role: me.role });
+      return json(res, 200, { email: me.email, name: me.name, role: me.role }, sessionHeaders);
     }
 
     // Everything below requires a signed-in, active member.
@@ -234,7 +238,7 @@ export default async function handler(req, res) {
 
     if (path === '/state') {
       if (q.since && Number(q.since) === version) {
-        return json(res, 200, { version, unchanged: true, prefsVersion, ...(prefs !== null ? { prefs } : {}) });
+        return json(res, 200, { version, unchanged: true, prefsVersion, ...(prefs !== null ? { prefs } : {}) }, sessionHeaders);
       }
       let out = await getState();
       // Check the legacy content migration against state we already needed.
@@ -247,7 +251,7 @@ export default async function handler(req, res) {
       }
       const currentMe = out.state.users.find((u) => u.email === email && u.status === 'active');
       if (!currentMe) return json(res, 401, { error: 'Not signed in' });
-      return json(res, 200, { version: out.version, prefsVersion, state: shapeState(out.state, currentMe, prefs), files: await listFiles() });
+      return json(res, 200, { version: out.version, prefsVersion, state: shapeState(out.state, currentMe, prefs), files: await listFiles() }, sessionHeaders);
     }
 
     // Admins can verify the Resend wiring with one click — the real welcome
