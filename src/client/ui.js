@@ -406,7 +406,7 @@ function viewPage(id) {
             <h1>${MD.esc(p.title)}</h1>
           </div>
           <div class="page-head__byline">
-            <span class="who"><span class="avatar" style="width:20px;height:20px;font-size:9px">${Store.initials(p.owner)}</span> ${MD.esc(Store.userName(p.owner))}</span>
+            <span class="who">${MD.esc(Store.userName(p.owner))}</span>
             <button class="page-head__info ${infoOpen ? 'active' : ''}" data-action="page-info" data-id="${id}" aria-label="Page details" aria-expanded="${infoOpen}" title="Page details">${I.info}</button>
             ${infoOpen ? `<span class="page-head__meta">
             <span>created ${relTime(p.created)}</span>

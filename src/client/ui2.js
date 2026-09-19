@@ -28,7 +28,7 @@ function openEditor(pageId, isNew, draft) {
     body: draft?.body ?? p?.body ?? '',
     section: draft?.section ?? p?.section ?? 'projects',
     parent: p?.parent ?? draft?.parent ?? null,
-    mode: Store.prefs().editorMode || 'split',
+    mode: 'split', // every editor opens split; the mode tabs change only this session
     dirty: false,
     origTitle: draft?.origTitle ?? p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
     origSection: draft?.origSection ?? p?.section ?? '',
@@ -729,7 +729,6 @@ function viewHistory(id) {
       ${p.revs.map((r, i) => {
         const pd = diffLines(p.revs[i - 1] ? p.revs[i - 1].body : '', r.body);
         return `<a class="rev ${i === p.revs.length - 1 ? 'rev--current' : ''}" href="#/history/${id}?rev=${i}" style="${i === selIdx ? 'background:var(--hover)' : ''};text-decoration:none;color:inherit">
-        <span class="avatar">${Store.initials(r.by)}</span>
         <span class="rev__meta"><span class="rev__summary">${MD.esc(r.summary || 'Edited')}</span>
         <span class="rev__when">${MD.esc(Store.userName(r.by))} · ${fmtDateTime(r.ts)}</span></span>
         <span class="rev__stats"><span class="add">+${pd.add}</span><span class="del">−${pd.del}</span></span>
@@ -787,7 +786,6 @@ function viewActivity() {
         ${g.items.map((a) => {
           const pg = a.pageId && Store.page(a.pageId);
           return `<a class="feed__row" ${pg ? `href="#/page/${a.pageId}"` : ''}>
-          <span class="avatar">${Store.initials(a.by)}</span>
           <span class="feed__what">${activityLine(a)}</span>
           <span class="feed__when">${relTime(a.ts)}</span></a>`;
         }).join('')}
@@ -1443,7 +1441,6 @@ function viewTrash() {
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><h1>Trash</h1><p>Deleted pages are permanently removed after 30 days.</p></div>
     ${items.length ? `<div class="history">${items.map((p) => `<div class="rev">
-      <span class="avatar">${Store.initials(p.deletedBy)}</span>
       <span class="rev__meta"><span class="rev__summary">${MD.esc(p.title)}</span><span class="rev__when">deleted by ${MD.esc(Store.userName(p.deletedBy))} · ${relTime(p.deletedAt)}</span></span>
       <button class="btn btn--sm" data-action="trash-restore" data-id="${p.id}">Restore</button>
       <button class="btn btn--sm btn--danger" data-action="trash-purge" data-id="${p.id}">Delete forever</button>

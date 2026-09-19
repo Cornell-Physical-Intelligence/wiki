@@ -685,6 +685,11 @@ document.addEventListener('click', async (ev) => {
       { icon: I.clock, label: 'Activity', run: () => nav('#/activity') },
       { icon: I.shield, label: 'Wiki health', run: () => nav('#/health') },
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
+      { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
+        const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
+        try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
+        catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); }
+      } },
       ...(Store.isAdmin() ? ['-',
         { icon: I.users, label: 'Members', run: () => nav('#/admin') },
         { icon: I.bolt, label: 'Integrations', run: () => nav('#/integrations') }] : []),
@@ -694,11 +699,6 @@ document.addEventListener('click', async (ev) => {
     ], el); break;
     case 'user-menu': stop(); openMenu([
       { icon: I.edit, label: 'Edit profile', run: () => { UI.modal = { kind: 'profile' }; render(); } },
-      { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
-        const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
-        try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
-        catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); }
-      } },
       ...(typeof REMOTE === 'undefined' ? [
         { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'Sign-in is simulated and changes are stored in this browser.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
         '-',
@@ -895,8 +895,6 @@ document.addEventListener('click', async (ev) => {
     /* ---- editor ---- */
     case 'ed-mode': stop(); {
       UI.editor.mode = el.dataset.mode;
-      Store.prefs().editorMode = el.dataset.mode;
-      Store.persist();
       const ed = $('.editor');
       if (ed) ed.className = ed.className.replace(/mode-\w+/, 'mode-' + el.dataset.mode);
       $$('.editor__mode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === el.dataset.mode));

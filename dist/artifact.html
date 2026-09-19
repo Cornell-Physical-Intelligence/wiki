@@ -4122,7 +4122,6 @@ const Store = {
     if (!Array.isArray(p.starred)) p.starred = [];
     if (!Array.isArray(p.recents)) p.recents = [];
     if (!Array.isArray(p.collapsed)) p.collapsed = [];
-    if (!p.editorMode) p.editorMode = 'split';
     return p;
   },
   toggleStar(id) {
@@ -4639,7 +4638,7 @@ function viewPage(id) {
             <h1>${MD.esc(p.title)}</h1>
           </div>
           <div class="page-head__byline">
-            <span class="who"><span class="avatar" style="width:20px;height:20px;font-size:9px">${Store.initials(p.owner)}</span> ${MD.esc(Store.userName(p.owner))}</span>
+            <span class="who">${MD.esc(Store.userName(p.owner))}</span>
             <button class="page-head__info ${infoOpen ? 'active' : ''}" data-action="page-info" data-id="${id}" aria-label="Page details" aria-expanded="${infoOpen}" title="Page details">${I.info}</button>
             ${infoOpen ? `<span class="page-head__meta">
             <span>created ${relTime(p.created)}</span>
@@ -5073,7 +5072,7 @@ function openEditor(pageId, isNew, draft) {
     body: draft?.body ?? p?.body ?? '',
     section: draft?.section ?? p?.section ?? 'projects',
     parent: p?.parent ?? draft?.parent ?? null,
-    mode: Store.prefs().editorMode || 'split',
+    mode: 'split', // every editor opens split; the mode tabs change only this session
     dirty: false,
     origTitle: draft?.origTitle ?? p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
     origSection: draft?.origSection ?? p?.section ?? '',
@@ -5774,7 +5773,6 @@ function viewHistory(id) {
       ${p.revs.map((r, i) => {
         const pd = diffLines(p.revs[i - 1] ? p.revs[i - 1].body : '', r.body);
         return `<a class="rev ${i === p.revs.length - 1 ? 'rev--current' : ''}" href="#/history/${id}?rev=${i}" style="${i === selIdx ? 'background:var(--hover)' : ''};text-decoration:none;color:inherit">
-        <span class="avatar">${Store.initials(r.by)}</span>
         <span class="rev__meta"><span class="rev__summary">${MD.esc(r.summary || 'Edited')}</span>
         <span class="rev__when">${MD.esc(Store.userName(r.by))} · ${fmtDateTime(r.ts)}</span></span>
         <span class="rev__stats"><span class="add">+${pd.add}</span><span class="del">−${pd.del}</span></span>
@@ -5832,7 +5830,6 @@ function viewActivity() {
         ${g.items.map((a) => {
           const pg = a.pageId && Store.page(a.pageId);
           return `<a class="feed__row" ${pg ? `href="#/page/${a.pageId}"` : ''}>
-          <span class="avatar">${Store.initials(a.by)}</span>
           <span class="feed__what">${activityLine(a)}</span>
           <span class="feed__when">${relTime(a.ts)}</span></a>`;
         }).join('')}
@@ -6488,7 +6485,6 @@ function viewTrash() {
   <div class="content"><div class="page-wrap"><div class="page-col">
     <div class="plain-head"><h1>Trash</h1><p>Deleted pages are permanently removed after 30 days.</p></div>
     ${items.length ? `<div class="history">${items.map((p) => `<div class="rev">
-      <span class="avatar">${Store.initials(p.deletedBy)}</span>
       <span class="rev__meta"><span class="rev__summary">${MD.esc(p.title)}</span><span class="rev__when">deleted by ${MD.esc(Store.userName(p.deletedBy))} · ${relTime(p.deletedAt)}</span></span>
       <button class="btn btn--sm" data-action="trash-restore" data-id="${p.id}">Restore</button>
       <button class="btn btn--sm btn--danger" data-action="trash-purge" data-id="${p.id}">Delete forever</button>
@@ -8887,6 +8883,11 @@ document.addEventListener('click', async (ev) => {
       { icon: I.clock, label: 'Activity', run: () => nav('#/activity') },
       { icon: I.shield, label: 'Wiki health', run: () => nav('#/health') },
       { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
+      { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
+        const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
+        try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
+        catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); }
+      } },
       ...(Store.isAdmin() ? ['-',
         { icon: I.users, label: 'Members', run: () => nav('#/admin') },
         { icon: I.bolt, label: 'Integrations', run: () => nav('#/integrations') }] : []),
@@ -8896,11 +8897,6 @@ document.addEventListener('click', async (ev) => {
     ], el); break;
     case 'user-menu': stop(); openMenu([
       { icon: I.edit, label: 'Edit profile', run: () => { UI.modal = { kind: 'profile' }; render(); } },
-      { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
-        const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
-        try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
-        catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); }
-      } },
       ...(typeof REMOTE === 'undefined' ? [
         { icon: I.shield, label: 'About this preview', run: () => { UI.modal = { kind: 'confirm', title: 'Preview build', text: 'Sign-in is simulated and changes are stored in this browser.', confirm: 'Got it' }; UI.modal.onGo = () => {}; render(); } },
         '-',
@@ -9097,8 +9093,6 @@ document.addEventListener('click', async (ev) => {
     /* ---- editor ---- */
     case 'ed-mode': stop(); {
       UI.editor.mode = el.dataset.mode;
-      Store.prefs().editorMode = el.dataset.mode;
-      Store.persist();
       const ed = $('.editor');
       if (ed) ed.className = ed.className.replace(/mode-\w+/, 'mode-' + el.dataset.mode);
       $$('.editor__mode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === el.dataset.mode));

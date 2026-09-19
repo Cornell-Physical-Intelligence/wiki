@@ -24,6 +24,8 @@ The CUPI mark is four circles: left half filled, bottom half filled, upper-right
 Re-rasterize the PNGs from `logo-square.svg` whenever the mark changes; do not reintroduce the crab as a logo or icon.
 
 The signed-out page is the wiki's own frame with the members-only parts locked. The sidebar shows the brand, a disabled search, the section names with no pages, and a "Not signed in" account row; the content column carries a "Sign in" heading, one sentence on what the wiki is and who can sign in (`LOGIN_SUMMARY` in `src/client/ui.js`), the sign-in card, and the site footer. Both builds render through `viewLoginShell`; `src/remote.js` supplies the live Google link and the denied notice. Keyboard shortcuts and preference writes are off until someone signs in.
+
+People are credited by name alone on pages, in history, in the activity feed, and in the trash; the initials bubble appears only on the signed-in account row and the preview build's account chooser. The editor always opens in split view (write-only below 900px wide); the Write / Split / Preview tabs change only the open editor. "Export wiki as Markdown" lives in the Settings menu with the other wiki tools.
 ## Architecture
 
 No framework. The client is one self-contained HTML file (`scripts/build.mjs` assembles it from `src/client/`). The backend is one Vercel serverless function (`api/index.js`): OAuth, HMAC-signed session cookies, a versioned JSONB state document in Postgres with optimistic-concurrency writes, and attachments as `bytea` rows. Clients apply mutations optimistically and the server re-validates every one against the member's role.

@@ -470,7 +470,6 @@ const Store = {
     if (!Array.isArray(p.starred)) p.starred = [];
     if (!Array.isArray(p.recents)) p.recents = [];
     if (!Array.isArray(p.collapsed)) p.collapsed = [];
-    if (!p.editorMode) p.editorMode = 'split';
     return p;
   },
   toggleStar(id) {
