@@ -8,7 +8,8 @@ const read = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url),
 const b64 = (f) => readFileSync(new URL(`../src/client/${f}`, import.meta.url)).toString('base64');
 
 // The CUPI mark: four circles. logo-row.svg is the row the boot splash
-// draws in; logo-square.svg is the 2x2 form behind every
+// draws in; logo-square.svg is the 2x2 form beside the sidebar brand
+// (inlined as CUPI_MARK) and behind every
 // icon (favicon-squircle-32.png, favicon-cupi-192.png). Both draw in
 // currentColor so they follow the theme. See README "Brand".
 const svg = (f) => read(f).replace(/<!--[\s\S]*?-->\s*/g, '').trim();
@@ -85,6 +86,7 @@ export function scripts({ remote = false } = {}) {
 const assets = `'use strict';
 const AI_MODELS = ${JSON.stringify(AI_MODELS)};
 const AI_DEFAULTS = ${JSON.stringify(AI_DEFAULTS)};
+const CUPI_MARK = ${JSON.stringify(LOGO_SQUARE)};
 const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
   return [
     assets,

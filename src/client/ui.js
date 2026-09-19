@@ -45,7 +45,7 @@ const I = {
 };
 
 // Standardize the chrome on Lucide (the star keeps its filled variant, the
-// Google mark stays brand-exact; the CUPI mark appears only in the boot splash).
+// Google mark stays brand-exact; the CUPI mark is CUPI_MARK from logo-square.svg).
 Object.assign(I, {
   search: lucide('search', 1.8),
   home: lucide('home', 1.8),
@@ -298,7 +298,7 @@ function viewSidebar() {
   const r = UI.route;
   return `<aside class="sidebar">
     <div class="sidebar__head">
-      <a class="sidebar__brand" href="#/home">CUPI Wiki</a>
+      <a class="sidebar__brand" href="#/home"><span class="sidebar__mark" aria-hidden="true">${CUPI_MARK}</span>CUPI Wiki</a>
     </div>
     <button class="sidebar__search" data-action="palette">
       ${I.search} <span>Search…</span> <span class="kbd">⌘K</span>

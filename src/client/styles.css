@@ -380,11 +380,13 @@ label > .dd { width: 100%; }
 
 .sidebar__head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
 .sidebar__brand {
-  display: inline-flex; align-items: center; color: var(--fg);
+  display: inline-flex; align-items: center; gap: 9px; color: var(--fg);
   font-family: var(--font-display); font-weight: 700; font-size: 15px;
   letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
   user-select: none; text-decoration: none;
 }
+.sidebar__mark { width: 20px; height: 20px; display: block; flex: none; color: var(--fg); }
+.sidebar__mark svg { width: 100%; height: 100%; display: block; overflow: visible; stroke-width: 9; }
 
 /* Boot splash: the mark draws itself in (rings, then fills, then the divider)
    while the store boots, then the whole splash fades out over the app. */
