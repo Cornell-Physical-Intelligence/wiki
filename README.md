@@ -22,6 +22,8 @@ The CUPI mark is four circles: left half filled, bottom half filled, upper-right
 - Opening the wiki shows the mark drawing itself in over the page background until the store has booted, then the splash fades out over the app (`settleBoot` in `src/client/main.js`). The mark does not travel to the sidebar.
 
 Re-rasterize the PNGs from `logo-square.svg` whenever the mark changes; do not reintroduce the crab as a logo or icon.
+
+The sign-in page is a plain "CUPI Wiki" heading in the display serif, the "(Cornell University Physical Intelligence)" caption, one sentence on what the wiki is and does (`LOGIN_SUMMARY` in `src/client/ui.js`), the sign-in card, and the site footer. The Voronoi canvas title that used to sit there is gone along with its engine.
 ## Architecture
 
 No framework. The client is one self-contained HTML file (`scripts/build.mjs` assembles it from `src/client/`). The backend is one Vercel serverless function (`api/index.js`): OAuth, HMAC-signed session cookies, a versioned JSONB state document in Postgres with optimistic-concurrency writes, and attachments as `bytea` rows. Clients apply mutations optimistically and the server re-validates every one against the member's role.

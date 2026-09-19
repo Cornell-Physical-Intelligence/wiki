@@ -213,11 +213,20 @@ function loginFooter(previewLine) {
 }
 
 
+// What the wiki is and does, in one sentence, under the heading on the
+// sign-in page (shared with the live build in src/remote.js).
+const LOGIN_SUMMARY = 'CUPI\u2019s internal knowledge base: subteam documentation, project pages, and the processes behind them, with full page history, inline CAD and schematic previews, search, and templates for meeting notes, design docs, and test reports.';
+
+function loginHeading() {
+  return `<h1 class="login__wordmark">CUPI Wiki</h1>
+    <p class="login__caption">(Cornell University Physical Intelligence)</p>
+    <p class="login__summary">${LOGIN_SUMMARY}</p>`;
+}
+
 function viewLogin() {
   const denied = UI.route.name === 'denied';
   return `<div class="login">
-    <h1 class="login__title"><span class="visually-hidden">Cornell Physical Intelligence (CUPI)</span><span class="vt-title" aria-hidden="true"><canvas class="vt-title__canvas"></canvas></span></h1>
-    <p class="login__caption">(Cornell University Physical Intelligence)</p>
+    ${loginHeading()}
     <div class="login__card">
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}

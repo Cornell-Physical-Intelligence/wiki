@@ -247,8 +247,8 @@ label > .dd { width: 100%; }
 
 .login__wordmark {
   font-family: var(--font-display); font-weight: 700;
-  font-size: clamp(56px, 11vw, 108px); line-height: 1;
-  letter-spacing: 0.01em; user-select: none;
+  font-size: clamp(40px, 7vw, 64px); line-height: 1.05;
+  letter-spacing: 0.01em; user-select: none; text-align: center;
   margin: 0;
 }
 
@@ -1672,20 +1672,16 @@ body { transition: background-color 160ms ease, color 160ms ease; }
    is bounded by the CUPI letterforms; the caption is the site's Times caption. */
 .login__title { margin: 0; line-height: 0; display: flex; justify-content: center; user-select: none; width: 100%; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.vt-title {
-  display: block; width: min(90vw, 720px); opacity: 0;
-  transition: opacity 0.6s cubic-bezier(0.2, 0, 0, 1);
-  user-select: none; -webkit-user-select: none;
-}
-.vt-title.is-ready { opacity: 1; }
-.vt-title__canvas { display: block; width: 100%; height: 100%; }
-@media (prefers-reduced-motion: reduce) { .vt-title { transition: none; } }
 .login__caption {
-  margin: clamp(-6px, 0.6vw, 14px) 0 0; color: var(--fg);
+  margin: 8px 0 0; color: var(--fg);
   font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(7px, 0.9vw, 12px); letter-spacing: 0.22em;
-  text-transform: uppercase; text-align: center; white-space: nowrap;
+  font-size: clamp(8px, 0.9vw, 12px); letter-spacing: 0.22em;
+  text-transform: uppercase; text-align: center;
   pointer-events: none;
+}
+.login__summary {
+  margin: 18px 0 10px; max-width: 52ch; text-align: center; text-wrap: balance;
+  font-size: 15px; line-height: 1.55; color: var(--muted);
 }
 
 .login__welcome { margin: 0; text-align: center; font-size: 14px; color: var(--fg); text-wrap: balance; }
