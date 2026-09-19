@@ -159,7 +159,7 @@ function route() {
   const name = seg[0] || (me ? 'home' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
-  const KNOWN = ['home', 'page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'home', params: {} }; nav('#/home'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
@@ -331,7 +331,7 @@ function topbar(crumbHtml, right) {
 function crumbsFor(p) {
   const sec = SECTIONS.find((s) => s.id === p.section);
   return `<a href="#/home">Wiki</a><span class="crumbs__sep">/</span>` +
-    (sec ? `<a href="#/section/${sec.id}">${sec.name}</a><span class="crumbs__sep">/</span>` : '') +
+    (sec ? `<span class="crumbs__sec">${sec.name}</span><span class="crumbs__sep">/</span>` : '') +
     `<span class="crumbs__here">${MD.esc(p.title)}</span>`;
 }
 
@@ -397,21 +397,6 @@ function viewMissing(id) {
     ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist. It may have been moved to Trash.</p>
     <button class="btn" data-action="new-page">${I.plus} New page</button>
   </div></div></div></div>`;
-}
-
-function viewSection(secId) {
-  const sec = SECTIONS.find((s) => s.id === secId);
-  if (!sec) return viewMissing(secId);
-  const pages = Store.inSection(secId);
-  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">${sec.name}</span>`,
-    `<button class="btn" data-action="new-page" data-sec="${secId}">${I.plus} New page</button>`) + `
-  <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><h1>${sec.name}</h1></div>
-    <div class="cardlist">
-      ${pages.map((p) => `<a class="pagecard" href="#/page/${p.id}"><b>${MD.esc(p.title)}</b><span class="snip">${MD.esc(MD.mdToText(p.body).slice(0, 130))}</span><span class="meta">${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span></a>`).join('')}
-    </div>
-    ${pages.length === 0 ? `<div class="empty">${I.page}<b>No pages yet</b></div>` : ''}
-  </div></div></div>`;
 }
 
 /* ------------------------------- 3D viewer ------------------------------- */

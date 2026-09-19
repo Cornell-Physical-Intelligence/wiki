@@ -1769,7 +1769,6 @@ function render() {
   if (UI.editor) view = viewEditor();
   else if (r.name === 'home') view = topbar('<span class="crumbs__here">Home</span>') + `<div class="content search-home-content">${viewSearchHome()}</div>`;
   else if (r.name === 'page') view = viewPage(r.params.id || 'welcome');
-  else if (r.name === 'section') view = viewSection(r.params.id);
   else if (r.name === 'history') view = viewHistory(r.params.id);
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();

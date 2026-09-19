@@ -526,6 +526,7 @@ label > .dd { width: 100%; }
 .crumbs { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; font-size: 13px; }
 .crumbs a { color: var(--muted); text-decoration: none; padding: 3px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 .crumbs a:hover { background: var(--hover); color: var(--fg); }
+.crumbs__sec { color: var(--muted); padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 .crumbs__sep { color: var(--faint); flex: none; }
 .crumbs__here { color: var(--fg); font-weight: 500; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crumbs__draft { color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding-left: 4px; }
@@ -1203,17 +1204,6 @@ a.feed__row:hover { background: var(--hover); }
 .feed__what b { color: var(--fg); font-weight: 500; }
 .feed__when { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--faint); white-space: nowrap; }
 
-.cardlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.pagecard {
-  display: flex; flex-direction: column; gap: 7px;
-  padding: 14px 16px; border: 1px solid var(--hairline); border-radius: var(--radius);
-  text-decoration: none; color: var(--fg);
-  transition-property: background, border-color; transition-duration: 0.15s;
-}
-.pagecard:hover { background: var(--hover); border-color: var(--rule); }
-.pagecard b { font-weight: 500; font-size: 14.5px; }
-.pagecard .snip { font-size: 12.5px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.pagecard .meta { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); margin-top: auto; }
 
 /* ---------------------------------------------------------------------------
    Modals, menus, toasts, empty states
@@ -1505,7 +1495,7 @@ a.feed__row:hover { background: var(--hover); }
 
 @media (max-width: 640px) {
   /* Breadcrumbs: only the current page — ancestors crush into noise here. */
-  .crumbs a, .crumbs .crumbs__sep { display: none; }
+  .crumbs a, .crumbs .crumbs__sec, .crumbs .crumbs__sep { display: none; }
   .crumbs .crumbs__here { max-width: 60vw; }
   /* Invite form stacks; the email field keeps a usable width. */
   .invite-add { flex-wrap: wrap; }
@@ -5590,7 +5580,7 @@ function route() {
   const name = seg[0] || (me ? 'home' : 'login');
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
-  const KNOWN = ['home', 'page', 'section', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'home', params: {} }; nav('#/home'); return; }
   UI.route = { name, params: { id: seg[1], ...params } };
 }
@@ -5762,7 +5752,7 @@ function topbar(crumbHtml, right) {
 function crumbsFor(p) {
   const sec = SECTIONS.find((s) => s.id === p.section);
   return `<a href="#/home">Wiki</a><span class="crumbs__sep">/</span>` +
-    (sec ? `<a href="#/section/${sec.id}">${sec.name}</a><span class="crumbs__sep">/</span>` : '') +
+    (sec ? `<span class="crumbs__sec">${sec.name}</span><span class="crumbs__sep">/</span>` : '') +
     `<span class="crumbs__here">${MD.esc(p.title)}</span>`;
 }
 
@@ -5828,21 +5818,6 @@ function viewMissing(id) {
     ${I.page}<b>No page here</b><p>“${MD.esc(id || '')}” doesn't exist. It may have been moved to Trash.</p>
     <button class="btn" data-action="new-page">${I.plus} New page</button>
   </div></div></div></div>`;
-}
-
-function viewSection(secId) {
-  const sec = SECTIONS.find((s) => s.id === secId);
-  if (!sec) return viewMissing(secId);
-  const pages = Store.inSection(secId);
-  return topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">${sec.name}</span>`,
-    `<button class="btn" data-action="new-page" data-sec="${secId}">${I.plus} New page</button>`) + `
-  <div class="content"><div class="page-wrap"><div class="page-col">
-    <div class="plain-head"><h1>${sec.name}</h1></div>
-    <div class="cardlist">
-      ${pages.map((p) => `<a class="pagecard" href="#/page/${p.id}"><b>${MD.esc(p.title)}</b><span class="snip">${MD.esc(MD.mdToText(p.body).slice(0, 130))}</span><span class="meta">${MD.esc(Store.userName(p.updatedBy))} · ${relTime(p.updated)}</span></a>`).join('')}
-    </div>
-    ${pages.length === 0 ? `<div class="empty">${I.page}<b>No pages yet</b></div>` : ''}
-  </div></div></div>`;
 }
 
 /* ------------------------------- 3D viewer ------------------------------- */
@@ -7982,7 +7957,6 @@ function render() {
   if (UI.editor) view = viewEditor();
   else if (r.name === 'home') view = topbar('<span class="crumbs__here">Home</span>') + `<div class="content search-home-content">${viewSearchHome()}</div>`;
   else if (r.name === 'page') view = viewPage(r.params.id || 'welcome');
-  else if (r.name === 'section') view = viewSection(r.params.id);
   else if (r.name === 'history') view = viewHistory(r.params.id);
   else if (r.name === 'activity') view = viewActivity();
   else if (r.name === 'admin') view = viewAdmin();
