@@ -666,7 +666,7 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- shell ---- */
-    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; Store.prefs().navHidden = UI.navHidden; Store.persist(); } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
+    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; if (Store.me()) { Store.prefs().navHidden = UI.navHidden; Store.persist(); } } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
     case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); break;
     case 'sec-toggle': {
       if (ev.target.closest('[data-action="new-page"]')) break;
@@ -1748,6 +1748,13 @@ document.addEventListener('keydown', (ev) => {
     const first = controls[0], last = controls[controls.length - 1];
     if (ev.shiftKey && (document.activeElement === first || !sidebar.contains(document.activeElement))) { ev.preventDefault(); last?.focus(); }
     else if (!ev.shiftKey && (document.activeElement === last || !sidebar.contains(document.activeElement))) { ev.preventDefault(); first?.focus(); }
+    return;
+  }
+
+  // Signed out: the frame is on screen but its shortcuts are not. Only the
+  // mobile drawer answers Escape.
+  if (!Store.me()) {
+    if (ev.key === 'Escape' && UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); }
     return;
   }
 

@@ -213,28 +213,59 @@ function loginFooter(previewLine) {
 }
 
 
-// What the wiki is and does, in one sentence, under the heading on the
-// sign-in page (shared with the live build in src/remote.js).
-const LOGIN_SUMMARY = 'CUPI\u2019s internal knowledge base: subteam documentation, project pages, and the processes behind them, with full page history, inline CAD and schematic previews, search, and templates for meeting notes, design docs, and test reports.';
+// The signed-out page is the wiki's own frame with the members-only parts
+// locked: the sidebar shows the brand, a disabled search, the section names
+// with no pages, and an unsigned account row; the content column carries the
+// sign-in card where a page would be. Both builds render through
+// viewLoginShell and differ only in the card: src/remote.js overrides
+// viewLogin with the live Google link and the ?denied notice.
+const LOGIN_SUMMARY = 'CUPI’s internal knowledge base: subteam documentation, project pages, and team processes, with page history, CAD and schematic previews, and search. Members sign in with a cornell.edu Google account.';
 
-function loginHeading() {
-  return `<h1 class="login__wordmark">CUPI Wiki</h1>
-    <p class="login__caption">(Cornell University Physical Intelligence)</p>
-    <p class="login__summary">${LOGIN_SUMMARY}</p>`;
+function viewSidebarLocked() {
+  const folder = `<span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>`;
+  return `<aside class="sidebar">
+    <div class="sidebar__head">
+      <span class="sidebar__brand"><span class="sidebar__mark" aria-hidden="true">${CUPI_MARK}</span>CUPI Wiki</span>
+    </div>
+    <button class="sidebar__search" disabled title="Sign in to search">${I.search} <span>Search…</span> <span class="kbd">⌘K</span></button>
+    <nav class="sidebar__nav">
+      <span class="navlink active">${I.home} Home</span>
+      <span class="navlink navlink--locked" title="Sign in to add pages">${I.plus} New page</span>
+    </nav>
+    <div class="sidebar__scroll">
+      ${SECTIONS.map((sec) => `<div class="tree-section tree-section--locked"><div class="tree-section__head tree-section__head--static">${folder}<span class="tree-section__label">${MD.esc(sec.name)}</span></div></div>`).join('')}
+    </div>
+    <div class="sidebar__foot"><div class="sidebar__account">
+      <div class="sidebar__user sidebar__user--anon">
+        <span class="avatar avatar--anon" aria-hidden="true"></span>
+        <span class="sidebar__user-text"><span class="sidebar__user-name">Not signed in</span><span class="sidebar__user-mail">Sign in to see pages</span></span>
+      </div>
+    </div></div>
+  </aside>`;
+}
+
+function viewLoginShell(card, footerNote = '') {
+  return `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
+    ${viewSidebarLocked()}
+    <main class="main">
+      ${topbar('<span class="crumbs__here">Sign in</span>')}
+      <div class="content"><div class="page-wrap"><div class="page-col">
+        <div class="plain-head"><h1>Sign in</h1><p>${LOGIN_SUMMARY}</p></div>
+        <div class="login__card">${card}</div>
+        ${loginFooter(footerNote)}
+      </div></div></div>
+    </main>
+    <div class="shell__scrim" data-action="nav-close"></div>
+  </div>`;
 }
 
 function viewLogin() {
   const denied = UI.route.name === 'denied';
-  return `<div class="login">
-    ${loginHeading()}
-    <div class="login__card">
+  return viewLoginShell(`
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
-      ${UI.chooser ? viewChooser() : `
-      <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
-    </div>
-    ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
-  </div>`;
+      ${UI.chooser ? viewChooser() : `<button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}`,
+    'Preview build: sign-in is simulated and data stays in this browser.');
 }
 
 function viewChooser() {

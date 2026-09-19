@@ -1780,6 +1780,7 @@ function render() {
     stopMeaningSearch('home'); stopMeaningSearch('modal');
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
+    syncSidebarInteraction();
     mountLoginCard($('.login__card'));
     return;
   }

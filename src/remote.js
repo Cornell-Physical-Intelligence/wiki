@@ -327,15 +327,10 @@ viewLogin = function viewLoginRemote() {
   const params = new URLSearchParams(location.search);
   const denied = params.get('denied');
   const reason = params.get('reason');
-  return `<div class="login">
-    ${loginHeading()}
-    <div class="login__card">
+  return viewLoginShell(`
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied !== null ? `<div class="login__error">${reason ? MD.esc(reason) + ' ' : ''}<b>${MD.esc(denied || 'That account')}</b> isn't on the member list yet. Ask any admin to add you. Once you're added, this same button will work.</div>` : ''}
-      <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>
-    </div>
-    ${loginFooter('')}
-  </div>`;
+      <a class="login__google" href="/api/auth/login">${I.google} Continue with Google</a>`);
 };
 
 

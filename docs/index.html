@@ -248,28 +248,6 @@ label > .dd { width: 100%; }
    Login — mirrors the site's hero: emptiness, wordmark, letterspaced caps.
    ------------------------------------------------------------------------- */
 
-.login {
-  height: 100dvh; display: flex; flex-direction: column;
-  align-items: center; justify-content: flex-start;
-  padding: 24px; overflow-y: auto;
-}
-.login > :first-child { margin-top: auto; }
-.login > :last-child { margin-bottom: auto; }
-
-.login__wordmark {
-  font-family: var(--font-display); font-weight: 700;
-  font-size: clamp(40px, 7vw, 64px); line-height: 1.05;
-  letter-spacing: 0.01em; user-select: none; text-align: center;
-  margin: 0;
-}
-
-.login__sub {
-  margin: 14px 0 0;
-  font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(9px, 1vw, 12px); letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--fg); text-align: center; user-select: none;
-}
-
 .login__card {
   position: relative;
   width: min(400px, 92vw);
@@ -335,25 +313,14 @@ label > .dd { width: 100%; }
 .login__google:hover { background: var(--hover); }
 .login__google svg { width: 18px; height: 18px; flex: none; }
 
-.login__hint { font-size: 12.5px; color: var(--muted); text-align: center; margin: 0; }
-
-.login__rule {
-  display: flex; align-items: center; gap: 12px;
-  color: var(--faint); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-  font-family: var(--font-label); user-select: none;
-}
-.login__rule::before, .login__rule::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
-
-.login__invite { display: flex; gap: 8px; }
-.login__invite .text-input { font-family: var(--font-mono); letter-spacing: 0.06em; }
-
-.login__foot {
-  margin-top: clamp(40px, 8vh, 72px);
-  font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; line-height: 1.7;
-  color: var(--faint); text-align: center; user-select: none;
-}
-.login__foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
-.login__foot a:hover { color: var(--fg); }
+/* Signed-out frame: the same shell with the members-only controls locked. */
+.sidebar__search:disabled { opacity: 0.55; pointer-events: none; }
+.navlink--locked { opacity: 0.55; cursor: default; }
+.navlink--locked:hover { background: transparent; color: var(--muted); }
+.tree-section--locked .tree-section__head--static { cursor: default; }
+.sidebar__user--anon { cursor: default; }
+.sidebar__user--anon:hover { background: transparent; }
+.avatar--anon { background: transparent; border: 1px dashed var(--rule); }
 
 .login__error {
   border: 1px solid var(--bad); border-radius: var(--radius);
@@ -1678,25 +1645,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .video-embed__ext:hover { background: #fff; color: #111; }
 .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 @media print { .video-embed { display: none; } }
-
-
-/* Landing: the team site's homepage hero, verbatim. The Voronoi membrane web
-   is bounded by the CUPI letterforms; the caption is the site's Times caption. */
-.login__title { margin: 0; line-height: 0; display: flex; justify-content: center; user-select: none; width: 100%; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.login__caption {
-  margin: 8px 0 0; color: var(--fg);
-  font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(8px, 0.9vw, 12px); letter-spacing: 0.22em;
-  text-transform: uppercase; text-align: center;
-  pointer-events: none;
-}
-.login__summary {
-  margin: 18px 0 10px; max-width: 52ch; text-align: center; text-wrap: balance;
-  font-size: 15px; line-height: 1.55; color: var(--muted);
-}
-
-.login__welcome { margin: 0; text-align: center; font-size: 14px; color: var(--fg); text-wrap: balance; }
 
 
 /* Email panel: the manual path lives behind a quiet disclosure. */
@@ -4507,28 +4455,59 @@ function loginFooter(previewLine) {
 }
 
 
-// What the wiki is and does, in one sentence, under the heading on the
-// sign-in page (shared with the live build in src/remote.js).
-const LOGIN_SUMMARY = 'CUPI\u2019s internal knowledge base: subteam documentation, project pages, and the processes behind them, with full page history, inline CAD and schematic previews, search, and templates for meeting notes, design docs, and test reports.';
+// The signed-out page is the wiki's own frame with the members-only parts
+// locked: the sidebar shows the brand, a disabled search, the section names
+// with no pages, and an unsigned account row; the content column carries the
+// sign-in card where a page would be. Both builds render through
+// viewLoginShell and differ only in the card: src/remote.js overrides
+// viewLogin with the live Google link and the ?denied notice.
+const LOGIN_SUMMARY = 'CUPI’s internal knowledge base: subteam documentation, project pages, and team processes, with page history, CAD and schematic previews, and search. Members sign in with a cornell.edu Google account.';
 
-function loginHeading() {
-  return `<h1 class="login__wordmark">CUPI Wiki</h1>
-    <p class="login__caption">(Cornell University Physical Intelligence)</p>
-    <p class="login__summary">${LOGIN_SUMMARY}</p>`;
+function viewSidebarLocked() {
+  const folder = `<span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>`;
+  return `<aside class="sidebar">
+    <div class="sidebar__head">
+      <span class="sidebar__brand"><span class="sidebar__mark" aria-hidden="true">${CUPI_MARK}</span>CUPI Wiki</span>
+    </div>
+    <button class="sidebar__search" disabled title="Sign in to search">${I.search} <span>Search…</span> <span class="kbd">⌘K</span></button>
+    <nav class="sidebar__nav">
+      <span class="navlink active">${I.home} Home</span>
+      <span class="navlink navlink--locked" title="Sign in to add pages">${I.plus} New page</span>
+    </nav>
+    <div class="sidebar__scroll">
+      ${SECTIONS.map((sec) => `<div class="tree-section tree-section--locked"><div class="tree-section__head tree-section__head--static">${folder}<span class="tree-section__label">${MD.esc(sec.name)}</span></div></div>`).join('')}
+    </div>
+    <div class="sidebar__foot"><div class="sidebar__account">
+      <div class="sidebar__user sidebar__user--anon">
+        <span class="avatar avatar--anon" aria-hidden="true"></span>
+        <span class="sidebar__user-text"><span class="sidebar__user-name">Not signed in</span><span class="sidebar__user-mail">Sign in to see pages</span></span>
+      </div>
+    </div></div>
+  </aside>`;
+}
+
+function viewLoginShell(card, footerNote = '') {
+  return `<div class="shell ${UI.navOpen ? 'nav-open' : ''} ${UI.navHidden ? 'nav-hidden' : ''}">
+    ${viewSidebarLocked()}
+    <main class="main">
+      ${topbar('<span class="crumbs__here">Sign in</span>')}
+      <div class="content"><div class="page-wrap"><div class="page-col">
+        <div class="plain-head"><h1>Sign in</h1><p>${LOGIN_SUMMARY}</p></div>
+        <div class="login__card">${card}</div>
+        ${loginFooter(footerNote)}
+      </div></div></div>
+    </main>
+    <div class="shell__scrim" data-action="nav-close"></div>
+  </div>`;
 }
 
 function viewLogin() {
   const denied = UI.route.name === 'denied';
-  return `<div class="login">
-    ${loginHeading()}
-    <div class="login__card">
+  return viewLoginShell(`
       ${UI.loginError ? `<div class="login__error">${UI.loginError}</div>` : ''}
       ${denied ? `<div class="login__error"><b>${MD.esc(UI.route.params.email || 'This account')}</b> isn't on the member list. Ask a team lead to add this address.</div>` : ''}
-      ${UI.chooser ? viewChooser() : `
-      <button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}
-    </div>
-    ${loginFooter('Preview build: sign-in is simulated and data stays in this browser.')}
-  </div>`;
+      ${UI.chooser ? viewChooser() : `<button class="login__google" data-action="login-google">${I.google} Continue with Google</button>`}`,
+    'Preview build: sign-in is simulated and data stays in this browser.');
 }
 
 function viewChooser() {
@@ -6855,6 +6834,7 @@ function render() {
     stopMeaningSearch('home'); stopMeaningSearch('modal');
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
+    syncSidebarInteraction();
     mountLoginCard($('.login__card'));
     return;
   }
@@ -8897,7 +8877,7 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- shell ---- */
-    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; Store.prefs().navHidden = UI.navHidden; Store.persist(); } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
+    case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; if (Store.me()) { Store.prefs().navHidden = UI.navHidden; Store.persist(); } } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
     case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); break;
     case 'sec-toggle': {
       if (ev.target.closest('[data-action="new-page"]')) break;
@@ -9979,6 +9959,13 @@ document.addEventListener('keydown', (ev) => {
     const first = controls[0], last = controls[controls.length - 1];
     if (ev.shiftKey && (document.activeElement === first || !sidebar.contains(document.activeElement))) { ev.preventDefault(); last?.focus(); }
     else if (!ev.shiftKey && (document.activeElement === last || !sidebar.contains(document.activeElement))) { ev.preventDefault(); first?.focus(); }
+    return;
+  }
+
+  // Signed out: the frame is on screen but its shortcuts are not. Only the
+  // mobile drawer answers Escape.
+  if (!Store.me()) {
+    if (ev.key === 'Escape' && UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); }
     return;
   }
 

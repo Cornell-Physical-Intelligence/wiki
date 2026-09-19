@@ -237,28 +237,6 @@ label > .dd { width: 100%; }
    Login — mirrors the site's hero: emptiness, wordmark, letterspaced caps.
    ------------------------------------------------------------------------- */
 
-.login {
-  height: 100dvh; display: flex; flex-direction: column;
-  align-items: center; justify-content: flex-start;
-  padding: 24px; overflow-y: auto;
-}
-.login > :first-child { margin-top: auto; }
-.login > :last-child { margin-bottom: auto; }
-
-.login__wordmark {
-  font-family: var(--font-display); font-weight: 700;
-  font-size: clamp(40px, 7vw, 64px); line-height: 1.05;
-  letter-spacing: 0.01em; user-select: none; text-align: center;
-  margin: 0;
-}
-
-.login__sub {
-  margin: 14px 0 0;
-  font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(9px, 1vw, 12px); letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--fg); text-align: center; user-select: none;
-}
-
 .login__card {
   position: relative;
   width: min(400px, 92vw);
@@ -324,25 +302,14 @@ label > .dd { width: 100%; }
 .login__google:hover { background: var(--hover); }
 .login__google svg { width: 18px; height: 18px; flex: none; }
 
-.login__hint { font-size: 12.5px; color: var(--muted); text-align: center; margin: 0; }
-
-.login__rule {
-  display: flex; align-items: center; gap: 12px;
-  color: var(--faint); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-  font-family: var(--font-label); user-select: none;
-}
-.login__rule::before, .login__rule::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
-
-.login__invite { display: flex; gap: 8px; }
-.login__invite .text-input { font-family: var(--font-mono); letter-spacing: 0.06em; }
-
-.login__foot {
-  margin-top: clamp(40px, 8vh, 72px);
-  font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; line-height: 1.7;
-  color: var(--faint); text-align: center; user-select: none;
-}
-.login__foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
-.login__foot a:hover { color: var(--fg); }
+/* Signed-out frame: the same shell with the members-only controls locked. */
+.sidebar__search:disabled { opacity: 0.55; pointer-events: none; }
+.navlink--locked { opacity: 0.55; cursor: default; }
+.navlink--locked:hover { background: transparent; color: var(--muted); }
+.tree-section--locked .tree-section__head--static { cursor: default; }
+.sidebar__user--anon { cursor: default; }
+.sidebar__user--anon:hover { background: transparent; }
+.avatar--anon { background: transparent; border: 1px dashed var(--rule); }
 
 .login__error {
   border: 1px solid var(--bad); border-radius: var(--radius);
@@ -1667,25 +1634,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .video-embed__ext:hover { background: #fff; color: #111; }
 .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 @media print { .video-embed { display: none; } }
-
-
-/* Landing: the team site's homepage hero, verbatim. The Voronoi membrane web
-   is bounded by the CUPI letterforms; the caption is the site's Times caption. */
-.login__title { margin: 0; line-height: 0; display: flex; justify-content: center; user-select: none; width: 100%; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.login__caption {
-  margin: 8px 0 0; color: var(--fg);
-  font-family: 'Times New Roman', Times, serif;
-  font-size: clamp(8px, 0.9vw, 12px); letter-spacing: 0.22em;
-  text-transform: uppercase; text-align: center;
-  pointer-events: none;
-}
-.login__summary {
-  margin: 18px 0 10px; max-width: 52ch; text-align: center; text-wrap: balance;
-  font-size: 15px; line-height: 1.55; color: var(--muted);
-}
-
-.login__welcome { margin: 0; text-align: center; font-size: 14px; color: var(--fg); text-wrap: balance; }
 
 
 /* Email panel: the manual path lives behind a quiet disclosure. */

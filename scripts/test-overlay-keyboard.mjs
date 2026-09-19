@@ -52,7 +52,7 @@ function fixture() {
     getBoundingClientRect() { return this.rect || { left: 30, top: 25, bottom: 45 }; }
   }
   document.body = new Node('body'); document.body.connect(true); document.activeElement = document.body;
-  const context = vm.createContext({ document, window: { addEventListener() {}, removeEventListener() {} }, UI: { modal: null, editor: null, menu: null },
+  const context = vm.createContext({ Store: { me: () => ({ email: 'member@example.com' }), isAdmin: () => false }, document, window: { addEventListener() {}, removeEventListener() {} }, UI: { modal: null, editor: null, menu: null },
     innerWidth: 800, innerHeight: 600,
     $: (selector) => document.querySelector(selector), $$: (selector) => document.querySelectorAll(selector),
     setTimeout(fn) { timers.push(fn); }, render() {}, nav() {}, route() {},
