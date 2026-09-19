@@ -1780,6 +1780,8 @@ function render() {
     stopMeaningSearch('home'); stopMeaningSearch('modal');
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
+    const vt = $('.login .vt-title');
+    if (vt) mountHeroTitle(vt);
     mountLoginCard($('.login__card'));
     return;
   }
@@ -1856,6 +1858,7 @@ function render() {
   syncAiUsage();
   $$('.cad-embed').forEach(mountCadViewer);
   mountTableSort();
+  { const vt = $('.login .vt-title'); if (vt) mountHeroTitle(vt); }
   if (typeof REMOTE !== 'undefined' && r.name === 'integrations' && !UI.editor && UI.resendDomains === undefined && Store.isAdmin()) {
     const es = Store.emailSettings();
     if (es.oauthConnected || es.keySet || es.envKeySet) {
