@@ -509,9 +509,11 @@ label > .dd { width: 100%; }
 .sidebar__user-text { flex: 1; min-width: 0; }
 .sidebar__user-name { display: block; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar__user-mail { display: block; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar__utilities { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; width: 100%; }
-.sidebar__utilities .icon-btn { width: 100%; height: 40px; }
-.sidebar__utilities .icon-btn::after { inset: 0; }
+/* Account row: the account card fills the row; the Settings gear sits at its
+   right and opens the wiki-level menu (activity, health, members, trash…). */
+.sidebar__account { display: flex; align-items: center; gap: 2px; }
+.sidebar__account .sidebar__user { width: auto; flex: 1; }
+.sidebar__settings { width: 36px; height: 36px; flex: none; }
 
 /* ---------------------------------------------------------------------------
    Main column + glass topbar
@@ -5492,6 +5494,7 @@ Object.assign(I, {
   link: lucide('wikilink', 1.8),
   x: lucide('x', 2),
   help: lucide('help', 1.8),
+  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
   mail: lucide('mail', 1.8),
   send: lucide('send', 1.8),
   copy: lucide('copy', 1.8),
@@ -5586,7 +5589,10 @@ function nav(hash) { if (UI.editor?.saving) return; location.hash = hash; }
 function route() {
   const { seg, params } = parseHash();
   const me = Store.me();
-  const name = seg[0] || (me ? 'home' : 'login');
+  // "Applications" is the UI name for the intake list; the route stays
+  // "interest" internally (API, store, tests) and the old hash keeps working.
+  const raw = seg[0] || (me ? 'home' : 'login');
+  const name = raw === 'applications' ? 'interest' : raw;
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
   const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
@@ -5722,9 +5728,7 @@ function viewSidebar() {
     </button>
     <nav class="sidebar__nav">
       <a class="navlink ${r.name === 'home' ? 'active' : ''}" href="#/home">${I.home} Home</a>
-      <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity">${I.clock} Activity</a>
-      <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
-      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
+      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/applications" title="Club applications, admins only">${I.mail} Applications</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
@@ -5734,19 +5738,19 @@ function viewSidebar() {
       </div></div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
     </div>
-    <div class="sidebar__foot">
+    <div class="sidebar__foot"><div class="sidebar__account">
       <button class="sidebar__user" data-action="user-menu" aria-label="Account menu">
         <span class="avatar">${Store.initials(me.email)}</span>
         <span class="sidebar__user-text"><span class="sidebar__user-name" title="${MD.esc(me.name)}">${MD.esc(me.name)}</span><span class="sidebar__user-mail" title="${MD.esc(me.email)}">${MD.esc(me.email)}</span></span>
       </button>
-      <div class="sidebar__utilities">
-        ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-        <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
-        <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
-      </div>
-    </div>
+      <button class="icon-btn sidebar__settings ${SETTINGS_ROUTES.includes(r.name) ? 'active' : ''}" data-action="settings-menu" aria-label="Settings" title="Settings" aria-haspopup="menu" aria-expanded="false">${I.settings}</button>
+    </div></div>
   </aside>`;
 }
+
+// Routes reached from the Settings menu (the gear beside the account card):
+// everything about the wiki itself rather than its pages.
+const SETTINGS_ROUTES = ['activity', 'health', 'admin', 'trash'];
 
 function topbar(crumbHtml, right) {
   return `<header class="topbar">
@@ -6998,7 +7002,7 @@ function viewActivity() {
 /* --------------------- interest list (self-contained) ---------------------
    The client half of lib/interest.js: its own route, its own endpoint, its
    own cache (UI.interest). Nothing here touches the shared wiki state, and
-   any page can link it with [Interest list](#/interest). */
+   any page can link it with [Applications](#/applications). */
 
 const INTEREST_ICONS = {
   flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V3m0 1c5-4 11 4 16 0v12c-5 4-11-4-16 0"/></svg>',
@@ -7251,10 +7255,10 @@ function interestPendingModalHtml(id) {
 }
 
 function viewInterest() {
-  const shell = (inner) => topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
+  const shell = (inner) => topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Applications</span>`) +
     `<div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">${inner}</div></div></div>`;
   if (!Store.isAdmin()) {
-    return shell(`<div class="empty">${I.mail}<b>Only admins can read the interest list</b>
+    return shell(`<div class="empty">${I.mail}<b>Only admins can read applications</b>
       <p>Apply-page submissions carry personal info, so they stay with team leads.</p>
       <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a></div>`);
   }
@@ -7287,7 +7291,7 @@ function viewInterest() {
         <a class="btn btn--sm btn--icon" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>CSV${INTEREST_ICONS.download}</a>
       </div>`).join('')}
     </div>` : '';
-  const head = `<div class="plain-head"><h1>Interest list</h1>
+  const head = `<div class="plain-head"><h1>Applications</h1>
     </div>`;
   if (st.loading) return shell(head + '<p class="sheet__note">Loading…</p>');
   if (st.error) return shell(head + `<p class="sheet__note">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);
@@ -9467,6 +9471,13 @@ document.addEventListener('paste', (ev) => {
   if (files.length) { ev.preventDefault(); bugAddFiles(files); }
 });
 
+function openBugReport() {
+  if (!UI.bugDraft) UI.bugDraft = { title: '', body: '', images: [] };
+  UI.bugDraft.error = null;
+  UI.modal = { kind: 'bug' };
+  render();
+}
+
 async function submitBug() {
   const d = UI.bugDraft;
   if (!d || d.sending) return;
@@ -9950,7 +9961,7 @@ function archiveInterestList() {
   const year = new Date().getFullYear();
   const season = new Date().getMonth() >= 6 ? 'Fall' : 'Spring';
   UI.modal = {
-    kind: 'confirm', title: 'Archive the interest list?',
+    kind: 'confirm', title: 'Archive these applications?',
     text: `Save all <b>${n}</b> submissions, comments, flags, and attachments in an archive for this recruiting cycle.`,
     confirm: 'Archive list',
     field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
@@ -10006,9 +10017,17 @@ document.addEventListener('click', async (ev) => {
       el.setAttribute('aria-label', (i >= 0 ? 'Collapse ' : 'Expand ') + (SECTIONS.find((s) => s.id === el.dataset.sec)?.name || 'section'));
       break;
     }
+    case 'settings-menu': stop(); openMenu([
+      { icon: I.clock, label: 'Activity', run: () => nav('#/activity') },
+      { icon: I.shield, label: 'Wiki health', run: () => nav('#/health') },
+      ...(Store.isAdmin() ? [{ icon: I.users, label: 'Members & access', run: () => nav('#/admin') }] : []),
+      { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
+      '-',
+      { icon: I.bug, label: 'Report a bug', run: openBugReport },
+      { icon: I.help, label: 'Keyboard shortcuts', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
+    ], el); break;
     case 'user-menu': stop(); openMenu([
       { icon: I.edit, label: 'Edit profile', run: () => { UI.modal = { kind: 'profile' }; render(); } },
-      { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
         const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
         try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
@@ -10167,13 +10186,7 @@ document.addEventListener('click', async (ev) => {
     case 'help-menu': stop(); UI.modal = { kind: 'shortcuts' }; render(); break;
 
     /* ---- bug reports ---- */
-    case 'bug-open': stop(); {
-      if (!UI.bugDraft) UI.bugDraft = { title: '', body: '', images: [] };
-      UI.bugDraft.error = null;
-      UI.modal = { kind: 'bug' };
-      render();
-      break;
-    }
+    case 'bug-open': stop(); openBugReport(); break;
     case 'bug-done': stop(); UI.bugDraft = null; closeModal(); break;
     case 'bug-remove-img': stop(); { bugSyncFields(); UI.bugDraft.images.splice(+el.dataset.i, 1); render(); } break;
     case 'bug-submit': stop(); submitBug(); break;

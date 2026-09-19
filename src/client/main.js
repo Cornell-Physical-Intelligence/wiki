@@ -133,6 +133,13 @@ document.addEventListener('paste', (ev) => {
   if (files.length) { ev.preventDefault(); bugAddFiles(files); }
 });
 
+function openBugReport() {
+  if (!UI.bugDraft) UI.bugDraft = { title: '', body: '', images: [] };
+  UI.bugDraft.error = null;
+  UI.modal = { kind: 'bug' };
+  render();
+}
+
 async function submitBug() {
   const d = UI.bugDraft;
   if (!d || d.sending) return;
@@ -616,7 +623,7 @@ function archiveInterestList() {
   const year = new Date().getFullYear();
   const season = new Date().getMonth() >= 6 ? 'Fall' : 'Spring';
   UI.modal = {
-    kind: 'confirm', title: 'Archive the interest list?',
+    kind: 'confirm', title: 'Archive these applications?',
     text: `Save all <b>${n}</b> submissions, comments, flags, and attachments in an archive for this recruiting cycle.`,
     confirm: 'Archive list',
     field: { label: 'Archive name', value: `${season} ${year} recruiting`, placeholder: 'e.g. Fall 2026 recruiting', maxlength: 80 },
@@ -672,9 +679,17 @@ document.addEventListener('click', async (ev) => {
       el.setAttribute('aria-label', (i >= 0 ? 'Collapse ' : 'Expand ') + (SECTIONS.find((s) => s.id === el.dataset.sec)?.name || 'section'));
       break;
     }
+    case 'settings-menu': stop(); openMenu([
+      { icon: I.clock, label: 'Activity', run: () => nav('#/activity') },
+      { icon: I.shield, label: 'Wiki health', run: () => nav('#/health') },
+      ...(Store.isAdmin() ? [{ icon: I.users, label: 'Members & access', run: () => nav('#/admin') }] : []),
+      { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
+      '-',
+      { icon: I.bug, label: 'Report a bug', run: openBugReport },
+      { icon: I.help, label: 'Keyboard shortcuts', run: () => { UI.modal = { kind: 'shortcuts' }; render(); } },
+    ], el); break;
     case 'user-menu': stop(); openMenu([
       { icon: I.edit, label: 'Edit profile', run: () => { UI.modal = { kind: 'profile' }; render(); } },
-      { icon: I.trash, label: 'Trash', run: () => nav('#/trash') },
       { icon: I.copy, label: 'Export wiki as Markdown', run: async () => {
         const doc = Store.s.pages.map((p) => `# ${p.title}\n\n${p.body}`).join('\n\n---\n\n');
         try { await navigator.clipboard.writeText(doc); toast(`Copied ${Store.s.pages.length} pages as Markdown`); }
@@ -833,13 +848,7 @@ document.addEventListener('click', async (ev) => {
     case 'help-menu': stop(); UI.modal = { kind: 'shortcuts' }; render(); break;
 
     /* ---- bug reports ---- */
-    case 'bug-open': stop(); {
-      if (!UI.bugDraft) UI.bugDraft = { title: '', body: '', images: [] };
-      UI.bugDraft.error = null;
-      UI.modal = { kind: 'bug' };
-      render();
-      break;
-    }
+    case 'bug-open': stop(); openBugReport(); break;
     case 'bug-done': stop(); UI.bugDraft = null; closeModal(); break;
     case 'bug-remove-img': stop(); { bugSyncFields(); UI.bugDraft.images.splice(+el.dataset.i, 1); render(); } break;
     case 'bug-submit': stop(); submitBug(); break;

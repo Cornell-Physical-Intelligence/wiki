@@ -9,6 +9,7 @@ Internal knowledge base for Cornell Physical Intelligence (CUPI), a Cornell Univ
 - **Search** automatically searches page previews for the task you describe; save previews suggest change summaries and flag concrete dependencies in linked pages
 - Admin intake review with shared flags, attributed comments, direct row deletion, and archives that preserve reviews
 - Comments, activity feed, per-page **watching with an inbox**, starred pages, **wiki health** (broken links / orphans / stale pages)
+- Sidebar: Home, Applications (admins), New page, then the page tree. Activity, Wiki health, Members & access, Trash, bug reports, and keyboard shortcuts live in the **Settings** menu behind the gear beside the account card
 - **Google OAuth restricted to cornell.edu** + an admin-managed member allowlist with emailed invite codes
 - Matches the design language of [cornellphysicalintelligence.com](https://cornellphysicalintelligence.com)
 
@@ -36,7 +37,7 @@ No framework. The client is one self-contained HTML file (`scripts/build.mjs` as
 - Multipart page uploads retain their parts until the completed file is verified. A stable file ID makes finish retries reuse the same file after a lost response; cleanup failures do not invalidate a successful upload.
 - `wiki_ai_usage` holds shared OpenAI spending reservations, measured token costs, and request counters separately from content. Include it in backups and retain it across redeployments and rollbacks; deleting or restoring an older ledger can reset spending protection. Production uses atomic versioned updates across workers; local development uses `.devaiusage.json`.
 
-The public Interest form uses a separate private Blob receipt journal before database processing. Its recovery path and browser draft protections are independent of wiki preference synchronization.
+The public apply form feeds **Applications** (`#/applications`; the older `#/interest` hash still resolves), the admin-only list that will grow into the club's full application process: applications, interviews, and decisions. The API routes, storage, and tests keep the `interest` name. Submissions pass through a separate private Blob receipt journal before database processing. Its recovery path and browser draft protections are independent of wiki preference synchronization.
 
 ## Deploy (≈10 minutes, one time)
 

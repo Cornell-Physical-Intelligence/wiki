@@ -801,7 +801,7 @@ function viewActivity() {
 /* --------------------- interest list (self-contained) ---------------------
    The client half of lib/interest.js: its own route, its own endpoint, its
    own cache (UI.interest). Nothing here touches the shared wiki state, and
-   any page can link it with [Interest list](#/interest). */
+   any page can link it with [Applications](#/applications). */
 
 const INTEREST_ICONS = {
   flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V3m0 1c5-4 11 4 16 0v12c-5 4-11-4-16 0"/></svg>',
@@ -1054,10 +1054,10 @@ function interestPendingModalHtml(id) {
 }
 
 function viewInterest() {
-  const shell = (inner) => topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Interest list</span>`) +
+  const shell = (inner) => topbar(`<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Applications</span>`) +
     `<div class="content"><div class="page-wrap page-wrap--wide"><div class="page-col page-col--wide">${inner}</div></div></div>`;
   if (!Store.isAdmin()) {
-    return shell(`<div class="empty">${I.mail}<b>Only admins can read the interest list</b>
+    return shell(`<div class="empty">${I.mail}<b>Only admins can read applications</b>
       <p>Apply-page submissions carry personal info, so they stay with team leads.</p>
       <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a></div>`);
   }
@@ -1090,7 +1090,7 @@ function viewInterest() {
         <a class="btn btn--sm btn--icon" href="/api/interest/archives/${MD.esc(a.id)}.csv" download>CSV${INTEREST_ICONS.download}</a>
       </div>`).join('')}
     </div>` : '';
-  const head = `<div class="plain-head"><h1>Interest list</h1>
+  const head = `<div class="plain-head"><h1>Applications</h1>
     </div>`;
   if (st.loading) return shell(head + '<p class="sheet__note">Loading…</p>');
   if (st.error) return shell(head + `<p class="sheet__note">Could not load: ${MD.esc(st.error)}. <button class="linklike" data-action="interest-refresh">Retry</button></p>`);

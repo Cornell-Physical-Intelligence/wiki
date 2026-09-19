@@ -62,6 +62,7 @@ Object.assign(I, {
   link: lucide('wikilink', 1.8),
   x: lucide('x', 2),
   help: lucide('help', 1.8),
+  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
   mail: lucide('mail', 1.8),
   send: lucide('send', 1.8),
   copy: lucide('copy', 1.8),
@@ -156,7 +157,10 @@ function nav(hash) { if (UI.editor?.saving) return; location.hash = hash; }
 function route() {
   const { seg, params } = parseHash();
   const me = Store.me();
-  const name = seg[0] || (me ? 'home' : 'login');
+  // "Applications" is the UI name for the intake list; the route stays
+  // "interest" internally (API, store, tests) and the old hash keeps working.
+  const raw = seg[0] || (me ? 'home' : 'login');
+  const name = raw === 'applications' ? 'interest' : raw;
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
   const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
@@ -292,9 +296,7 @@ function viewSidebar() {
     </button>
     <nav class="sidebar__nav">
       <a class="navlink ${r.name === 'home' ? 'active' : ''}" href="#/home">${I.home} Home</a>
-      <a class="navlink ${r.name === 'activity' ? 'active' : ''}" href="#/activity">${I.clock} Activity</a>
-      <a class="navlink ${r.name === 'health' ? 'active' : ''}" href="#/health" title="Broken links, orphans, and stale pages">${I.shield} Wiki health</a>
-      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/interest" title="Apply-page submissions, admins only">${I.mail} Interest</a>` : ''}
+      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/applications" title="Club applications, admins only">${I.mail} Applications</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
@@ -304,19 +306,19 @@ function viewSidebar() {
       </div></div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
     </div>
-    <div class="sidebar__foot">
+    <div class="sidebar__foot"><div class="sidebar__account">
       <button class="sidebar__user" data-action="user-menu" aria-label="Account menu">
         <span class="avatar">${Store.initials(me.email)}</span>
         <span class="sidebar__user-text"><span class="sidebar__user-name" title="${MD.esc(me.name)}">${MD.esc(me.name)}</span><span class="sidebar__user-mail" title="${MD.esc(me.email)}">${MD.esc(me.email)}</span></span>
       </button>
-      <div class="sidebar__utilities">
-        ${me.role === 'admin' ? `<a class="icon-btn ${r.name === 'admin' ? 'active' : ''}" href="#/admin" aria-label="Members and access" title="Members &amp; access">${I.users}</a>` : ''}
-        <button class="icon-btn" data-action="bug-open" aria-label="Report a bug" title="Report a bug">${I.bug}</button>
-        <button class="icon-btn" data-action="help-menu" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">${I.help}</button>
-      </div>
-    </div>
+      <button class="icon-btn sidebar__settings ${SETTINGS_ROUTES.includes(r.name) ? 'active' : ''}" data-action="settings-menu" aria-label="Settings" title="Settings" aria-haspopup="menu" aria-expanded="false">${I.settings}</button>
+    </div></div>
   </aside>`;
 }
+
+// Routes reached from the Settings menu (the gear beside the account card):
+// everything about the wiki itself rather than its pages.
+const SETTINGS_ROUTES = ['activity', 'health', 'admin', 'trash'];
 
 function topbar(crumbHtml, right) {
   return `<header class="topbar">
