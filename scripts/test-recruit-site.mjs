@@ -184,6 +184,17 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal((await recruit('PATCH', '/recruit/cycles/cy-interest', { version: v3, capacity: 1 })).status, 200);
   const full = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Second', email: 'second@cornell.edu', availability: 'Thu' } });
   assert.equal(full.status, 409); assert.match(full.data.error, /full/);
-  console.log('PASS: per-section CSV with formula-safe cells, a closed interest form refuses the website, capacity applies per section');
+  /* ---- people: one row per email across the forms ---- */
+  const people = await recruit('GET', '/recruit/cycles/cy-interest/people');
+  assert.equal(people.status, 200, people.text);
+  const cam = people.data.rows.find((p) => p.email === 'cam@cornell.edu');
+  assert.ok(cam?.sections.coffee && cam?.sections.interest, 'a person groups the forms they sent');
+  assert.equal(cam.sections.coffee.section, 'coffee'); assert.ok(cam.latest, 'the latest submission is named');
+  assert.equal(people.data.counts.people, people.data.rows.length);
+  assert.ok(people.data.counts.bySection.coffee >= 1 && people.data.counts.bySection.interest >= 1, 'counts cover every form');
+  assert.deepEqual(people.data.rows.map((p) => p.last), [...people.data.rows.map((p) => p.last)].sort((a, b) => b - a), 'newest activity first');
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?q=cam')).data.rows.length, 1, 'search by name or email');
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people', {}, plain)).status, 403, 'members without a role cannot list people');
+  console.log('PASS: per-section CSV with formula-safe cells, a closed interest form refuses the website, capacity applies per section, people group across forms');
   console.log('PASS: site module — public read, per-section submit, settings, csv');
 }

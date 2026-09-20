@@ -40,6 +40,24 @@
   .sheet.sheet--recruit th[data-col="review"], .sheet.sheet--recruit td[data-col="review"] { display: table-cell; }
   .sheet.sheet--recruit th[data-col="stage"] { width: 96px; }
 }
+/* People: a cell per form, each a pill that opens that submission. */
+.sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 132px; }
+.sheet.sheet--people th[data-col="last"] { width: 96px; }
+.rc-sent {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px 0 7px;
+  border: 1px solid var(--hairline); border-radius: 999px; font-size: 12.5px; color: var(--fg); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rc-sent:hover { background: var(--hover); border-color: var(--rule); }
+.rc-sent > svg { width: 12px; height: 12px; color: var(--good); flex: none; }
+.rc-sent__flag svg { width: 12px; height: 12px; color: var(--accent); display: block; }
+.rc-sent__n { font-size: 11px; color: var(--faint); }
+@container (max-width: 36em) {
+  .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people td[data-col="interest"],
+  .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people td[data-col="coffee"],
+  .sheet.sheet--people th[data-col="application"], .sheet.sheet--people td[data-col="application"] { display: table-cell; }
+  .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 92px; }
+}
 /* Settings forms: one column of labelled fields, actions on a footer rail. */
 .rc-settings .admin-block { max-width: 640px; }
 .rc-form { display: flex; flex-direction: column; gap: 14px; }
@@ -127,7 +145,19 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .fe-q:focus-within { border-color: var(--rule); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px rgba(0, 0, 0, 0.06); }
-.fe-q__head { display: flex; align-items: flex-start; gap: 14px; padding-left: 12px; }
+.fe-q__head { display: flex; align-items: flex-start; gap: 10px; }
+.fe-q__grip {
+  width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--faint); border-radius: var(--card-inner); cursor: grab; touch-action: none;
+}
+.fe-q__grip svg { width: 16px; height: 16px; }
+.fe-q__grip:hover, .fe-q__grip:focus-visible { color: var(--fg); background: var(--hover); outline: none; }
+.fe-q__grip:focus-visible { box-shadow: inset 0 0 0 2px var(--fg); }
+.fe-q.is-dragging { position: relative; z-index: 3; border-color: var(--rule); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 18px 40px rgba(0, 0, 0, 0.14); transition: box-shadow 0.15s ease; }
+.fe-q.is-dragging .fe-q__grip { cursor: grabbing; }
+.fe__list.is-sorting .fe-q { transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 0.15s ease; }
+.fe__list.is-sorting .fe-q.is-dragging { transition: box-shadow 0.15s ease; }
+@media (prefers-reduced-motion: reduce) { .fe__list.is-sorting .fe-q { transition: none; } }
 .fe-q__label { flex: 1; min-width: 0; height: 28px; padding: 0; font: inherit; font-size: 15.5px; font-weight: 500; }
 .fe-q__type { flex: none; }
 .fe-q .dd.fe-q__type { height: 28px; border-radius: var(--card-inner); }
@@ -157,8 +187,6 @@
 .fe-q__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
 .fe-q__tools .icon-btn { width: 28px; height: 28px; border-radius: var(--card-inner); }
 .fe-q__tools .icon-btn svg { width: 15px; height: 15px; }
-.fe-q__tools .icon-btn[disabled] { opacity: 0.25; pointer-events: none; }
-.fe-q__up svg { transform: rotate(180deg); }
 .fe-q__fixed { font-size: 12px; color: var(--faint); padding: 0 6px; }
 .fe-switch { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
 .fe-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
@@ -175,8 +203,7 @@
 .fe__status--dirty { color: var(--muted); }
 .fe__error { color: var(--bad); }
 @media (max-width: 640px) {
-  .fe-q__head, .fe-q__foot { padding-left: 6px; }
-  .fe-q__foot { margin-left: 6px; }
+  .fe-q__foot { padding-left: 6px; margin-left: 6px; }
   .fe-q__help { width: calc(100% - 12px); margin: 2px 6px 0; }
   .fe-q__answer { margin: 12px 6px 10px; }
   .fe__title { font-size: 24px; }

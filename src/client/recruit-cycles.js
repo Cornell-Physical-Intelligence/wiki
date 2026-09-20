@@ -306,7 +306,7 @@ const RECRUIT_SETTINGS = [
     id: 'cycle', label: 'Cycle', when: (c, role) => recruitCan('lead'),
     view: (cycle) => `<form class="rc-form" data-action="recruit-settings-cycle">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Term', dd('recruit-term', recruitTermOptions(cycle.term), cycle.term || 'Rolling'))}
+      ${recruitFormField('Term', dd('recruit-term', recruitTermOptions(cycle.term), cycle.term || recruitDefaultTerm()))}
       ${recruitFormField('Opens', `<input class="text-input" name="opensAt" value="${MD.esc(recruitDateInput(cycle.opensAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
       ${recruitFormField('Closes', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
       ${recruitCan('admin') ? recruitFormField('Capacity', `<input class="text-input" name="capacity" value="${MD.esc(String(cycle.doc?.capacity || 0))}" inputmode="numeric" maxlength="6" autocomplete="off">`, '0 = unlimited') : ''}

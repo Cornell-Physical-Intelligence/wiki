@@ -27,6 +27,7 @@ const recruitTypeLabel = (type) => (RECRUIT_QUESTION_TYPES.find((t) => t.value =
 const recruitIsChoice = (type) => type === 'single' || type === 'multi';
 
 const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
+const RECRUIT_GRIP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
 
 // The form view of a section tab (?edit=1) is for leads.
 const recruitEditingForm = () => recruitCan('lead') && UI.route?.params?.edit === '1';
@@ -75,10 +76,15 @@ function recruitPaintModeBar(cycle, key, editing) {
 
 /* ------------------------------- model ----------------------------------- */
 
+let recruitQuestionSeq = 0;
+// Cards keep an identity across repaints so a move can be animated.
+const recruitQuestionId = () => `q${++recruitQuestionSeq}`;
+
 function recruitFormModel(sec, key, landing = null) {
   const fixed = new Set(RECRUIT_FIXED_KEYS[key] || ['name', 'email']);
   const questions = (Array.isArray(sec?.form?.questions) ? sec.form.questions : []).map((q) => {
     const out = {
+      _id: recruitQuestionId(),
       key: q.key || '', type: RECRUIT_QUESTION_TYPES.some((t) => t.value === q.type) ? q.type : 'short',
       label: q.label || '', help: q.help || '', required: q.required === true, fixed: fixed.has(q.key),
     };
@@ -140,8 +146,9 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
   const typeControl = q.fixed
     ? `<span class="fe-q__type fe-q__type--fixed" title="The website needs this question as it is">${MD.esc(recruitTypeLabel(q.type))}</span>`
     : dd('recruit-fe-type', RECRUIT_QUESTION_TYPES, q.type, { small: true }).replace('data-m="recruit-fe-type"', `data-m="recruit-fe-type" data-i="${i}" aria-label="Answer type for ${MD.esc(name)}"`).replace('class="dd dd--sm"', 'class="dd dd--sm fe-q__type"');
-  return `<li class="fe-q" data-i="${i}">
+  return `<li class="fe-q" data-i="${i}" data-qid="${MD.esc(q._id || '')}">
     <div class="fe-q__head">
+      <button type="button" class="fe-q__grip" data-action="recruit-fe-grip" data-i="${i}" aria-label="Move ${MD.esc(name)}: drag, or press the arrow keys" title="Drag to reorder">${RECRUIT_GRIP}</button>
       <input class="fe-q__label" data-m="recruit-fe-label" data-i="${i}" value="${MD.esc(q.label)}" placeholder="Question" maxlength="120" aria-label="Question ${n}" autocomplete="off">
       ${typeControl}
     </div>
@@ -150,8 +157,6 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
     <div class="fe-q__foot">
       <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
       <span class="fe-q__tools">
-        <button type="button" class="icon-btn fe-q__up" data-action="recruit-fe-up" data-i="${i}" aria-label="Move ${MD.esc(name)} up" ${i === 0 ? 'disabled' : ''}>${I.chev}</button>
-        <button type="button" class="icon-btn" data-action="recruit-fe-down" data-i="${i}" aria-label="Move ${MD.esc(name)} down" ${i >= total - 1 ? 'disabled' : ''}>${I.chev}</button>
         ${q.fixed ? '<span class="fe-q__fixed" title="The website needs this question">Fixed</span>' : `<button type="button" class="icon-btn" data-action="recruit-fe-remove" data-i="${i}" aria-label="Remove ${MD.esc(name)}">${I.x}</button>`}
       </span>
     </div>
@@ -194,11 +199,111 @@ function recruitFeCtx(el) {
   return { cycle, key, fe, host, q, i: Number(el?.dataset?.i), j: Number(el?.dataset?.j) };
 }
 
-// Structural changes repaint the list; typing repaints only the footer.
+// Structural changes repaint the list and animate every card from where it
+// was to where it is; typing repaints only the footer.
 function recruitPaintForm(c, { list = true } = {}) {
   if (!c?.host) return;
-  if (list) recruitRepaint($('[data-rc="fe-list"]', c.host), recruitQuestionCardsHtml(c.fe, c.cycle));
+  if (list) {
+    const listEl = $('[data-rc="fe-list"]', c.host);
+    const before = recruitCardTops(listEl);
+    recruitRepaint(listEl, recruitQuestionCardsHtml(c.fe, c.cycle));
+    recruitFlip(listEl, before);
+  }
   recruitRepaint($('[data-rc="fe-foot"]', c.host), recruitFormFootHtml(c.fe));
+}
+
+const recruitCards = (listEl) => (listEl ? [...listEl.querySelectorAll('.fe-q')].filter((el) => el.parentElement === listEl) : []);
+const recruitMeasurable = (el) => typeof el?.getBoundingClientRect === 'function';
+
+function recruitCardTops(listEl) {
+  const tops = new Map();
+  for (const el of recruitCards(listEl)) if (recruitMeasurable(el)) tops.set(el.dataset.qid, el.getBoundingClientRect().top);
+  return tops;
+}
+
+const recruitReducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// FLIP: cards start where they were and glide to where they are now.
+function recruitFlip(listEl, before) {
+  if (!before.size || recruitReducedMotion()) return;
+  const moved = [];
+  for (const el of recruitCards(listEl)) {
+    if (!recruitMeasurable(el) || !before.has(el.dataset.qid)) continue;
+    const dy = before.get(el.dataset.qid) - el.getBoundingClientRect().top;
+    if (Math.abs(dy) < 0.5) continue;
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${dy}px)`;
+    moved.push(el);
+  }
+  if (!moved.length) return;
+  void listEl.offsetHeight;
+  for (const el of moved) { el.style.transition = 'transform 220ms cubic-bezier(0.2, 0, 0, 1)'; el.style.transform = ''; }
+  setTimeout(() => { for (const el of moved) { el.style.transition = ''; } }, 260);
+}
+
+// Dragging a card by its grip: the card follows the pointer, the others slide
+// out of its way, and the drop repaints the list in the new order with no
+// jump because everything is already where it will be.
+function recruitDragStart(ev, grip) {
+  if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+  const card = grip.closest('.fe-q');
+  const listEl = card?.parentElement;
+  const c = recruitFeCtx(grip);
+  if (!card || !listEl || !c?.q || !recruitMeasurable(card)) return;
+  ev.preventDefault();
+  const cards = recruitCards(listEl);
+  const from = cards.indexOf(card);
+  const rects = cards.map((el) => el.getBoundingClientRect());
+  const gap = cards.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 12;
+  const h = rects[from].height + gap;
+  const startY = ev.clientY;
+  const others = cards.map((_, j) => j).filter((j) => j !== from);
+  let to = from;
+  card.classList.add('is-dragging');
+  listEl.classList.add('is-sorting');
+  try { grip.setPointerCapture?.(ev.pointerId); } catch { /* capture is a nicety */ }
+  const mine = (e) => e.pointerId === undefined || ev.pointerId === undefined || e.pointerId === ev.pointerId;
+  const move = (e) => {
+    if (!mine(e)) return;
+    const dy = e.clientY - startY;
+    card.style.transform = `translateY(${dy}px)`;
+    const centre = rects[from].top + rects[from].height / 2 + dy;
+    to = others.filter((j) => rects[j].top + rects[j].height / 2 < centre).length;
+    for (const j of others) {
+      const shift = j < from ? (j >= to ? h : 0) : (j <= to ? -h : 0);
+      cards[j].style.transform = shift ? `translateY(${shift}px)` : '';
+    }
+  };
+  const end = (e) => {
+    if (e && !mine(e)) return;
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', end);
+    document.removeEventListener('pointercancel', end);
+    card.classList.remove('is-dragging');
+    if (to !== from) {
+      const qs = c.fe.model.questions;
+      const [q] = qs.splice(from, 1);
+      qs.splice(to, 0, q);
+      recruitPaintForm(c);   // measured with the cards where they sit, so only the dragged one settles
+      listEl.classList.remove('is-sorting');
+      $(`.fe-q[data-i="${to}"] .fe-q__grip`, c.host)?.focus({ preventScroll: true });
+    } else {
+      for (const el of cards) el.style.transform = '';
+      setTimeout(() => listEl.classList.remove('is-sorting'), 200);
+    }
+  };
+  // Listened for on the document, so the drag survives the pointer leaving
+  // the grip even where capture is refused.
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+}
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('pointerdown', (ev) => {
+    const grip = typeof ev.target?.closest === 'function' ? ev.target.closest('.fe-q__grip') : null;
+    if (grip) recruitDragStart(ev, grip);
+  });
 }
 
 function recruitPaintAnswer(c) {
@@ -206,6 +311,8 @@ function recruitPaintAnswer(c) {
   if (card && !recruitIsChoice(c.q.type)) card.innerHTML = recruitAnswerPreviewHtml(c.q, c.i);
 }
 
+// Arrow keys on a grip move the card one slot; the list animates the same
+// way a drop does.
 function recruitMoveQuestion(el, delta) {
   const c = recruitFeCtx(el);
   if (!c?.q) return;
@@ -213,7 +320,7 @@ function recruitMoveQuestion(el, delta) {
   if (j < 0 || j >= qs.length) return;
   [qs[c.i], qs[j]] = [qs[j], qs[c.i]];
   recruitPaintForm(c);
-  ($(`[data-action="${delta < 0 ? 'recruit-fe-up' : 'recruit-fe-down'}"][data-i="${j}"]:not([disabled])`, c.host) || $(`[data-action="${delta < 0 ? 'recruit-fe-down' : 'recruit-fe-up'}"][data-i="${j}"]`, c.host))?.focus({ preventScroll: true });
+  $(`.fe-q[data-i="${j}"] .fe-q__grip`, c.host)?.focus({ preventScroll: true });
 }
 
 // What the server stores: keys for new questions come from their labels.
@@ -293,8 +400,7 @@ RECRUIT.register({
       recruitPaintForm(c);
       ($$('[data-m="recruit-fe-label"]', c.host)[Math.min(c.i, c.fe.model.questions.length - 1)] || $('[data-action="recruit-fe-add"]', c.host))?.focus({ preventScroll: true });
     },
-    'recruit-fe-up': (el) => recruitMoveQuestion(el, -1),
-    'recruit-fe-down': (el) => recruitMoveQuestion(el, 1),
+    'recruit-fe-grip': () => {},   // a click on the grip does nothing; dragging and the arrow keys move the card
     'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-open': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.open = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-landing': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.atApply = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
@@ -347,6 +453,13 @@ RECRUIT.register({
       recruitPaintForm(c);
       $(`[data-m="recruit-fe-type"][data-i="${c.i}"]`, c.host)?.focus({ preventScroll: true });
     },
+  },
+  keydown(ev) {
+    const grip = typeof ev.target?.matches === 'function' && ev.target.matches('.fe-q__grip') ? ev.target : null;
+    if (!grip || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return false;
+    ev.preventDefault();
+    recruitMoveQuestion(grip, ev.key === 'ArrowUp' ? -1 : 1);
+    return true;
   },
   reset() {},
 });

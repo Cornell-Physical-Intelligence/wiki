@@ -93,6 +93,7 @@ function recruitListParams(cycle, f, cursor) {
 // Client-side tests apply on top of what the server returned (a page).
 function recruitVisibleRows(cycle = recruitCycleRow()) {
   const st = recruitState();
+  if (UI.route?.params?.sub === 'people' && st.people) return recruitPeopleStepRows();
   const rows = st.apps?.rows || [];
   if (!cycle) return rows;
   const f = recruitFilters(cycle.id);
@@ -140,17 +141,29 @@ async function recruitLoadApps(more = false) {
 // otherwise the row is fetched again so a stale answer never wins.
 function recruitAcceptRow(row) {
   const st = recruitState();
+  if (!row?.id) return false;
+  let accepted = false;
   const apps = st.apps;
-  if (!row?.id || !apps?.byId) return false;
-  const cached = apps.byId[row.id];
-  if (!cached) return false;
-  const next = Number(row.editVersion ?? cached.editVersion ?? 0), cur = Number(cached.editVersion ?? 0);
-  if (next < cur) { recruitRefetchRow(row.id); return false; }
-  const merged = { ...cached, ...row };
-  apps.byId[row.id] = merged;
-  const i = apps.rows.findIndex((r) => r.id === row.id);
-  if (i >= 0) apps.rows[i] = merged;
-  return true;
+  const cached = apps?.byId?.[row.id];
+  if (cached) {
+    const next = Number(row.editVersion ?? cached.editVersion ?? 0), cur = Number(cached.editVersion ?? 0);
+    if (next < cur) { recruitRefetchRow(row.id); return false; }
+    const merged = { ...cached, ...row };
+    apps.byId[row.id] = merged;
+    const i = apps.rows.findIndex((r) => r.id === row.id);
+    if (i >= 0) apps.rows[i] = merged;
+    accepted = true;
+  }
+  const people = st.people;
+  const known = people?.byId?.[row.id];
+  if (known) {
+    const merged = { ...known, ...row };
+    people.byId[row.id] = merged;
+    for (const p of people.rows) for (const k of Object.keys(p.sections || {})) if (p.sections[k]?.id === row.id) p.sections[k] = merged;
+    recruitPaintPeople();
+    accepted = true;
+  }
+  return accepted;
 }
 
 function recruitRefetchRow(id) {
@@ -370,9 +383,120 @@ function recruitSheetHtml(cycle) {
   </div>`;
 }
 
+/* ------------------------------- people ---------------------------------- */
+
+// Everyone in the cycle, one row per email, with a cell per form they sent.
+// Loaded whole (the server caps it), searched in place.
+function recruitLoadPeople() {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  if (!cycle) return;
+  st.people = { key: st.key + ':' + cycle.id, rows: [], byId: {}, counts: null, total: 0, loading: true, error: null, q: st.people?.q || '' };
+  const people = st.people, key = st.key;
+  RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people`)
+    .then((out) => {
+      if (st.key !== key || st.people !== people) return;
+      people.rows = Array.isArray(out.rows) ? out.rows : [];
+      people.byId = {};
+      for (const p of people.rows) for (const r of Object.values(p.sections || {})) if (r?.id) people.byId[r.id] = r;
+      people.counts = out.counts || null;
+      people.total = Number(out.total ?? people.rows.length);
+      people.loading = false;
+      if (!recruitPaintPeople()) renderBackground('recruit');
+    })
+    .catch((e) => {
+      if (st.key !== key || st.people !== people) return;
+      people.loading = false;
+      people.error = recruitError(e);
+      if (!recruitPaintPeople()) renderBackground('recruit');
+    });
+}
+
+function recruitPeopleVisible() {
+  const p = recruitState().people;
+  if (!p) return [];
+  const q = String(p.q || '').trim().toLowerCase();
+  return q ? p.rows.filter((x) => String(x.name || '').toLowerCase().includes(q) || String(x.email || '').includes(q)) : p.rows;
+}
+
+// Previous and Next walk the people: the open submission where it belongs to
+// the person, otherwise their latest one.
+function recruitPeopleStepRows() {
+  const st = recruitState();
+  const openId = UI.modal?.kind === 'recruit-app' ? UI.modal.id : null;
+  return recruitPeopleVisible().map((p) => Object.values(p.sections || {}).find((r) => r?.id === openId) || st.people.byId[p.latest] || Object.values(p.sections || {})[0]).filter(Boolean);
+}
+
+function recruitPeopleCountsLine() {
+  const c = recruitState().people?.counts;
+  if (!c) return '';
+  const by = c.bySection || {};
+  return `${recruitPlural(c.people || 0, 'person', 'people')} · ${Number(by.interest || 0).toLocaleString('en-US')} interest · ${recruitPlural(by.coffee || 0, 'coffee chat')} · ${recruitPlural(by.application || 0, 'application')}`;
+}
+
+function recruitPeopleFootText() {
+  const p = recruitState().people;
+  if (!p || p.loading || p.error) return '';
+  const shown = recruitPeopleVisible().length;
+  return shown === p.rows.length ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.rows.length, 'person', 'people')}`;
+}
+
+function recruitSentCell(r, p) {
+  if (!r) return '<span class="faint">—</span>';
+  const comments = Number(r.comments || 0);
+  const when = new Date(Number(r.ts));
+  return `<button class="rc-sent ${r.flagged ? 'is-flagged' : ''}" data-action="recruit-app-open" data-id="${MD.esc(r.id)}" aria-label="Open the ${MD.esc(recruitSectionNoun(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(when.toLocaleString())}">${I.check}<span>${MD.esc(recruitDate(Number(r.ts)))}</span>${r.flagged ? `<span class="rc-sent__flag" title="Flagged">${RC_ICONS.flag}</span>` : ''}${comments ? `<span class="rc-sent__n" title="${comments} ${comments === 1 ? 'comment' : 'comments'}">${comments}</span>` : ''}</button>`;
+}
+
+function recruitPeopleRowsHtml(rows) {
+  const p = recruitState().people;
+  const span = 7;
+  if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
+  if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No people match.' : 'Nobody yet.'}</td></tr>`;
+  return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
+    <td data-col="person"><button class="interest-person" data-action="recruit-app-open" data-id="${MD.esc(x.latest || '')}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
+    <td data-col="interest">${recruitSentCell(x.sections?.interest, x)}</td>
+    <td data-col="coffee">${recruitSentCell(x.sections?.coffee, x)}</td>
+    <td data-col="application">${recruitSentCell(x.sections?.application, x)}</td>
+    <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
+    <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
+    <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
+  </tr>`).join('');
+}
+
+function recruitPeopleHtml(cycle) {
+  const p = recruitState().people;
+  const th = (id, label) => `<th data-col="${id}"><span class="sheet__sort sheet__sort--static">${label}</span></th>`;
+  return `<div class="rc-mode"><span class="rc-mode__status" data-rc="people-counts">${MD.esc(recruitPeopleCountsLine())}</span></div>
+  <div class="sheet sheet--recruit sheet--people">
+    <div class="sheet__bar">
+      <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
+    </div>
+    <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
+      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest form')}${th('coffee', 'Coffee chat')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Last activity')}</tr></thead>
+      <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
+    </table></div>
+    <div class="sheet__foot" role="status" data-rc="people-foot">${MD.esc(recruitPeopleFootText())}</div>
+  </div>`;
+}
+
+function recruitPaintPeople() {
+  const body = $('[data-rc="people-rows"]');
+  if (!body) return false;
+  recruitRepaint(body, recruitPeopleRowsHtml(recruitPeopleVisible()));
+  const foot = $('[data-rc="people-foot"]');
+  if (foot) foot.textContent = recruitPeopleFootText();
+  const counts = $('[data-rc="people-counts"]');
+  if (counts) counts.textContent = recruitPeopleCountsLine();
+  return true;
+}
+
 // A section tab: Responses (the sheet) or Form (the editor), behind one bar.
+// The People tab is everyone across the three forms.
 function recruitApplicationsView(cycle, role, panel) {
   const st = recruitState();
+  if (panel === 'people') return recruitPeopleHtml(cycle);
   const editing = recruitEditingForm();
   const bar = recruitModeBarHtml(cycle, panel, editing);
   if (editing) return bar + recruitFormEditorHtml(cycle, panel);
@@ -494,7 +618,7 @@ function recruitDraft(id) {
 
 function recruitApp(id) {
   const st = recruitState();
-  return st.detail[id]?.application || st.apps?.byId?.[id] || null;
+  return st.detail[id]?.application || st.apps?.byId?.[id] || st.people?.byId?.[id] || null;
 }
 
 function recruitAnswersHtml(d, cycle) {
@@ -536,9 +660,11 @@ function recruitDetailMainHtml(id) {
   if (!d || d.loading && !d.application) return basics + '<p class="sheet__note">Loading…</p>';
   if (d.error) return basics + `<p class="sheet__note">Could not load: ${MD.esc(d.error)}. <button class="linklike" data-action="recruit-detail-retry" data-id="${MD.esc(id)}">Retry</button></p>`;
   const a = d.application;
+  const here = (d.history || []).filter((h) => h.cycleId === cycle?.id);
   const others = (d.history || []).filter((h) => h.cycleId !== cycle?.id);
+  const hereHtml = here.length ? `<p class="rc-history">Also sent this cycle: ${here.map((h) => `<button type="button" class="linklike" data-action="recruit-app-swap" data-id="${MD.esc(h.id)}">${MD.esc(recruitSectionNoun(h.section).toLowerCase())}</button>`).join(', ')}</p>` : '';
   const history = others.length ? `<p class="rc-history">Also sent ${others.map((h) => `${MD.esc(h.cycleName || h.cycleId)}${h.section && h.section !== 'interest' ? ' · ' + MD.esc(RECRUIT_SECTION_LABELS[h.section] || h.section) : ''}`).join(', ')}</p>` : '';
-  return basics + history + recruitAnswersHtml(d, cycle);
+  return basics + hereHtml + history + recruitAnswersHtml(d, cycle);
 }
 
 function recruitDetailSideHtml(id) {
@@ -758,11 +884,26 @@ function recruitAcceptReview(id, out) {
   if (d?.application && Number(a.reviewVersion ?? 0) >= Number(d.application.reviewVersion ?? 0)) {
     d.application = { ...d.application, review: a.review || d.application.review, reviewVersion: a.reviewVersion ?? d.application.reviewVersion };
   } else if (!d || d.error) st.detail[id] = recruitDetailData({ application: a });
-  const cached = st.apps?.byId?.[id];
+  const cached = st.apps?.byId?.[id] || st.people?.byId?.[id];
   if (cached && Number(a.reviewVersion ?? 0) >= Number(cached.reviewVersion ?? 0)) {
     const review = a.review || {};
     recruitAcceptRow({ id, reviewVersion: a.reviewVersion, editVersion: cached.editVersion, flagged: Boolean(review.flagged), comments: (review.comments || []).length });
   }
+}
+
+// Open another of this person's submissions inside the dialog, fetching it
+// first when neither list has it.
+async function recruitSwapOrLoad(id) {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  if (!cycle || !id) return;
+  if (!recruitApp(id)) {
+    try {
+      const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications/${encodeURIComponent(id)}`);
+      st.detail[id] = recruitDetailData(out);
+    } catch (e) { toast(recruitError(e)); return; }
+  }
+  recruitSwapApp(id);
 }
 
 async function recruitToggleFlag(id) {
@@ -861,6 +1002,8 @@ async function recruitDeleteComment(id, commentId) {
 }
 
 function recruitRefreshAfterRemoval(ids) {
+  const st = recruitState();
+  if (st.people) recruitLoadPeople();
   const open = UI.modal?.kind === 'recruit-app' && ids.has(UI.modal.id);
   if (open) closeModal(() => renderBackground('recruit'));
   else if (!recruitPaintRows()) renderBackground('recruit');
@@ -902,16 +1045,19 @@ RECRUIT.register({
   name: 'applications',
   order: 10,
   kernel: true,
-  panels: RECRUIT_SECTION_KEYS.map((key, i) => ({ id: key, label: RECRUIT_SECTION_LABELS[key], order: 10 + i, when: () => true })),
+  panels: [{ id: 'people', label: 'People', order: 1, when: () => true }, ...RECRUIT_SECTION_KEYS.map((key, i) => ({ id: key, label: RECRUIT_SECTION_LABELS[key], order: 10 + i, when: () => true }))],
   view: recruitApplicationsView,
-  mount(cycle) {
+  mount(cycle, role, panel) {
     const st = recruitState();
+    if (panel === 'people') { if (st.people === undefined || st.people.key !== st.key + ':' + cycle.id) recruitLoadPeople(); return; }
     if (st.apps === undefined || st.apps.key !== st.key + ':' + cycle.id + ':' + recruitSection()) recruitLoadApps();
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },
   filters: (cycle) => recruitCoreFilters(cycle),
   actions: {
     'recruit-apps-refresh': () => { recruitLoadApps(); },
+    'recruit-people-refresh': () => { recruitLoadPeople(); },
+    'recruit-app-swap': (el) => recruitSwapOrLoad(el.dataset.id),
     'recruit-load-more': () => { recruitLoadApps(true); },
     'recruit-sort': (el) => {
       const cycle = recruitCycleRow();
@@ -960,6 +1106,7 @@ RECRUIT.register({
     'recruit-queue-place': (el) => recruitOpenQueuePlace(el, el.dataset.id),
   },
   inputs: {
+    'recruit-people-q': (el) => { const p = recruitState().people; if (!p) return; p.q = el.value; recruitPaintPeople(); },
     'recruit-q': (el) => {
       const cycle = recruitCycleRow();
       if (!cycle) return;
@@ -988,7 +1135,7 @@ RECRUIT.register({
       </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
     </div>`,
   },
-  reset() { clearTimeout(recruitSearchTimer); recruitSearchTimer = null; },
+  reset() { clearTimeout(recruitSearchTimer); recruitSearchTimer = null; recruitState().people = undefined; },
 });
 
 // recruit:applications:end
