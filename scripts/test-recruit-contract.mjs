@@ -17,8 +17,8 @@ const { ACCESS_LEVELS } = await import(pathToFileURL(join(root, 'lib/recruit/per
 
 const serverFiles = existsSync(modulesDir) ? readdirSync(modulesDir).filter((f) => f.endsWith('.js')).sort() : [];
 const clientFiles = existsSync(clientDir) ? readdirSync(clientDir).filter((f) => /^recruit-[a-z]+\.js$/.test(f) && f !== 'recruit-core.js').sort() : [];
-const ALLOWED_IMPORTS = /^(node:[a-z_/]+|\.\.\/fixed-form\.js|\.\.\/mailer\.js|\.\.\/migrate\.js|\.\.\/permissions\.js)$/;
-const KERNEL = new Set(['cycles', 'applications', 'roles']);
+const ALLOWED_IMPORTS = /^(node:[a-z_/]+|\.\.\/fixed-form\.js|\.\.\/sections\.js|\.\.\/mailer\.js|\.\.\/migrate\.js|\.\.\/permissions\.js)$/;
+const KERNEL = new Set(['cycles', 'applications', 'roles', 'site']);
 
 test('every server module file exports the module object shape', async () => {
   assert.ok(serverFiles.length >= 3, 'the kernel modules exist');
@@ -44,8 +44,8 @@ test('every server module file exports the module object shape', async () => {
     const schema = typeof mod.schema === 'function' ? mod.schema([]) : mod.schema;
     assert.ok(Array.isArray(schema) && schema.every((s) => typeof s === 'string'), `${file}: schema strings`);
     for (const s of schema) {
-      assert.match(s, /^\s*(CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|CREATE UNIQUE INDEX IF NOT EXISTS|ALTER TABLE .* ADD COLUMN IF NOT EXISTS|INSERT INTO recruit_settings .* ON CONFLICT DO NOTHING)/s, `${file}: schema is additive only`);
-      assert.doesNotMatch(s, /\b(DROP|RENAME|BEGIN|COMMIT)\b/i, `${file}: schema never drops or renames`);
+      assert.match(s, /^\s*(CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|CREATE UNIQUE INDEX IF NOT EXISTS|ALTER TABLE .* ADD COLUMN IF NOT EXISTS|ALTER TABLE .* DROP CONSTRAINT IF EXISTS|INSERT INTO recruit_settings .* ON CONFLICT DO NOTHING)/s, `${file}: schema is additive only`);
+      assert.doesNotMatch(s.replace(/DROP CONSTRAINT IF EXISTS \w+/i, ''), /\b(DROP|RENAME|BEGIN|COMMIT)\b/i, `${file}: schema never drops tables or renames`);
     }
     assert.ok(mod.memory && typeof mod.memory === 'object', `${file}: memory collections`);
     assert.equal(typeof mod.defaults, 'function', `${file}: defaults(cycle)`);

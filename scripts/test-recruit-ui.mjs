@@ -1,5 +1,5 @@
 // The recruit client (registry, shell, cycle index, Applications panel,
-// roles) run whole inside vm against a small tree-based DOM fixture. No
+// sections) run whole inside vm against a small tree-based DOM fixture. No
 // network, browser, production data or credentials are used.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
-const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', applications: 'recruit-applications.js', roles: 'recruit-roles.js' };
+const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', applications: 'recruit-applications.js' };
 const src = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([k, f]) => [k, await read(`../src/client/${f}`)])));
 const ui2 = await read('../src/client/ui2.js');
 const main = await read('../src/client/main.js');
@@ -161,7 +161,7 @@ function fixture({ remote = true, admin = true } = {}) {
   };
   if (remote) base.REMOTE = { pending: 0 };
   const ctx = vm.createContext(base);
-  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.applications + '\n' + src.roles, ctx, { filename: 'recruit-client.js' });
+  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
   const run = (code) => vm.runInContext(code, ctx);
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   return { ctx, document, app, requests, renders, backgrounds, toasts, menus, navs, closes, run, settle,
@@ -174,22 +174,22 @@ const rows = () => [
   { id: 'in-1', name: '<img src=x onerror=alert(1)>', email: '"x"@cornell.edu', ts: 1700000000000, year: 'Junior', subteam: 'Electrical', stage: 'applied', tags: ['<b>'], flagged: false, comments: 1, files: [], editVersion: 2, reviewVersion: 1, source: 'form' },
   { id: 'in-2', name: 'Two', email: 'two@cornell.edu', ts: 1700000100000, year: '', subteam: '', stage: 'screening', tags: [], flagged: true, comments: 0, files: [], editVersion: 0, reviewVersion: 0, source: 'admin' },
 ];
-function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, byStage: { applied: 1, screening: 1 } } } = {}) {
+function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, bySection: { interest: 2 } } } = {}) {
   const st = f.run('recruitState()');
   st.me = { admin: roles.includes('admin'), cycles: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', roles }] };
   f.ctx.UI.recruitMe = st.me;
   st.cycles = { list: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', counts, updated: 1, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true, orphans: 0 } };
   st.cycleId = 'cy-a';
-  st.cycle = { data: cycleRow(), role, roles, counts, form: null, grants: [] };
-  st.apps = { key: st.key + ':cy-a', rows: rows(), byId: Object.fromEntries(rows().map((r) => [r.id, r])), next: 'cursor-1', total: 200, counts, loading: false, error: null };
-  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'applications' } };
+  st.cycle = { data: cycleRow(), role, roles, counts, sections: null, grants: [] };
+  st.apps = { key: st.key + ':cy-a:interest', rows: rows(), byId: Object.fromEntries(rows().map((r) => [r.id, r])), next: 'cursor-1', total: 200, counts, loading: false, error: null };
+  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'interest' } };
   return st;
 }
 
 /* ------------------------------- registry -------------------------------- */
 {
   const f = fixture();
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'applications', 'roles'], 'kernel modules register in order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'applications'], 'kernel modules register in order');
   f.ctx.zetaCalls = [];
   f.run(`RECRUIT.register({ name: 'zeta', order: 5, panel: { id: 'zeta', label: 'Zeta', when: (cycle, role) => role === 'admin' || role === 'lead' }, view: () => '<p>zeta</p>',
     actions: { 'recruit-zeta': (el, ev, stop) => zetaCalls.push(el.dataset.id) }, modals: { 'recruit-zeta': (m) => '<div class="modal" data-zeta></div>' },
@@ -197,16 +197,16 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
     filters: [{ group: 'review', value: 'unscored', label: 'Unscored', query: { unscored: 1 } }],
     selectionActions: (ids) => [{ id: 'zeta-move', label: 'Zeta ' + ids.length, run: () => {} }],
     detailSections: (app) => ({ id: 'zeta', title: 'Zeta', html: '<p data-zeta-section>' + app.id + '</p>' }) })`);
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'applications', 'roles'], 'registry sorts by order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'applications'], 'registry sorts by order');
   assert.throws(() => f.run("RECRUIT.register({ name: 'zeta', order: 9 })"), /already registered/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, actions: { 'nope': () => {} } })"), /must start with recruit-/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'noorder' })"), /needs an order/);
   const cycle = cycleRow();
   f.ctx.cycle = cycle;
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['zeta', 'applications', 'settings'], 'Applications tab precedes module tabs by panel order, Settings is last');
-  same(f.run("RECRUIT.panels(cycle, 'reviewer').map((p) => p.id)"), ['applications'], 'tabs are gated by role');
+  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['zeta', 'interest', 'coffee', 'application', 'settings'], 'the three section tabs follow module tabs by panel order, Settings is last');
+  same(f.run("RECRUIT.panels(cycle, 'reviewer').map((p) => p.id)"), ['interest', 'coffee', 'application'], 'tabs are gated by role');
   f.ctx.cycle = cycleRow({ doc: { modules: { zeta: false } } });
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['applications', 'settings'], 'a module switched off for the cycle loses its tab');
+  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['interest', 'coffee', 'application', 'settings'], 'a module switched off for the cycle loses its tab');
   assert.match(f.run("RECRUIT.modal({ kind: 'recruit-zeta' })"), /data-zeta/, 'modal kinds resolve through the registry');
   assert.equal(f.run("RECRUIT.modal({ kind: 'recruit-nope' })"), '', 'unknown kinds draw nothing');
   const el = f.run("document.createElement('button')"); el.setAttribute('data-action', 'recruit-zeta'); el.setAttribute('data-id', 'x');
@@ -220,7 +220,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   loadCycle(f);
   f.mount();
   const tabs = f.app.querySelectorAll('.rc-tabs [role="tab"]');
-  same(tabs.map((t) => t.textContent), ['Zeta', 'Applications', 'Settings']);
+  same(tabs.map((t) => t.textContent), ['Zeta', 'Interest form', 'Coffee chats', 'Applications', 'Settings']);
   assert.equal(tabs[1].getAttribute('aria-current'), 'page');
   tabs[1].focus(); f.ctx.evt.target = tabs[1];
   assert.equal(f.run('RECRUIT.keydown(evt)'), true); assert.ok(f.document.activeElement === tabs[2], 'arrow keys rove the tablist');
@@ -230,10 +230,10 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.match(sheet.querySelector('tbody td[data-col="score"]').innerHTML, /—/);
   f.ctx.st = f.run('recruitState()'); f.ctx.st.selected = new Set(['in-1', 'in-2']);
   f.run('recruitPaintSelection()');
-  assert.match(f.app.querySelector('[data-recruit-selection]').innerHTML, /Zeta 2/, 'module selection actions join the toolbar');
+  assert.match(f.app.querySelector('[data-recruit-selection]').innerHTML, /2 selected/, 'the selection toolbar counts');
   f.run("UI.modal = { kind: 'recruit-app', id: 'in-1' }"); f.ctx.st.detail['in-1'] = { application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', answers: {}, files: [], review: { comments: [] }, tags: [] }, form: null, history: [], audit: [] };
   assert.match(f.run('RECRUIT.modal(UI.modal)'), /data-zeta-section/, 'module detail sections join the dialog');
-  console.log('PASS: registry dispatches by view key, sorts by order, gates tabs by role and module switch, and merges columns, filters, selection actions and detail sections');
+  console.log('PASS: registry dispatches by view key, sorts by order, gates tabs by role and module switch, and merges columns, filters and detail sections');
 }
 
 /* ------------------------------- cycle index ----------------------------- */
@@ -254,12 +254,12 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   st.cycles = { loading: true }; assert.match(f.run('viewRecruit()'), /Loading…/);
   st.cycles = { error: 'boom' }; assert.match(f.run('viewRecruit()'), /Could not load: boom/);
   st.cycles = { list: [
-    { id: 'cy-a', name: '<b>Fall</b> 2026', term: 'Fall 2026', status: 'open', counts: { total: 12 }, updated: 1 },
+    { id: 'cy-a', name: '<b>Fall</b> 2026', term: 'Fall 2026', status: 'open', counts: { total: 12, bySection: { interest: 10, coffee: 2 } }, updated: 1 },
     { id: 'cy-old', name: 'Spring 2025', term: 'Spring 2025', status: 'archived', counts: { total: 3 }, updated: 1 },
   ], intakeCycleId: 'cy-a', migration: { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 } };
   const html = f.run('viewRecruit()');
   assert.match(html, /&lt;b&gt;Fall&lt;\/b&gt; 2026/, 'cycle names are escaped'); assert.doesNotMatch(html, /<b>Fall<\/b>/);
-  assert.match(html, /Open · receives the website form · 12 applications/);
+  assert.match(html, /Open · receives the website form · 10 interest · 2 coffee chats · 0 applications/);
   assert.match(html, /Archived<\/h2>/, 'archived cycles sit under a second heading');
   assert.match(html, /Import the current list and archives/); assert.match(html, /40 submissions and 1 archive/);
   assert.match(html, /data-action="recruit-cycle-new"/);
@@ -285,12 +285,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const html = f.run('viewRecruit()');
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/, 'names are escaped in rows'); assert.doesNotMatch(html, /<img src=x/);
   assert.match(html, /&quot;x&quot;@cornell\.edu/, 'emails are escaped in rows and labels');
-  assert.match(html, /data-m="recruit-filter"/); assert.match(html, /data-m="recruit-view"/); assert.match(html, /data-m="recruit-cycle-switch"/);
+  assert.match(html, /data-m="recruit-filter"/); assert.match(html, /data-m="recruit-cycle-switch"/);
   assert.doesNotMatch(html, /<select|<datalist/);
-  assert.match(html, /class="rc-strip"/); assert.match(html, /data-rc-count="applied">1</);
-  assert.match(html, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026/); assert.match(html, /Open · receives the website form · 2 applications/);
+  assert.match(html, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026/); assert.match(html, /Open · receives the website form · 2 interest · 0 coffee chats · 0 applications/);
   assert.match(html, /2 of 200 shown · <\/span><button class="linklike" data-action="recruit-load-more">Load more/);
-  assert.match(html, /export\.csv\?sort=ts&amp;dir=desc&amp;limit=200/, 'the export link carries the list query');
+  assert.match(html, /applications\.csv\?section=interest/, 'the export link names the section');
   f.mount();
   const person = f.app.querySelector('[data-action="recruit-app-open"][data-id="in-1"]');
   person.focus();
@@ -382,13 +381,12 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const f = fixture();
   const st = loadCycle(f);
   f.mount();
-  assert.equal(f.app.querySelector('[data-rc="counts"]').textContent, 'Open · receives the website form · 2 applications');
+  assert.equal(f.app.querySelector('[data-rc="counts"]').textContent, 'Open · receives the website form · 2 interest · 0 coffee chats · 0 applications');
   const tick = f.run('recruitSyncTick()');
   assert.equal(f.requests[0].url, '/recruit/cycles?all=1');
-  f.requests[0].resolve({ cycles: [{ id: 'cy-a', name: 'Fall 2026', status: 'open', counts: { total: 7, byStage: { applied: 4, screening: 3 } }, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true } });
+  f.requests[0].resolve({ cycles: [{ id: 'cy-a', name: 'Fall 2026', status: 'open', counts: { total: 7, bySection: { interest: 4, coffee: 3 } }, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true } });
   await tick;
-  assert.equal(f.app.querySelector('[data-rc="counts"]').textContent, 'Open · receives the website form · 7 applications', 'counts repaint in place');
-  assert.equal(f.app.querySelector('[data-rc-count="applied"]').textContent, '4');
+  assert.equal(f.app.querySelector('[data-rc="counts"]').textContent, 'Open · receives the website form · 4 interest · 3 coffee chats · 0 applications', 'counts repaint in place');
   assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'the sync loop never repaints the whole route');
   assert.ok(st._syncTimer, 'the loop rescheduled itself'); f.run('clearTimeout(recruitState()._syncTimer)');
   f.ctx.UI.modal = { kind: 'confirm' };
@@ -396,7 +394,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.equal(f.requests.length, 1, 'no fetch while a dialog is open'); f.run('clearTimeout(recruitState()._syncTimer)');
   f.ctx.UI.modal = null; f.ctx.UI.route = { name: 'home', params: {} };
   f.run('RECRUIT.sync()'); assert.equal(st._syncTimer, null, 'leaving the route stops the loop');
-  console.log('PASS: the sync loop repaints counts and the stage strip in place and stays quiet behind dialogs');
+  console.log('PASS: the sync loop repaints counts in place and stays quiet behind dialogs');
 }
 
 /* ------------------------------- detail dialog --------------------------- */
@@ -410,12 +408,10 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const veil = f.mountModal();
   const html = veil.innerHTML;
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/); assert.doesNotMatch(html, /<img src=x/);
-  assert.match(html, /A &lt;robot&gt;/); assert.match(html, /Existing &lt;comment&gt;/); assert.match(html, /rc-tag">&lt;b&gt;/);
+  assert.match(html, /A &lt;robot&gt;/); assert.match(html, /Existing &lt;comment&gt;/);
   assert.match(html, /href="\/api\/recruit\/files\/int-1" download="cv\.pdf"/, 'files link only the authenticated route');
-  assert.match(html, /Also applied Spring 2025 · Rejected/);
-  assert.match(html, /data-m="recruit-app-stage"/, 'leads get the stage dropdown'); assert.doesNotMatch(html, /<select/);
+  assert.match(html, /Also sent Spring 2025/); assert.doesNotMatch(html, /<select/);
   assert.match(html, /1 of 2<\/span>/); assert.match(html, /data-action="modal-close"/);
-  assert.match(html, /<h4 class="interest-subhead">Activity<\/h4>/, 'the roles module adds the Activity section');
   const field = veil.querySelector('.interest-compose textarea');
   field.value = 'New <comment>';
   assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(field, { type: 'input' }), true);
@@ -461,20 +457,12 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.equal(del.url, '/recruit/cycles/cy-a/applications/in-1/comments/ic-first');
   del.resolve({ application: { id: 'in-1', reviewVersion: 4, review: { comments: [second, saved] } } }); await deleting;
   assert.equal(f.toasts.at(-1), 'Comment deleted'); assert.equal(veil.querySelector('[data-comment-id="ic-first"]'), null);
-  // Flag round trip and the stage dropdown.
+  // Flag round trip.
   const flagging = f.run("recruitToggleFlag('in-1')");
   const patch = f.requests.find((r) => r.method === 'PATCH');
   same(patch.body, { flagged: true });
   patch.resolve({ application: { id: 'in-1', reviewVersion: 5, review: { flagged: true, comments: [second, saved] } } }); await flagging;
   assert.equal(st.apps.byId['in-1'].flagged, true); assert.equal(f.toasts.at(-1), 'Flagged for follow-up');
-  const stageHost = veil.querySelector('[data-m="recruit-app-stage"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(stageHost);
-  f.menus.at(-1).items.find((i) => i.label === 'Interview').run();
-  const move = f.requests.find((r) => r.url.endsWith('/moves'));
-  same(move.body.ids, ['in-1']); assert.equal(move.body.to, 'interview'); assert.match(move.body.requestId, /^rq-/);
-  move.resolve({ moved: [{ id: 'in-1', from: 'applied', editVersion: 3 }], skipped: [] }); await f.settle();
-  assert.equal(st.apps.byId['in-1'].stage, 'interview'); assert.equal(st.apps.byId['in-1'].editVersion, 3);
-  assert.equal(f.toasts.at(-1), 'Moved <img src=x onerror=alert(1)> to Interview'); assert.equal(f.renders.length, 0);
   // Previous / Next walk the visible list.
   f.run('recruitStepApp(1)'); assert.equal(f.ctx.UI.modal.id, 'in-2'); assert.equal(f.renders.length, 1, 'stepping is a user action and may render');
   console.log('PASS: the application dialog escapes everything, keeps a dirty comment draft across background refreshes, retries with the same ic- id, and never remounts while open');
@@ -506,36 +494,4 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   console.log('PASS: rows merge only when editVersion is not older, copy and delete toast their counts, and removal closes the open dialog');
 }
 
-/* ------------------------------- roles ----------------------------------- */
-{
-  const f = fixture();
-  const st = loadCycle(f);
-  f.ctx.UI.route.params.sub = 'settings';
-  f.mount();
-  assert.ok(f.app.querySelector('#rc-settings-roles'), 'the roles section joins Settings');
-  assert.ok(f.app.querySelector('#rc-settings-activity'));
-  f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'settings' } })");
-  const rolesReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-a/roles');
-  assert.ok(rolesReq?.signal instanceof AbortSignal);
-  rolesReq.resolve({ roles: [{ member: 'r@cornell.edu', name: 'Rae <R>', roles: ['reviewer'], subteams: ['electrical'] }], members: [{ email: 'r@cornell.edu', name: 'Rae <R>' }, { email: 'n@cornell.edu', name: 'New', subteam: 'Software' }] }); await f.settle();
-  assert.equal(f.renders.length, 0);
-  const list = f.app.querySelector('[data-rc="roles"]');
-  assert.match(list.innerHTML, /Rae &lt;R&gt;/); assert.match(list.innerHTML, /Reviewer · Electrical/);
-  const form = f.app.querySelector('form[data-action="recruit-settings-roles"]');
-  const member = form.querySelector('[data-m="recruit-role-member"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(member);
-  const opts = f.menus.at(-1).items.map((i) => i.label);
-  assert.ok(opts.includes('New · Software') && !opts.includes('Rae <R>'), 'already granted members leave the picker');
-  f.menus.at(-1).items.find((i) => i.label === 'New · Software').run();
-  form.elements.reviewer.checked = true; form.elements['subteam:software'].checked = true;
-  const submitting = f.run('RECRUIT.submit.bind(RECRUIT)')(form, { preventDefault() {} });
-  await f.settle();
-  const put = f.requests.find((r) => r.method === 'PUT');
-  assert.equal(put.url, '/recruit/cycles/cy-a/roles/n%40cornell.edu');
-  same(put.body.roles, ['reviewer']); same(put.body.subteams, ['software']); assert.match(put.body.requestId, /^rq-/);
-  put.resolve({ role: { member: 'n@cornell.edu', roles: ['reviewer'], subteams: ['software'] } }); await submitting;
-  assert.equal(st.mod.roles.roles.length, 2); same(f.backgrounds.at(-1), 'recruit'); assert.equal(f.toasts.at(-1), 'Reviewer granted');
-  console.log('PASS: roles load into Settings, escape names, pick members through dd(), and grant through an idempotent PUT');
-}
-
-console.log('PASS: recruit UI — registry, cycle index, sheet, dialog, sync, merges and roles');
+console.log('PASS: recruit UI — registry, cycle index, sheet, dialog, sync and merges');

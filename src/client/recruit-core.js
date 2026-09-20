@@ -37,10 +37,14 @@ const RECRUIT = {
   active(cycle) { return this.modules.filter((m) => recruitEnabled(m, cycle)); },
 
   panels(cycle, role) {
-    return this.active(cycle)
-      .filter((m) => m.panel && (!m.panel.when || m.panel.when(cycle, role)))
-      .map((m) => ({ id: m.panel.id, label: m.panel.label, order: m.panel.order ?? m.order, module: m }))
-      .sort((a, b) => a.order - b.order);
+    const out = [];
+    for (const m of this.active(cycle)) {
+      for (const p of (m.panels || (m.panel ? [m.panel] : []))) {
+        if (!p || (p.when && !p.when(cycle, role))) continue;
+        out.push({ id: p.id, label: p.label, order: p.order ?? m.order, module: m });
+      }
+    }
+    return out.sort((a, b) => a.order - b.order);
   },
   columns(cycle, role) {
     const seen = new Set(), out = [];
@@ -214,7 +218,7 @@ const RECRUIT = {
         .then((out) => {
           if (st.key !== key) return;                       // switched away meanwhile
           const roles = Array.isArray(out.me?.roles) ? out.me.roles : (st.me.admin ? ['admin'] : []);
-          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, byStage: {} }, form: out.form || null, grants: out.roles || [] };
+          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [] };
           renderBackground('recruit');
         })
         .catch((e) => { if (st.key !== key) return; st.cycle = { error: recruitError(e), status: e.status }; renderBackground('recruit'); });
@@ -222,7 +226,7 @@ const RECRUIT = {
     if (st.cycle?.data) {
       const panel = recruitActivePanel();
       st.panel = panel?.id || null;
-      try { panel?.module.mount?.(st.cycle.data, st.cycle.role); } catch (e) { console.error(e); }
+      try { panel?.module.mount?.(st.cycle.data, st.cycle.role, panel.id); } catch (e) { console.error(e); }
     }
     this.sync();
   },
@@ -268,6 +272,14 @@ const RECRUIT = {
     }
   },
 };
+
+const RECRUIT_SECTION_KEYS = ['interest', 'coffee', 'application'];
+// One row of a section, as a noun: what the dialog is showing.
+const RECRUIT_SECTION_NOUNS = { interest: 'Interest form', coffee: 'Coffee chat', application: 'Application' };
+const recruitSectionNoun = (key) => RECRUIT_SECTION_NOUNS[key] || 'Application';
+const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Applications' };
+// The section a cycle URL points at; the interest form when it names none.
+function recruitSection() { const sub = UI.route?.params?.sub; return RECRUIT_SECTION_KEYS.includes(sub) ? sub : 'interest'; }
 
 const RECRUIT_TIMEOUT_MS = 20000;
 const RECRUIT_SYNC_MS = 30000;
@@ -343,18 +355,6 @@ function recruitDate(ts) {
 
 const recruitPlural = (n, one, many = one + 's') => `${Number(n || 0).toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
-function recruitStages(cycle) {
-  const stages = cycle?.doc?.pipeline?.stages;
-  return Array.isArray(stages) && stages.length ? stages : RECRUIT_DEFAULT_STAGES;
-}
-const RECRUIT_DEFAULT_STAGES = [
-  { key: 'applied', name: 'Applied', kind: 'open' }, { key: 'screening', name: 'Screening', kind: 'open' },
-  { key: 'interview', name: 'Interview', kind: 'open' }, { key: 'decision', name: 'Decision', kind: 'open' }, { key: 'offer', name: 'Offer', kind: 'open' },
-  { key: 'waitlisted', name: 'Waitlisted', kind: 'hold', outcome: 'waitlisted' },
-  { key: 'accepted', name: 'Accepted', kind: 'closed', outcome: 'accepted' }, { key: 'declined', name: 'Declined', kind: 'closed', outcome: 'declined' },
-  { key: 'rejected', name: 'Rejected', kind: 'closed', outcome: 'rejected' },
-];
-const recruitStageName = (cycle, key) => recruitStages(cycle).find((s) => s.key === key)?.name || key || '';
 const recruitSubteams = (cycle) => (Array.isArray(cycle?.doc?.subteams) ? cycle.doc.subteams : []);
 const RECRUIT_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'];
 
@@ -459,7 +459,8 @@ function recruitCountsLine(cycle = recruitCycleRow(), counts = recruitState().cy
   const st = recruitState();
   const parts = [recruitStatusText(cycle, st.cycles?.intakeCycleId)];
   if (cycle.status === 'open' && cycle.closesAt) parts.push('closes ' + new Date(Number(cycle.closesAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-  parts.push(recruitPlural(counts?.total || 0, 'application'));
+  const by = counts?.bySection || {};
+  parts.push(`${Number(by.interest || 0).toLocaleString('en-US')} interest`, recruitPlural(by.coffee || 0, 'coffee chat'), recruitPlural(by.application || 0, 'application'));
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -477,11 +478,11 @@ function recruitPaintCounts() {
   const st = recruitState();
   const cycle = st.cycle?.data;
   if (!cycle) return;
-  const counts = st.cycle.counts || { total: 0, byStage: {} };
+  const counts = st.cycle.counts || { total: 0, bySection: {} };
   for (const el of $$('[data-rc="counts"]')) el.textContent = recruitCountsLine(cycle, counts);
   for (const el of $$('[data-rc-count]')) {
     const k = el.dataset.rcCount;
-    el.textContent = k === 'all' ? Number(counts.total || 0).toLocaleString('en-US') : Number(counts.byStage?.[k] || 0).toLocaleString('en-US');
+    el.textContent = k === 'all' ? Number(counts.total || 0).toLocaleString('en-US') : Number(counts.bySection?.[k] || 0).toLocaleString('en-US');
   }
 }
 
@@ -545,7 +546,7 @@ function recruitCycleShellHtml(id) {
   let body = '';
   if (active) {
     let inner = '';
-    try { inner = active.module.view ? String(active.module.view(cycle, role) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this section: ${MD.esc(e.message || 'error')}</p>`; }
+    try { inner = active.module.view ? String(active.module.view(cycle, role, active.id) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this section: ${MD.esc(e.message || 'error')}</p>`; }
     body = `<div class="rc-panel" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
   } else body = `<div class="empty">${I.info}<b>Nothing to show for your role in this cycle</b></div>`;
   const head = `<div class="plain-head"><h1>${MD.esc(cycle.name)}</h1><p data-rc="counts">${MD.esc(recruitCountsLine(cycle, c.counts))}</p></div>`;

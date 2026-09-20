@@ -3,6 +3,7 @@
 // repo file does not carry them yet, so the real public POST runs against
 // the real bridge before and after the integration commit.
 import assert from 'node:assert/strict';
+const liveTerm = `${new Date().getUTCMonth() >= 6 ? 'Fall' : 'Spring'} ${new Date().getUTCFullYear()}`;
 import { mkdtemp, cp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -200,7 +201,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   const snapshot = async () => { const d = await recruitDoc(); return JSON.stringify({ apps: [...d.applications].sort((a, b) => a.id.localeCompare(b.id)), cycles: d.cycles.map((c) => [c.id, c.status, c.term, c.name, c.legacy]).sort(), applicants: [...d.applicants].sort((a, b) => a.email.localeCompare(b.email)) }); };
   const snap1 = await snapshot();
   const d1 = await recruitDoc();
-  assert.deepEqual(d1.cycles.map((c) => [c.id, c.status, c.term]).sort(), [['cy-aaaa1111', 'archived', 'Fall 2025'], ['cy-bbbb2222', 'archived', ''], ['cy-interest', 'open', 'Rolling']], 'terms are guessed from archive names');
+  assert.deepEqual(d1.cycles.map((c) => [c.id, c.status, c.term]).sort(), [['cy-aaaa1111', 'archived', 'Fall 2025'], ['cy-bbbb2222', 'archived', ''], ['cy-interest', 'open', liveTerm]], 'terms are guessed from archive names');
   assert.equal(d1.settings.doc.intakeCycleId, 'cy-interest', 'the interest list receives the form from the live step on');
   const migratedLegacy = d1.applications.find((a) => a.id === 'in-legacy');
   assert.deepEqual(migratedLegacy.review, legacyReview, 'review preserved verbatim');
@@ -229,7 +230,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
 
   /* ---- after migration: the fixed POST lands in the intake cycle ---- */
   const target = await bridge.target();
-  assert.deepEqual(target, { cycleId: 'cy-interest', formVersion: 0, perIpHour: 5, perDay: 2000, capacity: 0, notify: true, confirmUpdate: true });
+  assert.deepEqual(target, { cycleId: 'cy-interest', section: 'interest', closed: false, formVersion: 0, perIpHour: 5, perDay: 2000, capacity: 0, notify: true, confirmUpdate: true });
   const fresh = await interest('POST', '/interest', { name: 'Fresh Face', email: 'FRESH@example.com', subteam: 'Software', year: 'Grad', project: 'A robot' });
   assert.equal(fresh.status, 200);
   assert.equal(await legacyBytes(), legacyFrozen, 'the legacy inbox no longer grows');

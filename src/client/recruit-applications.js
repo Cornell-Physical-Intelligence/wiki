@@ -12,7 +12,7 @@
 
 /* ------------------------------- filters --------------------------------- */
 
-const RECRUIT_FILTER_DEFAULTS = { q: '', stage: '', subteam: '', year: '', tag: '', review: '', source: '', sort: 'ts', dir: 'desc' };
+const RECRUIT_FILTER_DEFAULTS = { q: '', subteam: '', year: '', review: '', sort: 'ts', dir: 'desc' };
 
 function recruitFilters(cycleId = recruitCycleRow()?.id) {
   const st = recruitState();
@@ -26,9 +26,6 @@ function recruitCoreFilters(cycle) {
   const rows = st.apps?.rows || [];
   const teams = recruitSubteams(cycle).map((t) => t.name).filter(Boolean);
   const rowTeams = [...new Set(rows.map((r) => String(r.subteam || '').trim()).filter((t) => t && !teams.includes(t)))].sort();
-  const tags = [...new Set(rows.flatMap((r) => (Array.isArray(r.tags) ? r.tags : [])))].sort((a, b) => a.localeCompare(b));
-  const sources = [...new Set(rows.map((r) => r.source).filter(Boolean))].sort();
-  const sourceLabel = { form: 'Website form', apply: 'Website form', admin: 'Added by hand', import: 'Imported', migrated: 'Old list', orphan: 'Adopted' };
   return [
     { group: 'review', value: '', label: 'All people' },
     { group: 'review', value: 'flagged', label: 'Flagged', query: { flagged: 1 } },
@@ -38,12 +35,10 @@ function recruitCoreFilters(cycle) {
     { group: 'subteam', value: '__undecided', label: 'Undecided', test: (r) => !String(r.subteam || '').trim() },
     { group: 'year', value: '', label: 'All years' },
     ...RECRUIT_YEARS.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
-    ...(tags.length ? [{ group: 'tag', value: '', label: 'All tags' }, ...tags.map((t) => ({ group: 'tag', value: t, label: t, query: { tag: t } }))] : []),
-    ...(sources.length > 1 ? [{ group: 'source', value: '', label: 'Any source' }, ...sources.map((s) => ({ group: 'source', value: s, label: sourceLabel[s] || s, test: (r) => r.source === s }))] : []),
   ];
 }
 
-const RECRUIT_FILTER_GROUPS = ['review', 'subteam', 'year', 'tag', 'source'];
+const RECRUIT_FILTER_GROUPS = ['review', 'subteam', 'year'];
 
 function recruitFilterLabel(cycle = recruitCycleRow()) {
   const f = recruitFilters(cycle?.id);
@@ -83,8 +78,8 @@ function recruitOpenFilter(host) {
 
 function recruitListParams(cycle, f, cursor) {
   const p = new URLSearchParams();
+  p.set('section', recruitSection());
   if (f.q?.trim()) p.set('q', f.q.trim());
-  if (f.stage) p.set('stage', f.stage);
   for (const e of RECRUIT.filters(cycle, recruitRole())) {
     if (e.query && (f[e.group] || '') === e.value && e.value !== '') for (const [k, v] of Object.entries(e.query)) p.set(k, String(v));
   }
@@ -117,7 +112,7 @@ async function recruitLoadApps(more = false) {
   const f = recruitFilters(cycle.id);
   const cursor = more ? st.apps?.next : null;
   if (more && (!st.apps || st.apps.loading || !cursor)) return;
-  if (!more) st.apps = { key: st.key + ':' + cycle.id, rows: [], byId: {}, next: null, total: 0, counts: st.apps?.counts || null, loading: true, error: null };
+  if (!more) st.apps = { key: st.key + ':' + cycle.id + ':' + recruitSection(), rows: [], byId: {}, next: null, total: 0, counts: st.apps?.counts || null, loading: true, error: null };
   const apps = st.apps;
   apps.loading = true;
   apps.error = null;
@@ -131,7 +126,7 @@ async function recruitLoadApps(more = false) {
     apps.byId = Object.fromEntries(apps.rows.map((r) => [r.id, r]));
     apps.next = out.next || null;
     apps.total = Number(out.total ?? apps.rows.length);
-    if (out.counts) { apps.counts = out.counts; if (st.cycle) st.cycle.counts = { ...(st.cycle.counts || {}), byStage: out.counts.byStage || st.cycle.counts?.byStage || {}, total: st.cycle.counts?.total ?? apps.total }; }
+    if (out.counts) { apps.counts = out.counts; if (st.cycle) st.cycle.counts = { ...(st.cycle.counts || {}), bySection: out.counts.bySection || st.cycle.counts?.bySection || {} }; }
     apps.loading = false;
   } catch (e) {
     if (st.key !== key || st.apps !== apps || seq !== recruitListSeq) return;
@@ -212,9 +207,7 @@ function recruitSelectionBarHtml() {
   const ids = [...selected];
   const visible = recruitVisibleRows(cycle);
   const hidden = ids.filter((id) => !visible.some((r) => r.id === id)).length;
-  const actions = cycle ? RECRUIT.selectionActions(ids, cycle, recruitRole()) : [];
   return `<span data-rc-selection-count role="status">${ids.length} selected${hidden ? ` · ${hidden} hidden by filter` : ''}</span>
-    ${actions.map((a) => `<button class="btn btn--sm ${a.danger ? 'btn--danger' : ''}" data-action="recruit-selection-act" data-sel="${MD.esc(a.id)}" ${a.disabled ? 'disabled' : ''}>${a.icon || ''}${MD.esc(a.label)}</button>`).join('')}
     <button class="btn btn--sm" data-action="recruit-copy-emails">${I.copy} Copy emails</button>
     ${recruitCan('admin') && cycle?.status !== 'archived' ? `<button class="btn btn--sm btn--danger" data-action="recruit-remove-selected">${I.trash} Delete</button>` : ''}
     <button class="icon-btn" data-action="recruit-clear-selection" aria-label="Clear selection" title="Clear selection">${I.x}</button>`;
@@ -246,7 +239,6 @@ function recruitBaseColumns(cycle) {
   return [
     { id: 'year', label: 'Year', sortKey: null, cell: (r) => (r.year ? MD.esc(r.year) : '<span class="faint">—</span>') },
     { id: 'subteam', label: 'Subteam', sortKey: null, cell: (r) => MD.esc(r.subteam || 'Undecided') },
-    { id: 'stage', label: 'Stage', sortKey: 'stage_at', cell: (r) => MD.esc(recruitStageName(cycle, r.stage)) },
   ];
 }
 
@@ -284,7 +276,7 @@ function recruitRowsHtml(rows, cycle) {
   const span = cols.length + 4;
   if (!st.apps || (st.apps.loading && !st.apps.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (st.apps?.error && !st.apps.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(st.apps.error)}. <button class="linklike" data-action="recruit-apps-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No people match these filters.' : 'No applications yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No people match these filters.' : 'Nothing here yet.'}</td></tr>`;
   const selected = recruitSelection();
   return rows.map((r) => recruitRowHtml(r, cycle, cols, selected)).join('');
 }
@@ -343,19 +335,6 @@ function recruitPaintRows(updatedId) {
 
 const recruitPaintRow = (id) => recruitPaintRows(id);
 
-function recruitStripHtml(cycle) {
-  const st = recruitState();
-  const f = recruitFilters(cycle.id);
-  const counts = st.cycle?.counts || { total: 0, byStage: {} };
-  const btn = (key, name, n) => `<button class="rc-strip__stage" data-action="recruit-stage" data-stage="${MD.esc(key)}" aria-pressed="${(f.stage || '') === key}">${MD.esc(name)}<span class="rc-strip__n" data-rc-count="${MD.esc(key || 'all')}">${Number(n || 0).toLocaleString('en-US')}</span></button>`;
-  return `<div class="rc-strip" role="group" aria-label="Stages">${btn('', 'All', counts.total)}${recruitStages(cycle).map((s) => btn(s.key, s.name, counts.byStage?.[s.key])).join('')}</div>`;
-}
-
-function recruitViewOptions(cycle) {
-  const views = Array.isArray(cycle.doc?.pipeline?.views) ? cycle.doc.pipeline.views : [];
-  return [{ value: '', label: 'Views' }, ...views.map((v) => ({ value: v.key, label: v.name })), { value: '__save', label: 'Save current view…' }, ...(views.length && recruitCan('lead') ? [{ value: '__manage', label: 'Manage views…' }] : [])];
-}
-
 function recruitSheetHtml(cycle) {
   const st = recruitState();
   const f = recruitFilters(cycle.id);
@@ -368,19 +347,18 @@ function recruitSheetHtml(cycle) {
     : `<th data-col="${MD.esc(id)}"><span class="sheet__sort sheet__sort--static">${MD.esc(label)}</span></th>`;
   const lead = recruitCan('lead');
   const archived = cycle.status === 'archived';
-  const exportHref = `/api/recruit/cycles/${encodeURIComponent(cycle.id)}/export.csv?${recruitListParams(cycle, f, null)}`;
+  const section = recruitSection();
+  const exportHref = `/api/recruit/cycles/${encodeURIComponent(cycle.id)}/applications.csv?section=${section}`;
   return `<div class="sheet sheet--recruit ${archived ? 'sheet--archived' : ''}">
     <div class="sheet__bar">
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-q" type="search" placeholder="Search people…" value="${MD.esc(f.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions" data-recruit-tools ${selected.size ? 'hidden' : ''}>
         ${dd('recruit-filter', [{ value: 'combined', label: recruitFilterLabel(cycle) }], 'combined')}
-        ${dd('recruit-view', recruitViewOptions(cycle), '', { small: false })}
         ${lead ? `<a class="btn btn--sm" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
-        <button class="icon-btn" data-action="recruit-tools" aria-label="List options" title="List options" aria-haspopup="menu">${I.dots}</button>
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
     </div>
-    <div class="sheet__scroll"><table aria-label="Applications in ${MD.esc(cycle.name)}">
+    <div class="sheet__scroll"><table aria-label="${MD.esc(RECRUIT_SECTION_LABELS[section])} in ${MD.esc(cycle.name)}">
       <thead><tr>
         <th class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select-visible" aria-label="Select all visible people" ${rows.length && visibleSelected === rows.length ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label></th>
         ${th('name', 'Person', 'person')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
@@ -392,10 +370,10 @@ function recruitSheetHtml(cycle) {
   </div>`;
 }
 
-function recruitApplicationsView(cycle, role) {
+function recruitApplicationsView(cycle, role, panel) {
   const st = recruitState();
-  const pending = st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
-  return recruitStripHtml(cycle) + recruitSheetHtml(cycle) + pending;
+  const pending = panel === 'interest' && st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
+  return recruitSheetHtml(cycle) + pending;
 }
 
 /* ------------------------------- queue block ----------------------------- */
@@ -480,7 +458,7 @@ async function recruitPlaceQueued(receipt, cycle) {
 /* ------------------------------- detail dialog --------------------------- */
 
 function recruitDetailData(out) {
-  return { application: out.application || null, form: out.form || null, scores: out.scores || [], assignments: out.assignments || [], bookings: out.bookings || [], mail: out.mail || [], history: out.history || [], audit: out.audit || [] };
+  return { application: out.application || null, form: out.form || null, history: out.history || [], audit: out.audit || [] };
 }
 
 function recruitLoadDetail(id, { quiet = false } = {}) {
@@ -548,7 +526,6 @@ function recruitDetailMainHtml(id) {
   const basics = `<dl class="interest-detail">
     <dt>Subteam</dt><dd>${MD.esc(row.subteam || 'Undecided')}</dd>
     <dt>Year</dt><dd>${MD.esc(row.year || 'Not provided')}</dd>
-    <dt>Stage</dt><dd>${MD.esc(recruitStageName(cycle, row.stage))}${row.stageAt ? ` <span class="faint">since ${MD.esc(recruitDate(Number(row.stageAt)))}</span>` : ''}</dd>
     <dt>Received</dt><dd>${MD.esc(recruitDate(Number(row.ts)))}${row.updated && row.updated !== row.ts ? ` <span class="faint">updated ${MD.esc(recruitDate(Number(row.updated)))}</span>` : ''}</dd>
     ${row.cornell === false ? '<dt>Address</dt><dd><span class="interest-outside">Outside cornell.edu</span></dd>' : ''}
   </dl>`;
@@ -556,19 +533,8 @@ function recruitDetailMainHtml(id) {
   if (d.error) return basics + `<p class="sheet__note">Could not load: ${MD.esc(d.error)}. <button class="linklike" data-action="recruit-detail-retry" data-id="${MD.esc(id)}">Retry</button></p>`;
   const a = d.application;
   const others = (d.history || []).filter((h) => h.cycleId !== cycle?.id);
-  const history = others.length ? `<p class="rc-history">Also applied ${others.map((h) => `${MD.esc(h.cycleName || h.cycleId)}${h.outcome ? ' · ' + MD.esc(recruitStageName(cycle, h.outcome)) : ''}`).join(', ')}</p>` : '';
-  const lead = recruitCan('lead') && cycle?.status !== 'archived';
-  const tags = Array.isArray(a.tags) ? a.tags : [];
-  const tagsHtml = `<h4 class="interest-subhead">Tags</h4><div class="rc-tags" data-rc="tags">${tags.map((t) => `<span class="rc-tag">${MD.esc(t)}${lead ? `<button type="button" class="rc-tag__x" data-action="recruit-tag-remove" data-id="${MD.esc(id)}" data-tag="${MD.esc(t)}" aria-label="Remove tag ${MD.esc(t)}">${I.x}</button>` : ''}</span>`).join('')}${tags.length ? '' : '<span class="faint">None</span>'}</div>
-    ${lead ? `<form class="rc-tag-form" data-action="recruit-tag-form" data-id="${MD.esc(id)}"><input class="text-input" data-m="recruit-tag-new" name="tag" placeholder="Add a tag" maxlength="30" autocomplete="off" spellcheck="false" aria-label="Add a tag"><button type="submit" class="btn btn--sm">Add</button></form>` : ''}`;
-  const dec = a.decision || {};
-  const decision = a.outcome || dec.outcome ? `<h4 class="interest-subhead">Decision</h4><dl class="interest-detail">
-      <dt>Outcome</dt><dd>${MD.esc(recruitStageName(cycle, a.outcome || dec.outcome))}</dd>
-      ${dec.subteam ? `<dt>Subteam</dt><dd>${MD.esc(dec.subteam)}</dd>` : ''}
-      ${dec.reason ? `<dt>Reason</dt><dd>${MD.esc(dec.reason)}</dd>` : ''}
-      ${dec.at ? `<dt>Decided</dt><dd>${MD.esc(recruitDate(Number(dec.at)))}${dec.by ? ` · ${MD.esc(Store.userName?.(dec.by) || dec.by)}` : ''}</dd>` : ''}
-    </dl>` : '';
-  return basics + history + recruitAnswersHtml(d, cycle) + tagsHtml + decision;
+  const history = others.length ? `<p class="rc-history">Also sent ${others.map((h) => `${MD.esc(h.cycleName || h.cycleId)}${h.section && h.section !== 'interest' ? ' · ' + MD.esc(RECRUIT_SECTION_LABELS[h.section] || h.section) : ''}`).join(', ')}</p>` : '';
+  return basics + history + recruitAnswersHtml(d, cycle);
 }
 
 function recruitDetailSideHtml(id) {
@@ -576,7 +542,7 @@ function recruitDetailSideHtml(id) {
   const cycle = recruitCycleRow();
   const d = st.detail[id];
   if (!d || !d.application || d.error) return '';
-  const app = { ...d.application, scores: d.scores, assignments: d.assignments, bookings: d.bookings, mail: d.mail, audit: d.audit, history: d.history };
+  const app = { ...d.application, audit: d.audit, history: d.history };
   return RECRUIT.detailSections(app, cycle, recruitRole()).map((s) => `<section class="rc-section" data-rc-section="${MD.esc(s.id)}">${s.title ? `<h4 class="interest-subhead">${MD.esc(s.title)}</h4>` : ''}${s.html}</section>`).join('');
 }
 
@@ -619,20 +585,18 @@ function recruitAppModalHtml(m) {
   const row = recruitApp(id);
   if (!row || !cycle) return `<div class="modal" role="dialog" aria-label="Application unavailable"><div class="modal__head"><h3>Application unavailable</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div><div class="modal__body"><p>This application was removed. Close this window to refresh the list.</p></div></div>`;
   const lead = recruitCan('lead') && cycle.status !== 'archived';
-  const stageDd = lead ? dd('recruit-app-stage', recruitStages(cycle).map((s) => ({ value: s.key, label: s.name })), row.stage || 'applied', { small: true }) : '';
   const rows = recruitVisibleRows(cycle);
   const index = rows.findIndex((r) => r.id === id);
   const foot = index >= 0 && rows.length > 1 ? `<button class="btn btn--sm" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint" style="font-size:12px;font-variant-numeric:tabular-nums">${index + 1} of ${rows.length}</span><button class="btn btn--sm" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>` : '';
-  return `<div class="modal modal--wide interest-review rc-app" role="dialog" aria-label="Application from ${MD.esc(row.name)}" data-app="${MD.esc(id)}">
+  return `<div class="modal modal--wide interest-review rc-app" role="dialog" aria-label="${MD.esc(recruitSectionNoun(row.section))} from ${MD.esc(row.name)}" data-app="${MD.esc(id)}">
     <div class="modal__head">
       <div class="interest-review__identity"><h3>${MD.esc(row.name)}</h3><span>${MD.esc(row.email)} · ${MD.esc(cycle.name)}</span></div>
-      ${stageDd}
       <span data-rc="app-flag">${recruitFlagButton(row, { detail: true })}</span>
       <button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button>
     </div>
     <div class="modal__body interest-review__body">
       <section class="interest-application" aria-label="Application">
-        <h4 class="interest-subhead">Application</h4>
+        <h4 class="interest-subhead">${MD.esc(recruitSectionNoun(row.section))}</h4>
         <div data-rc="app-main">${recruitDetailMainHtml(id)}</div>
       </section>
       <section class="interest-discussion" aria-labelledby="recruit-comments-heading">
@@ -849,63 +813,6 @@ async function recruitDeleteComment(id, commentId) {
   }
 }
 
-/* ------------------------------- lead mutations -------------------------- */
-
-async function recruitPatchApp(id, body) {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
-  const row = recruitApp(id);
-  if (!cycle || !row) throw new Error('No such application');
-  const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ requestId: recruitId('rq'), editVersion: row.editVersion ?? st.apps?.byId?.[id]?.editVersion ?? 0, ...body }) });
-  if (out.application) {
-    if (st.detail[id]?.application) st.detail[id].application = { ...st.detail[id].application, ...out.application };
-    recruitAcceptRow(recruitRowFromApplication(out.application) || out.application);
-  }
-  return out;
-}
-
-async function recruitEditTags(id, add, remove) {
-  const st = recruitState();
-  if (st.busy.has('tags:' + id)) return;
-  st.busy.add('tags:' + id);
-  try {
-    await recruitPatchApp(id, { tags: { add, remove } });
-    recruitPaintRow(id);
-    recruitPaintDetail(id);
-  } catch (e) {
-    if (e.status === 409) { recruitRefetchRow(id); toast('This application changed. Reloaded; try again.'); }
-    else toast(`Could not update tags: ${recruitError(e)}`);
-  } finally { st.busy.delete('tags:' + id); }
-}
-
-async function recruitMoveOne(id, to) {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
-  const row = recruitApp(id);
-  if (!cycle || !row || row.stage === to || st.busy.has('move:' + id)) return;
-  st.busy.add('move:' + id);
-  try {
-    const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/moves`, { method: 'POST', body: JSON.stringify({ requestId: recruitId('rq'), ids: [id], to }) });
-    const moved = (out.moved || []).find((m) => m.id === id);
-    if (moved) {
-      recruitAcceptRow({ id, stage: to, stageAt: Date.now(), editVersion: moved.editVersion });
-      if (st.detail[id]?.application) Object.assign(st.detail[id].application, { stage: to, stageAt: Date.now(), editVersion: moved.editVersion });
-      if (st.cycle?.counts?.byStage) { const b = st.cycle.counts.byStage; b[row.stage] = Math.max(0, (b[row.stage] || 0) - 1); b[to] = (b[to] || 0) + 1; }
-      st.mod.analytics = undefined;
-      toast(`Moved ${row.name} to ${recruitStageName(cycle, to)}`);
-    } else {
-      const reason = (out.skipped || []).find((s) => s.id === id)?.reason;
-      toast(reason ? `Not moved: ${reason}` : 'Not moved');
-      recruitRefetchRow(id);
-    }
-    recruitPaintRow(id);
-    recruitPaintDetail(id);
-    const host = $('.rc-app [data-m="recruit-app-stage"]');
-    if (host) { const cur = recruitApp(id)?.stage; host.dataset.value = cur; const label = host.querySelector('.dd__label'); if (label) label.textContent = recruitStageName(cycle, cur); }
-  } catch (e) { toast(`Could not move: ${recruitError(e)}`); }
-  finally { st.busy.delete('move:' + id); }
-}
-
 function recruitRefreshAfterRemoval(ids) {
   const open = UI.modal?.kind === 'recruit-app' && ids.has(UI.modal.id);
   if (open) closeModal(() => renderBackground('recruit'));
@@ -922,7 +829,7 @@ function recruitConfirmRemoval(ids) {
   const hidden = rows.filter((r) => !visible.has(r.id)).length;
   UI.modal = {
     kind: 'confirm', title: rows.length === 1 ? `Delete ${rows[0].name}?` : `Delete ${rows.length} applications?`,
-    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including comments, scores and attachments. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
+    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including comments and attachments. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
     confirm: rows.length === 1 ? 'Delete application' : `Delete ${rows.length} applications`, danger: true, typed: rows.length > 1 ? 'delete applications' : undefined,
     onGo: async () => {
       const pending = rows.filter((r) => !st.busy.has('delete:' + r.id));
@@ -934,7 +841,6 @@ function recruitConfirmRemoval(ids) {
       if (st.apps?.rows) { st.apps.rows = st.apps.rows.filter((r) => !deleted.has(r.id)); for (const id of deleted) delete st.apps.byId[id]; st.apps.total = Math.max(0, st.apps.total - deleted.size); }
       for (const id of deleted) { st.selected?.delete(id); delete st.drafts[id]; delete st.detail[id]; }
       if (st.cycle?.counts) st.cycle.counts.total = Math.max(0, (st.cycle.counts.total || 0) - deleted.size);
-      st.mod.analytics = undefined;
       recruitRefreshAfterRemoval(deleted);
       const failed = pending.length - deleted.size;
       toast(failed ? `${deleted.size} deleted; ${failed} could not be deleted. Try again.` : `Deleted ${deleted.size} ${deleted.size === 1 ? 'application' : 'applications'}`);
@@ -943,288 +849,23 @@ function recruitConfirmRemoval(ids) {
   render();
 }
 
-/* ------------------------------- add / import / copy --------------------- */
-
-function recruitPersonFields(m, cycle) {
-  const teams = [{ value: '', label: 'Undecided' }, ...recruitSubteams(cycle).map((t) => ({ value: t.name, label: t.name }))];
-  const years = [{ value: '', label: 'Not provided' }, ...RECRUIT_YEARS.map((y) => ({ value: y, label: y }))];
-  return `<label>Name<input class="text-input" data-m="recruit-add-name" value="${MD.esc(m.name || '')}" maxlength="100" autocomplete="off" spellcheck="false"></label>
-    <label>Email<input class="text-input" data-m="recruit-add-email" value="${MD.esc(m.email || '')}" maxlength="200" inputmode="email" autocomplete="off" spellcheck="false"></label>
-    <label>Subteam${dd('recruit-add-subteam', teams, m.subteam || '')}</label>
-    <label>Year${dd('recruit-add-year', years, m.year || '')}</label>`;
-}
-
-function recruitAddModalHtml(m) {
-  const cycle = recruitCycleRow();
-  return `<div class="modal" role="dialog" aria-label="Add a person">
-    <div class="modal__head"><h3>Add a person</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
-    <div class="modal__body">${recruitPersonFields(m, cycle)}<p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p></div>
-    <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-add-go" ${m.busy ? 'disabled' : ''}>${m.busy ? 'Adding…' : 'Add'}</button></div>
-  </div>`;
-}
-
-function recruitModalSay(m, text, selector = '.modal .field-error') {
-  m.error = text;
-  const el = $(selector);
-  if (el) { el.textContent = text; el.hidden = !text; }
-}
-
-async function recruitAddGo() {
-  const m = UI.modal;
-  const cycle = recruitCycleRow();
-  if (m?.kind !== 'recruit-add' || m.busy || !cycle) return;
-  Object.assign(m, {
-    name: String($('.modal [data-m="recruit-add-name"]')?.value || '').trim(),
-    email: String($('.modal [data-m="recruit-add-email"]')?.value || '').trim().toLowerCase(),
-    subteam: $('.modal [data-m="recruit-add-subteam"]')?.dataset.value || '',
-    year: $('.modal [data-m="recruit-add-year"]')?.dataset.value || '',
-  });
-  if (!m.name) { recruitModalSay(m, 'A name is needed.'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.email)) { recruitModalSay(m, 'That email does not look right.'); return; }
-  m.requestId ||= recruitId('rq');
-  m.busy = true;
-  recruitModalSay(m, '');
-  const go = $('.modal [data-action="recruit-add-go"]');
-  if (go) { go.disabled = true; go.textContent = 'Adding…'; }
-  try {
-    const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications`, { method: 'POST', body: JSON.stringify({ requestId: m.requestId, name: m.name, email: m.email, subteam: m.subteam || undefined, year: m.year || undefined }) });
-    const st = recruitState();
-    const row = recruitRowFromApplication(out.application);
-    if (row && st.apps?.rows && !st.apps.byId[row.id]) { st.apps.rows.unshift(row); st.apps.byId[row.id] = row; st.apps.total += 1; if (st.cycle?.counts) { st.cycle.counts.total = (st.cycle.counts.total || 0) + 1; st.cycle.counts.byStage ||= {}; st.cycle.counts.byStage[row.stage] = (st.cycle.counts.byStage[row.stage] || 0) + 1; } }
-    toast(`Added ${m.name}`);
-    if (UI.modal === m) closeModal(() => { if (!recruitPaintRows()) renderBackground('recruit'); });
-  } catch (e) {
-    m.busy = false;
-    if (UI.modal === m) { recruitModalSay(m, e.status === 409 ? 'Someone with that email is already in this cycle.' : recruitError(e)); if (go) { go.disabled = false; go.textContent = 'Add'; } }
-  }
-}
-
-// A small CSV reader: quoted fields, doubled quotes, CRLF.
-function recruitParseCsv(text) {
-  const rows = [];
-  let row = [], cell = '', q = false;
-  const s = String(text || '').replace(/^﻿/, '');
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (q) {
-      if (ch === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; }
-      else cell += ch;
-    } else if (ch === '"') q = true;
-    else if (ch === ',') { row.push(cell); cell = ''; }
-    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && s[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
-    else cell += ch;
-  }
-  if (cell.length || row.length) { row.push(cell); rows.push(row); }
-  return rows.filter((r) => r.some((c) => c.trim()));
-}
-
-function recruitGuessColumn(headers, names) {
-  const lower = headers.map((h) => h.trim().toLowerCase());
-  for (const n of names) { const i = lower.findIndex((h) => h === n || h.includes(n)); if (i >= 0) return String(i); }
-  return '';
-}
-
-function recruitImportRows(m) {
-  const rows = recruitParseCsv(m.text || '');
-  if (!rows.length) return { headers: [], rows: [], people: [] };
-  const headers = rows[0];
-  const body = rows.slice(1);
-  const col = (k) => (m.cols?.[k] === '' || m.cols?.[k] === undefined ? -1 : Number(m.cols[k]));
-  const people = body.map((r) => ({ name: String(r[col('name')] ?? '').trim(), email: String(r[col('email')] ?? '').trim().toLowerCase(), subteam: col('subteam') >= 0 ? String(r[col('subteam')] ?? '').trim() : '', year: col('year') >= 0 ? String(r[col('year')] ?? '').trim() : '' }))
-    .filter((p) => p.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email));
-  return { headers, rows: body, people };
-}
-
-function recruitImportModalHtml(m) {
-  const { headers, rows, people } = recruitImportRows(m);
-  m.cols ||= {};
-  if (headers.length && !m.guessed) { m.guessed = true; m.cols.name ||= recruitGuessColumn(headers, ['name']); m.cols.email ||= recruitGuessColumn(headers, ['email', 'mail']); m.cols.subteam ||= recruitGuessColumn(headers, ['subteam', 'team']); m.cols.year ||= recruitGuessColumn(headers, ['year', 'class']); }
-  const options = [{ value: '', label: 'Skip' }, ...headers.map((h, i) => ({ value: String(i), label: h.trim() || `Column ${i + 1}` }))];
-  const map = headers.length ? `<div class="rc-import-cols">
-      <label>Name${dd('recruit-import-col-name', options, m.cols.name || '')}</label>
-      <label>Email${dd('recruit-import-col-email', options, m.cols.email || '')}</label>
-      <label>Subteam${dd('recruit-import-col-subteam', options, m.cols.subteam || '')}</label>
-      <label>Year${dd('recruit-import-col-year', options, m.cols.year || '')}</label>
-    </div>` : '';
-  const n = recruitImportRows(m).people.length;
-  return `<div class="modal modal--wide" role="dialog" aria-label="Import CSV">
-    <div class="modal__head"><h3>Import CSV</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
-    <div class="modal__body">
-      <label>Paste a CSV with a header row<textarea class="text-input" data-m="recruit-import-text" rows="8" spellcheck="false" placeholder="Name,Email,Subteam,Year">${MD.esc(m.text || '')}</textarea></label>
-      ${map}
-      <p class="sheet__note" style="margin:0" data-rc="import-count">${headers.length ? `${MD.esc(recruitPlural(n, 'person', 'people'))} with an email in ${MD.esc(recruitPlural(rows.length, 'row'))}` : 'Columns are matched from the header row.'}</p>
-      <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
-    </div>
-    <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-import-go" ${m.busy || !n ? 'disabled' : ''}>${m.busy ? 'Importing…' : n ? `Import ${n}` : 'Import'}</button></div>
-  </div>`;
-}
-
-function recruitImportRepaint(m) {
-  const { headers, rows, people } = recruitImportRows(m);
-  const count = $('.modal [data-rc="import-count"]');
-  if (count) count.textContent = headers.length ? `${recruitPlural(people.length, 'person', 'people')} with an email in ${recruitPlural(rows.length, 'row')}` : 'Columns are matched from the header row.';
-  const go = $('.modal [data-action="recruit-import-go"]');
-  if (go && !m.busy) { go.disabled = !people.length; go.textContent = people.length ? `Import ${people.length}` : 'Import'; }
-}
-
-async function recruitImportPeople(cycle, people, requestId) {
-  let created = 0; const skipped = [];
-  for (let i = 0; i < people.length; i += 500) {
-    const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications`, { method: 'POST', body: JSON.stringify({ requestId: `${requestId}-${i / 500}`, import: people.slice(i, i + 500).map((p) => ({ name: p.name || p.email, email: p.email, subteam: p.subteam || undefined, year: RECRUIT_YEARS.includes(p.year) ? p.year : undefined })) }), signal: AbortSignal.timeout(60000) });
-    created += Number(out.created || 0);
-    skipped.push(...(out.skipped || []));
-  }
-  return { created, skipped };
-}
-
-async function recruitImportGo() {
-  const m = UI.modal;
-  const cycle = recruitCycleRow();
-  if (m?.kind !== 'recruit-import' || m.busy || !cycle) return;
-  const { people } = recruitImportRows(m);
-  if (!people.length) { recruitModalSay(m, 'No rows with an email to import.'); return; }
-  if (people.length > 2000) { recruitModalSay(m, 'Import at most 2,000 people at a time.'); return; }
-  m.requestId ||= recruitId('rq');
-  m.busy = true;
-  recruitModalSay(m, '');
-  const go = $('.modal [data-action="recruit-import-go"]');
-  if (go) { go.disabled = true; go.textContent = 'Importing…'; }
-  try {
-    const { created, skipped } = await recruitImportPeople(cycle, people, m.requestId);
-    const st = recruitState();
-    st.cycles = undefined;
-    toast(`Imported ${created}${skipped.length ? ` · ${skipped.length} skipped` : ''}`);
-    if (UI.modal === m) closeModal(() => { recruitLoadApps(); renderBackground('recruit'); });
-  } catch (e) {
-    m.busy = false;
-    if (UI.modal === m) { recruitModalSay(m, recruitError(e)); if (go) { go.disabled = false; go.textContent = `Import ${people.length}`; } }
-  }
-}
-
-function recruitCopyModalHtml(m) {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
-  const others = (st.cycles?.list || []).filter((c) => c.id !== cycle?.id);
-  const options = [{ value: '', label: 'Choose a cycle' }, ...others.map((c) => ({ value: c.id, label: `${c.name} · ${recruitPlural(c.counts?.total || 0, 'application')}` }))];
-  return `<div class="modal" role="dialog" aria-label="Copy from another cycle">
-    <div class="modal__head"><h3>Copy from another cycle</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
-    <div class="modal__body">
-      <label>Cycle${dd('recruit-copy-from', options, m.from || '')}</label>
-      <p class="sheet__note" style="margin:0">People already in ${MD.esc(cycle?.name || 'this cycle')} are skipped. Only names, emails, subteams and years are copied.</p>
-      <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
-    </div>
-    <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-copy-go" ${m.busy ? 'disabled' : ''}>${m.busy ? 'Copying…' : 'Copy'}</button></div>
-  </div>`;
-}
-
-async function recruitCopyGo() {
-  const m = UI.modal;
-  const cycle = recruitCycleRow();
-  if (m?.kind !== 'recruit-copy' || m.busy || !cycle) return;
-  m.from = $('.modal [data-m="recruit-copy-from"]')?.dataset.value || '';
-  if (!m.from) { recruitModalSay(m, 'Choose a cycle to copy from.'); return; }
-  m.requestId ||= recruitId('rq');
-  m.busy = true;
-  recruitModalSay(m, '');
-  const go = $('.modal [data-action="recruit-copy-go"]');
-  if (go) { go.disabled = true; go.textContent = 'Copying…'; }
-  try {
-    const people = [];
-    let cursor = null;
-    for (let page = 0; page < 10; page++) {
-      const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(m.from)}/applications?limit=200${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`);
-      for (const r of out.rows || []) people.push({ name: r.name, email: r.email, subteam: r.subteam, year: r.year });
-      cursor = out.next || null;
-      if (!cursor) break;
-    }
-    const { created, skipped } = await recruitImportPeople(cycle, people, m.requestId);
-    const st = recruitState();
-    st.cycles = undefined;
-    toast(`Copied ${created}${skipped.length ? ` · ${skipped.length} already here` : ''}`);
-    if (UI.modal === m) closeModal(() => { recruitLoadApps(); renderBackground('recruit'); });
-  } catch (e) {
-    m.busy = false;
-    if (UI.modal === m) { recruitModalSay(m, recruitError(e)); if (go) { go.disabled = false; go.textContent = 'Copy'; } }
-  }
-}
-
-/* ------------------------------- saved views ----------------------------- */
-
-function recruitViewModalHtml(m) {
-  const cycle = recruitCycleRow();
-  const views = Array.isArray(cycle?.doc?.pipeline?.views) ? cycle.doc.pipeline.views : [];
-  const manage = m.mode === 'manage';
-  return `<div class="modal" role="dialog" aria-label="${manage ? 'Manage views' : 'Save view'}">
-    <div class="modal__head"><h3>${manage ? 'Saved views' : 'Save this view'}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
-    <div class="modal__body">
-      ${manage ? `<div class="audit">${views.map((v) => `<div class="audit__row"><span class="audit__what"><b>${MD.esc(v.name)}</b></span><button class="btn btn--sm btn--danger" style="margin-left:auto" data-action="recruit-view-delete" data-key="${MD.esc(v.key)}">Delete</button></div>`).join('') || '<div class="audit__row"><span class="audit__what faint">No saved views.</span></div>'}</div>`
-        : `<label>Name<input class="text-input" data-m="recruit-view-name" value="${MD.esc(m.name || '')}" maxlength="40" placeholder="e.g. Electrical, unscored" autocomplete="off"></label>
-           <p class="sheet__note" style="margin:0">Saves the current search, filters and sort for everyone in this cycle.</p>`}
-      <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
-    </div>
-    <div class="modal__foot"><button class="btn" data-action="modal-close">${manage ? 'Close' : 'Cancel'}</button>${manage ? '' : `<button class="btn btn--primary" data-action="recruit-view-save" ${m.busy ? 'disabled' : ''}>Save view</button>`}</div>
-  </div>`;
-}
-
-async function recruitPutViews(views) {
-  const cycle = recruitCycleRow();
-  const pipeline = { ...(cycle.doc?.pipeline || {}), stages: recruitStages(cycle), views };
-  const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/settings/pipeline`, { method: 'PUT', body: JSON.stringify({ version: cycle.version, settings: pipeline }) });
-  recruitAdoptCycle(out.cycle);
-}
-
-async function recruitViewSave() {
-  const m = UI.modal;
-  const cycle = recruitCycleRow();
-  if (m?.kind !== 'recruit-view' || m.busy || !cycle) return;
-  const name = String($('.modal [data-m="recruit-view-name"]')?.value || '').trim();
-  if (!name) { recruitModalSay(m, 'A view needs a name.'); return; }
-  m.busy = true;
-  const f = recruitFilters(cycle.id);
-  const key = recruitSlug(name) || 'view';
-  const views = (cycle.doc?.pipeline?.views || []).filter((v) => v.key !== key);
-  views.push({ key, name, query: { ...f } });
-  try {
-    await recruitPutViews(views);
-    toast(`Saved view ${name}`);
-    if (UI.modal === m) closeModal(() => renderBackground('recruit'));
-  } catch (e) { m.busy = false; if (UI.modal === m) recruitModalSay(m, e.status === 409 ? 'This cycle changed. Reload and try again.' : recruitError(e)); }
-}
-
-function recruitApplyView(key) {
-  const cycle = recruitCycleRow();
-  const v = (cycle?.doc?.pipeline?.views || []).find((x) => x.key === key);
-  if (!v) return;
-  const f = recruitFilters(cycle.id);
-  Object.assign(f, { ...RECRUIT_FILTER_DEFAULTS, ...(v.query || {}) });
-  render();
-  recruitLoadApps();
-}
-
 /* ------------------------------- register -------------------------------- */
 
 RECRUIT.register({
   name: 'applications',
   order: 10,
   kernel: true,
-  panel: { id: 'applications', label: 'Applications', order: 10, when: () => true },
+  panels: RECRUIT_SECTION_KEYS.map((key, i) => ({ id: key, label: RECRUIT_SECTION_LABELS[key], order: 10 + i, when: () => true })),
   view: recruitApplicationsView,
   mount(cycle) {
     const st = recruitState();
-    if (st.apps === undefined || st.apps.key !== st.key + ':' + cycle.id) recruitLoadApps();
+    if (st.apps === undefined || st.apps.key !== st.key + ':' + cycle.id + ':' + recruitSection()) recruitLoadApps();
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },
   filters: (cycle) => recruitCoreFilters(cycle),
   actions: {
     'recruit-apps-refresh': () => { recruitLoadApps(); },
     'recruit-load-more': () => { recruitLoadApps(true); },
-    'recruit-stage': (el) => {
-      const cycle = recruitCycleRow();
-      if (!cycle) return;
-      recruitFilters(cycle.id).stage = el.dataset.stage || '';
-      for (const b of $$('.rc-strip__stage')) b.setAttribute('aria-pressed', String((b.dataset.stage || '') === (el.dataset.stage || '')));
-      recruitLoadApps();
-    },
     'recruit-sort': (el) => {
       const cycle = recruitCycleRow();
       if (!cycle) return;
@@ -1244,12 +885,6 @@ RECRUIT.register({
     'recruit-select': (el) => { const s = recruitSelection(); if (el.checked) s.add(el.dataset.id); else s.delete(el.dataset.id); recruitPaintSelection(); },
     'recruit-select-visible': (el) => { const s = recruitSelection(); for (const r of recruitVisibleRows()) { if (el.checked) s.add(r.id); else s.delete(r.id); } recruitPaintSelection(); },
     'recruit-clear-selection': () => { recruitSelection().clear(); recruitPaintSelection(); },
-    'recruit-selection-act': async (el) => {
-      const cycle = recruitCycleRow();
-      const ids = [...recruitSelection()];
-      const action = RECRUIT.selectionActions(ids, cycle, recruitRole()).find((a) => a.id === el.dataset.sel);
-      if (action) await action.run(ids, cycle, el);
-    },
     'recruit-copy-emails': async () => {
       const emails = recruitSelectedEmails();
       if (!emails.length) return;
@@ -1265,17 +900,6 @@ RECRUIT.register({
       }
     },
     'recruit-remove-selected': () => recruitConfirmRemoval([...recruitSelection()]),
-    'recruit-tools': (el) => {
-      const st = recruitState();
-      const cycle = recruitCycleRow();
-      const lead = recruitCan('lead') && cycle?.status !== 'archived';
-      openMenu([
-        { label: 'Refresh', run: () => { st.apps = undefined; st.detail = {}; render(); } },
-        ...(lead ? ['-', { label: 'Add person…', run: () => { UI.modal = { kind: 'recruit-add' }; render(); } },
-          { label: 'Import CSV…', run: () => { UI.modal = { kind: 'recruit-import', text: '', cols: {} }; render(); } },
-          { label: 'Copy from cycle…', run: () => { UI.modal = { kind: 'recruit-copy' }; render(); } }] : []),
-      ], el);
-    },
     'recruit-app-open': (el) => recruitOpenApp(el.dataset.id, { comments: Boolean(el.dataset.comments) }),
     'recruit-app-prev': () => recruitStepApp(-1),
     'recruit-app-next': () => recruitStepApp(1),
@@ -1285,26 +909,8 @@ RECRUIT.register({
     'recruit-comment-delete': (el) => recruitConfirmCommentRemoval(el.dataset.id, el.dataset.cid),
     'recruit-comment-delete-cancel': (el) => recruitConfirmCommentRemoval(el.dataset.id, el.dataset.cid, true),
     'recruit-comment-delete-confirm': (el) => recruitDeleteComment(el.dataset.id, el.dataset.cid),
-    'recruit-tag-form': (form) => {
-      const input = $('[data-m="recruit-tag-new"]', form);
-      const tag = String(input?.value || '').trim().slice(0, 30);
-      if (!tag) return;
-      if (input) input.value = '';
-      recruitEditTags(form.dataset.id, [tag], []);
-    },
-    'recruit-tag-remove': (el) => recruitEditTags(el.dataset.id, [], [el.dataset.tag]),
     'recruit-queue-open': (el) => { UI.modal = { kind: 'recruit-queue', id: el.dataset.id }; render(); },
     'recruit-queue-place': (el) => recruitOpenQueuePlace(el, el.dataset.id),
-    'recruit-add-go': recruitAddGo,
-    'recruit-import-go': recruitImportGo,
-    'recruit-copy-go': recruitCopyGo,
-    'recruit-view-save': recruitViewSave,
-    'recruit-view-delete': async (el) => {
-      const cycle = recruitCycleRow();
-      if (!cycle) return;
-      try { await recruitPutViews((cycle.doc?.pipeline?.views || []).filter((v) => v.key !== el.dataset.key)); toast('View deleted'); renderBackground('recruit'); const row = el.closest('.audit__row'); row?.remove(); }
-      catch (e) { toast(`Could not delete: ${recruitError(e)}`); }
-    },
   },
   inputs: {
     'recruit-q': (el) => {
@@ -1321,31 +927,13 @@ RECRUIT.register({
       const button = el.closest('form')?.querySelector('[type="submit"]');
       if (button) button.disabled = draft.sending || !draft.text.trim();
     },
-    'recruit-import-text': (el) => { const m = UI.modal; if (m?.kind !== 'recruit-import') return; m.text = el.value; if (!m.guessed) { render(); $('.modal [data-m="recruit-import-text"]')?.focus(); } else recruitImportRepaint(m); },
   },
   dd: {
     'recruit-filter': (host, value) => (value === undefined ? recruitOpenFilter(host) : undefined),
-    'recruit-view': (host, value) => {
-      if (value === undefined) return undefined;             // the default menu from data-opts
-      const cycle = recruitCycleRow();
-      host.dataset.value = ''; const label = host.querySelector?.('.dd__label'); if (label) label.textContent = 'Views';
-      if (value === '__save') { UI.modal = { kind: 'recruit-view', mode: 'save' }; render(); }
-      else if (value === '__manage') { UI.modal = { kind: 'recruit-view', mode: 'manage' }; render(); }
-      else if (value && cycle) recruitApplyView(value);
-    },
-    'recruit-app-stage': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-app') recruitMoveOne(UI.modal.id, value); },
-    'recruit-import-col-name': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-import') { UI.modal.cols.name = value; recruitImportRepaint(UI.modal); } },
-    'recruit-import-col-email': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-import') { UI.modal.cols.email = value; recruitImportRepaint(UI.modal); } },
-    'recruit-import-col-subteam': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-import') { UI.modal.cols.subteam = value; recruitImportRepaint(UI.modal); } },
-    'recruit-import-col-year': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-import') { UI.modal.cols.year = value; recruitImportRepaint(UI.modal); } },
   },
   modals: {
     'recruit-app': recruitAppModalHtml,
     'recruit-queue': recruitQueueModalHtml,
-    'recruit-add': recruitAddModalHtml,
-    'recruit-import': recruitImportModalHtml,
-    'recruit-copy': recruitCopyModalHtml,
-    'recruit-view': recruitViewModalHtml,
     'recruit-email-copy': (m) => `<div class="modal" role="dialog" aria-label="Copy selected emails">
       <div class="modal__head"><h3>Selected emails</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
       <div class="modal__body"><p>Clipboard access was blocked. Select and copy this comma-separated list.</p>

@@ -207,10 +207,10 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
         return result([row]);
       }
       if (m(/^DELETE FROM recruit_cycles WHERE id = \$1$/)) { db.cycles = db.cycles.filter((c) => c.id !== v[0]); return result(); }
-      if (m(/^SELECT cycle_id, stage, count\(\*\)::int AS n FROM recruit_applications WHERE true( AND cycle_id = ANY\(\$1\))? GROUP BY cycle_id, stage$/)) {
+      if (m(/^SELECT cycle_id, stage, section, count\(\*\)::int AS n FROM recruit_applications WHERE true( AND cycle_id = ANY\(\$1\))? GROUP BY cycle_id, stage, section$/)) {
         const counts = new Map();
-        for (const a of db.applications) if (!v[0] || v[0].includes(a.cycle_id)) counts.set(a.cycle_id + '|' + a.stage, (counts.get(a.cycle_id + '|' + a.stage) || 0) + 1);
-        return result([...counts].map(([k, n]) => ({ cycle_id: k.split('|')[0], stage: k.split('|')[1], n })));
+        for (const a of db.applications) if (!v[0] || v[0].includes(a.cycle_id)) { const k = a.cycle_id + '|' + a.stage + '|' + (a.section || 'interest'); counts.set(k, (counts.get(k) || 0) + 1); }
+        return result([...counts].map(([k, n]) => ({ cycle_id: k.split('|')[0], stage: k.split('|')[1], section: k.split('|')[2], n })));
       }
 
       /* legacy tables */
@@ -256,7 +256,9 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
 
       /* applications */
       if (m(/^SELECT count\(\*\) AS n FROM recruit_applications WHERE cycle_id = \$1$/)) return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0]).length) }]);
-      if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 AND email = \$2$/)) return result(db.applications.filter((a) => a.cycle_id === v[0] && a.email === v[1]));
+      if (m(/^SELECT count\(\*\) AS n FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2$/)) return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1]).length) }]);
+      if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2 AND email = \$3$/)) return result(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1] && a.email === v[2]));
+      if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2 ORDER BY ts DESC LIMIT 10000$/)) return result(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1]).sort((x, y) => y.ts - x.ts));
       if (m(/^SELECT \* FROM recruit_applications WHERE id = \$1 AND cycle_id = \$2$/)) return result(db.applications.filter((a) => a.id === v[0] && a.cycle_id === v[1]));
       if (m(/^SELECT \* FROM recruit_applications WHERE id = \$1$/)) return result(db.applications.filter((a) => a.id === v[0]));
       if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 ORDER BY ts DESC LIMIT \$2$/)) return result(db.applications.filter((a) => a.cycle_id === v[0]).sort((x, y) => y.ts - x.ts).slice(0, v[1]));
@@ -265,13 +267,13 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
       if (m(/^SELECT \* FROM recruit_applications WHERE email = \$1 ORDER BY ts DESC$/)) return result(db.applications.filter((a) => a.email === v[0]));
       if (/^WITH prior AS \( ?SELECT outcome FROM interest_receipts WHERE id = \$1 AND NOT \(\$2 AND outcome IN/.test(text)) {
         db.commitStatement = text;
-        assert.equal(v.length, 31, 'the commit CTE carries every value as a parameter');
+        assert.equal(v.length, 32, 'the commit CTE carries every value as a parameter');
         const [rid, override] = v;
         const prior = db.receipts.get(rid);
         if (prior && !(override && ['review', 'held'].includes(prior))) return result([{ outcome: prior, inserted: null }]);
-        const incoming = { id: v[2], cycle_id: v[3], email: v[4], ts: v[5], updated: v[6], name: v[7], cornell: v[8], subteam: v[9], year: v[10], source: v[11], form_version: v[12], answers: JSON.parse(v[13]), files: JSON.parse(v[14]), stage: v[15], stage_at: v[16], stage_history: JSON.parse(v[17]), ip_hash: v[18], receipt_id: v[19], outcome: null, decision: {}, tags: [], review: {}, review_version: 0, edit_version: 0, onboarded_at: null, erased_at: null };
-        const hasYear = v[20], confirmUpdate = v[21];
-        const current = db.applications.find((a) => a.cycle_id === incoming.cycle_id && a.email === incoming.email);
+        const incoming = { id: v[2], cycle_id: v[3], section: v[4], email: v[5], ts: v[6], updated: v[7], name: v[8], cornell: v[9], subteam: v[10], year: v[11], source: v[12], form_version: v[13], answers: JSON.parse(v[14]), files: JSON.parse(v[15]), stage: v[16], stage_at: v[17], stage_history: JSON.parse(v[18]), ip_hash: v[19], receipt_id: v[20], outcome: null, decision: {}, tags: [], review: {}, review_version: 0, edit_version: 0, onboarded_at: null, erased_at: null };
+        const hasYear = v[21], confirmUpdate = v[22];
+        const current = db.applications.find((a) => a.cycle_id === incoming.cycle_id && (a.section || 'interest') === (incoming.section || 'interest') && a.email === incoming.email);
         let written = false, inserted = false;
         if (!current) { db.applications.push(incoming); written = inserted = true; }
         else if (confirmUpdate && current.updated <= incoming.updated) {
@@ -488,9 +490,9 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
   const commit = tracedSince(mark).filter((t) => /^WITH prior AS \( ?SELECT outcome FROM interest_receipts WHERE id = \$1 AND NOT/.test(t));
   assert.equal(commit.length, 1, 'exactly one commit statement');
   assert.match(commit[0], /INSERT INTO interest_receipts/);
-  assert.match(commit[0], /ON CONFLICT \(cycle_id, email\) DO UPDATE SET/);
+  assert.match(commit[0], /ON CONFLICT \(cycle_id, section, email\) DO UPDATE SET/);
   assert.match(commit[0], /INSERT INTO recruit_applicants/);
-  const setClause = /DO UPDATE SET (.*?) WHERE \$22 AND recruit_applications\.updated <= EXCLUDED\.updated/s.exec(commit[0])[1];
+  const setClause = /DO UPDATE SET (.*?) WHERE \$23 AND recruit_applications\.updated <= EXCLUDED\.updated/s.exec(commit[0])[1];
   for (const col of ['review', 'stage', 'tags', 'decision', 'edit_version', 'outcome']) assert.ok(!new RegExp(`\\b${col} =`).test(setClause), `${col} is never in the applicant SET list`);
   assert.ok(!tracedSince(mark).some((t) => t.startsWith('INSERT INTO interest_submissions')), 'nothing lands in the legacy table');
   const bridged = db.applications.find((a) => a.email === 'bridge@example.com');
