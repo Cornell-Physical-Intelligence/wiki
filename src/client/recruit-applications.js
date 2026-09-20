@@ -343,7 +343,7 @@ function recruitSheetHtml(cycle) {
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
     </div>
-    <div class="sheet__scroll"><table aria-label="${MD.esc(RECRUIT_SECTION_LABELS[section])} in ${MD.esc(cycle.name)}">
+    <div class="sheet__scroll"><table aria-label="${MD.esc(recruitSectionTitle(section, cycle))} in ${MD.esc(cycle.name)}">
       <thead><tr>
         <th class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select-visible" aria-label="Select all visible people" ${rows.length && visibleSelected === rows.length ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label></th>
         ${th('name', 'Person', 'person')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
@@ -490,10 +490,12 @@ RECRUIT.register({
   name: 'applications',
   order: 10,
   kernel: true,
-  panels: RECRUIT_SECTION_KEYS.map((key, i) => ({ id: key, label: RECRUIT_SECTION_LABELS[key], order: 10 + i, when: () => true })),
+  panels: (cycle) => recruitSectionKeys(cycle).map((key, i) => ({ id: key, label: recruitSectionTitle(key, cycle), order: 10 + i, when: () => true })),
   view: recruitApplicationsView,
   mount(cycle) {
     const st = recruitState();
+    const seg = $('.rc-seg--mode');
+    if (seg) { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => recruitSegSlide($('.rc-seg--mode'))); else recruitSegSlide(seg); }
     if (st.apps === undefined || st.apps.key !== st.key + ':' + cycle.id + ':' + recruitSection()) recruitLoadApps();
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },

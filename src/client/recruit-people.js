@@ -55,7 +55,8 @@ function recruitPeopleCountsLine() {
   const c = recruitState().people?.counts;
   if (!c) return '';
   const by = c.bySection || {};
-  return `${recruitPlural(c.people || 0, 'person', 'people')} · ${Number(by.interest || 0).toLocaleString('en-US')} interest · ${recruitPlural(by.coffee || 0, 'coffee chat')} · ${recruitPlural(by.application || 0, 'application')}${c.flagged ? ` · ${c.flagged} flagged` : ''}`;
+  const forms = recruitSectionKeys().map((key) => `${recruitSectionTitle(key)} ${Number(by[key] || 0).toLocaleString('en-US')}`);
+  return [recruitPlural(c.people || 0, 'person', 'people'), c.flagged ? `${c.flagged} flagged` : '', ...forms].filter(Boolean).join(' · ');
 }
 
 function recruitPeopleFootText() {
@@ -92,15 +93,14 @@ function recruitPersonReviewCellHtml(p) {
 
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const span = 8;
+  const keys = recruitSectionKeys();
+  const span = 5 + keys.length;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No people match.' : 'Nobody yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
     <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
-    <td data-col="interest">${recruitSentCell(x.sections?.interest, x)}</td>
-    <td data-col="coffee">${recruitSentCell(x.sections?.coffee, x)}</td>
-    <td data-col="application">${recruitSentCell(x.sections?.application, x)}</td>
+    ${keys.map((key) => `<td data-col="${MD.esc(key)}" class="rc-people__form">${recruitSentCell(x.sections?.[key], x)}</td>`).join('')}
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
@@ -110,7 +110,7 @@ function recruitPeopleRowsHtml(rows) {
 
 function recruitPeopleHtml(cycle) {
   const p = recruitState().people;
-  const th = (id, label) => `<th data-col="${id}"><span class="sheet__sort sheet__sort--static">${label}</span></th>`;
+  const th = (id, label) => `<th data-col="${id}"><span class="sheet__sort sheet__sort--static">${MD.esc(label)}</span></th>`;
   const lead = recruitCan('lead');
   return `<div class="rc-mode"><span class="rc-mode__status" data-rc="people-counts">${MD.esc(recruitPeopleCountsLine())}</span></div>
   <div class="sheet sheet--recruit sheet--people">
@@ -122,7 +122,7 @@ function recruitPeopleHtml(cycle) {
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest')}${th('coffee', 'Coffee')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
+      <thead><tr>${th('person', 'Person')}${recruitSectionKeys(cycle).map((key) => `<th data-col="${MD.esc(key)}" class="rc-people__form"><span class="sheet__sort sheet__sort--static">${MD.esc(recruitSectionTitle(key, cycle))}</span></th>`).join('')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
         <th class="sheet__review-cell" data-col="review"><span class="sheet__sort sheet__sort--static">Review</span></th></tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
@@ -243,8 +243,11 @@ function recruitPersonMainHtml(email, want) {
   if (!subs.length) return '<p class="faint">Nothing from this person in this cycle. Close this window to refresh the list.</p>';
   const sub = subs.find((s) => s.application.section === form) || subs[0];
   const a = sub.application;
+  const was = d.shown;
+  d.shown = a.section;
+  const from = was && was !== a.section ? subs.findIndex((s) => s.application.section === was) : -1;
   const switcher = subs.length > 1
-    ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent">${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionNoun(s.application.section))}</button>`).join('')}</nav>`
+    ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent"${from >= 0 ? ` data-seg-from="${from}"` : ''}><span class="rc-seg__thumb" aria-hidden="true"></span>${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionNoun(s.application.section))}</button>`).join('')}</nav>`
     : `<h4 class="interest-subhead">${MD.esc(recruitSectionNoun(a.section))}</h4>`;
   const basics = `<dl class="interest-detail">
     <dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>
@@ -320,6 +323,7 @@ function recruitPaintPerson(email) {
   const row = d?.person || recruitPersonRow(email);
   if (row && cycle) { recruitRepaint($('[data-rc="person-identity"]', dialog), recruitPersonIdentityHtml(row, cycle)); dialog.setAttribute('aria-label', row.name); }
   recruitRepaint($('[data-rc="person-main"]', dialog), recruitPersonMainHtml(email, UI.modal.form));
+  recruitSegSlide($('[data-rc="person-main"] .rc-seg--forms', dialog));
   recruitRepaint($('[data-rc="person-side"]', dialog), recruitPersonSideHtml(email, UI.modal.form));
   const flag = $('[data-rc="person-flag"]', dialog);
   if (flag) recruitRepaint(flag, recruitPersonFlagHtml(email));
@@ -330,6 +334,7 @@ function recruitPaintPerson(email) {
 function recruitOpenPerson(email, { form = null, comments = false } = {}) {
   if (!email) return;
   recruitShowModal({ kind: 'recruit-person', email, form, inPlace: true });
+  recruitSegSlide($('.rc-person .rc-seg--forms'));
   const d = recruitPerson(email);
   if (d === undefined || d?.error) recruitLoadPerson(email);
   recruitPrefetchPeople(email);

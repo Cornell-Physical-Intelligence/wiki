@@ -2004,6 +2004,12 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-tabs [role="tab"]:hover { color: var(--fg); background: var(--hover); }
 .rc-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+/* The + after the tabs adds a form to the cycle. */
+.rc-tabs__add { flex: none; align-self: center; width: 30px; height: 30px; margin: 0 0 2px 4px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--faint); }
+.rc-tabs__add svg { width: 15px; height: 15px; }
+.rc-tabs__add:hover, .rc-tabs__add:focus-visible { color: var(--fg); background: var(--hover); outline: none; }
+.rc-tabs__add:focus-visible { box-shadow: inset 0 0 0 2px var(--fg); }
+.rc-form-new .modal__body { gap: 12px; }
 .rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .rc-panel--enter { animation: none; } }
@@ -2032,7 +2038,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 /* People: one column per form. A sent form is its date, set like Received
    and Latest; it opens that form. Nothing sent is the same dash as an empty
    year. */
-.sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 100px; }
 .sheet.sheet--people th[data-col="last"] { width: 88px; }
 .rc-sent {
   display: inline-block; max-width: 100%; padding: 2px 0; background: none; border: 0; border-radius: 4px; cursor: pointer;
@@ -2043,10 +2048,8 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-sent:hover { color: var(--fg); text-decoration-color: var(--rule); }
 .rc-sent:focus-visible { color: var(--fg); outline: 2px solid var(--fg); outline-offset: 2px; }
 @container (max-width: 36em) {
-  .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people td[data-col="interest"],
-  .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people td[data-col="coffee"],
-  .sheet.sheet--people th[data-col="application"], .sheet.sheet--people td[data-col="application"] { display: table-cell; }
-  .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 92px; }
+  .sheet.sheet--people th.rc-people__form, .sheet.sheet--people td.rc-people__form { display: table-cell; }
+  .sheet.sheet--people th.rc-people__form { width: 92px; }
   .sheet.sheet--people th[data-col="review"], .sheet.sheet--people td[data-col="review"] { display: table-cell; }
 }
 /* Settings forms: one column of labelled fields, actions on a footer rail. */
@@ -2078,19 +2081,24 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 
 /* ---------------------------------------------------------------------------
    Cycle title: the name is the switch. */
+/* The name, its chevron and the gear sit on one axis: the h1 is a flex row,
+   so both icons centre on the same line as the text, at one size and one
+   shade, with even spacing between them. */
 .plain-head--cycle { margin-bottom: 18px; }
+.plain-head--cycle h1 { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .rc-cycle-title {
-  display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
-  margin: 0 0 0 -8px; padding: 2px 10px 2px 8px; border-radius: 10px;
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%;
+  margin: 0 0 0 -8px; padding: 2px 8px; border-radius: 10px;
   font: inherit; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer;
 }
 .rc-cycle-title:hover, .rc-cycle-title[aria-expanded="true"] { background: var(--hover); }
 .rc-cycle-title:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .rc-cycle-title .dd__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rc-cycle-title .dd__chev { width: 20px; height: 20px; color: var(--faint); flex: none; margin-top: 4px; }
-.rc-cycle-gear { width: 36px; height: 36px; margin: 0 0 0 2px; color: var(--faint); vertical-align: middle; border-radius: 10px; }
-.rc-cycle-gear svg { width: 20px; height: 20px; }
+.rc-cycle-title .dd__chev, .rc-cycle-gear svg { width: 18px; height: 18px; color: var(--faint); flex: none; }
+.rc-cycle-title:hover .dd__chev { color: var(--fg); }
+.rc-cycle-gear { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 8px; color: var(--faint); flex: none; }
 .rc-cycle-gear:hover { color: var(--fg); }
+.rc-cycle-gear:hover svg { color: var(--fg); }
 
 /* ---------------------------------------------------------------------------
    Settings dialog: a few short groups under hairlines, actions in the foot. */
@@ -2121,7 +2129,14 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 /* ---------------------------------------------------------------------------
    Section tab bar: Responses | Form, and the website status. */
 .rc-mode { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: -6px 0 16px; }
-.rc-seg { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
+.rc-seg { position: relative; display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
+/* The thumb: placed by script on the current item, sliding between items. */
+.rc-seg__thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: 0; border-radius: 999px; background: var(--fg); transition: transform 240ms cubic-bezier(0.2, 0, 0, 1), width 240ms cubic-bezier(0.2, 0, 0, 1); pointer-events: none; }
+.rc-seg a, .rc-seg button { position: relative; z-index: 1; }
+.rc-seg.is-live a[aria-current="page"], .rc-seg.is-live button[aria-current="page"] { background: transparent; }
+.rc-seg.is-live a[aria-current="page"]:hover, .rc-seg.is-live button[aria-current="page"]:hover { background: transparent; }
+.rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { transition: color 180ms ease; }
+@media (prefers-reduced-motion: reduce) { .rc-seg__thumb { transition: none; } }
 .rc-seg a, .rc-seg button { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; font: inherit; font-size: 13px; color: var(--muted); background: transparent; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .rc-seg a:hover, .rc-seg button:hover { color: var(--fg); background: var(--hover); }
 .rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { color: var(--page); background: var(--fg); }
@@ -2130,11 +2145,14 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-seg--forms { margin: 0 0 18px; }
 .rc-seg .count, .rc-mode__plain .count { font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7; }
 .rc-mode__plain { font-size: 13px; color: var(--muted); }
-.rc-mode__status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.rc-mode__status { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; max-width: 100%; font-size: 13px; color: var(--muted); }
+.rc-mode__addr { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.rc-mode__switch { font-size: 13px; }
+.rc-mode__switch input:checked ~ .fe-switch__text { color: var(--fg); }
 .rc-mode__status a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); margin-left: 4px; }
 .rc-mode__status a:hover { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-mode__sep { color: var(--faint); margin: 0 2px; }
-.rc-mode__link { font-variant-numeric: tabular-nums; }
+.rc-mode__link { min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .rc-mode__copy { width: 24px; height: 24px; margin-left: -2px; }
 .rc-mode__copy svg { width: 13px; height: 13px; }
 .rc-mode__also { color: var(--faint); }
@@ -2229,6 +2247,10 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe-switch--row small { font-size: 12.5px; color: var(--faint); }
 .fe-options__cap { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
 .fe-options__n { width: 96px; font-variant-numeric: tabular-nums; }
+.fe-options__remove { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
+.fe-options__remove .fe-switch__text { display: flex; flex-direction: column; gap: 2px; }
+.fe-options__remove small { font-size: 12.5px; color: var(--faint); }
+.sheet.sheet--people th.rc-people__form { width: 100px; }
 .fe-options__n::placeholder { color: var(--faint); }
 .fe__foot { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 12px 0; border-top: 1px solid var(--hairline); background: var(--page); }
 .fe__status, .fe__error { margin-left: auto; font-size: 12.5px; color: var(--faint); }
@@ -2239,7 +2261,15 @@ body { transition: background-color 160ms ease, color 160ms ease; }
   .fe-q__help { width: calc(100% - 12px); margin: 2px 6px 0; }
   .fe-q__answer { margin: 12px 6px 10px; }
   .fe__title { font-size: 24px; }
-  .rc-mode { margin-top: 0; }
+  .rc-mode { margin-top: 0; gap: 12px; }
+  /* The address takes a row of its own under the switch; no dot between. */
+  .rc-mode__addr { flex-basis: 100%; }
+  .rc-mode__sep { display: none; }
+  /* Stepping through people on a phone: the head's × closes, so the foot is
+     Previous and Next at the two ends, where thumbs are. */
+  .rc-app .modal__foot > [data-action="modal-close"], .rc-app .modal__foot > span[style] { display: none; }
+  .rc-app__nav { flex: 1; justify-content: space-between; }
+  .rc-app__index { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .fe-q, .fe-switch__track, .fe-switch__track::after, .fe-opt .icon-btn { transition: none; } }
 
@@ -8350,7 +8380,8 @@ const RECRUIT = {
   panels(cycle, role) {
     const out = [];
     for (const m of this.active(cycle)) {
-      for (const p of (m.panels || (m.panel ? [m.panel] : []))) {
+      const list = typeof m.panels === 'function' ? m.panels(cycle, role) : (m.panels || (m.panel ? [m.panel] : []));
+      for (const p of list) {
         if (!p || (p.when && !p.when(cycle, role))) continue;
         out.push({ id: p.id, label: p.label, order: p.order ?? m.order, module: m });
       }
@@ -8584,13 +8615,29 @@ const RECRUIT = {
   },
 };
 
+// The forms every cycle starts with; a cycle can add its own and drop any
+// but the interest form. The cycle's own list (in order) is the truth.
 const RECRUIT_SECTION_KEYS = ['interest', 'coffee', 'application'];
-// One row of a section, as a noun: what the dialog is showing.
-const RECRUIT_SECTION_NOUNS = { interest: 'Interest form', coffee: 'Coffee chat', application: 'Application' };
-const recruitSectionNoun = (key) => RECRUIT_SECTION_NOUNS[key] || 'Application';
 const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Applications' };
-// The section a cycle URL points at; the interest form when it names none.
-function recruitSection() { const sub = UI.route?.params?.sub; return RECRUIT_SECTION_KEYS.includes(sub) ? sub : 'interest'; }
+// The open cycle carries its merged, ordered forms from the server; any
+// other row (the index) is read from its saved settings over the defaults.
+function recruitSectionKeys(cycle = recruitCycleRow()) {
+  const st = recruitState();
+  if (cycle && st.cycle?.data?.id === cycle.id && st.cycle.sections) return Object.keys(st.cycle.sections).filter((k) => st.cycle.sections[k]);
+  const saved = cycle?.doc?.site?.sections && typeof cycle.doc.site.sections === 'object' ? cycle.doc.site.sections : {};
+  const order = Array.isArray(cycle?.doc?.site?.order) ? cycle.doc.site.order : [];
+  const known = [...RECRUIT_SECTION_KEYS.filter((k) => saved[k] !== null), ...Object.keys(saved).filter((k) => !RECRUIT_SECTION_KEYS.includes(k) && saved[k] && typeof saved[k] === 'object')];
+  return [...order.filter((k) => known.includes(k)), ...known.filter((k) => !order.includes(k))];
+}
+function recruitSectionTitle(key, cycle = recruitCycleRow()) {
+  const st = recruitState();
+  const merged = cycle && st.cycle?.data?.id === cycle.id ? st.cycle.sections?.[key] : null;
+  return merged?.title || cycle?.doc?.site?.sections?.[key]?.title || RECRUIT_SECTION_LABELS[key] || key;
+}
+// One row of a form, as a noun: what a dialog is showing.
+const recruitSectionNoun = (key, cycle = recruitCycleRow()) => recruitSectionTitle(key, cycle);
+// The form a cycle URL points at; the first form when it names none.
+function recruitSection() { const sub = UI.route?.params?.sub; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
 
 const RECRUIT_TIMEOUT_MS = 20000;
 const RECRUIT_SYNC_MS = 30000;
@@ -8683,6 +8730,32 @@ function recruitActivePanel() {
   return panels.find((p) => p.id === sub) || panels[0] || null;
 }
 
+// Segmented controls carry a thumb that slides to the current item. On a
+// fresh paint the thumb starts on the item it came from (data-seg-from, an
+// index) and glides over; with nothing to come from it just sits.
+function recruitSegSlide(nav) {
+  if (!nav || typeof nav.getBoundingClientRect !== 'function') return;
+  const items = [...nav.querySelectorAll('a, button')].filter((el) => el.parentElement === nav);
+  const thumb = nav.querySelector('.rc-seg__thumb');
+  const to = items.findIndex((el) => el.getAttribute('aria-current') === 'page');
+  if (!thumb || !thumb.style || to < 0 || typeof items[to].getBoundingClientRect !== 'function') return;
+  const box = nav.getBoundingClientRect();
+  const place = (el, animate) => {
+    const r = el.getBoundingClientRect();
+    thumb.style.transition = animate ? '' : 'none';
+    thumb.style.transform = `translateX(${r.left - box.left - nav.clientLeft}px)`;
+    thumb.style.width = `${r.width}px`;
+  };
+  const from = Number(nav.dataset.segFrom);
+  if (Number.isInteger(from) && from !== to && items[from] && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    place(items[from], false);
+    void thumb.offsetWidth;
+    place(items[to], true);
+  } else place(items[to], false);
+  nav.classList.add('is-live');
+  delete nav.dataset.segFrom;
+}
+
 // Region repaint that keeps the reader's focus (the caret's element is found
 // again by its data attributes after the HTML is replaced).
 function recruitRepaint(node, html) {
@@ -8771,7 +8844,7 @@ function recruitCountsLine(cycle = recruitCycleRow(), counts = recruitState().cy
   const parts = [recruitStatusText(cycle, st.cycles?.intakeCycleId)];
   if (cycle.status === 'open' && cycle.closesAt) parts.push('closes ' + new Date(Number(cycle.closesAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
   const by = counts?.bySection || {};
-  parts.push(`${Number(by.interest || 0).toLocaleString('en-US')} interest`, recruitPlural(by.coffee || 0, 'coffee chat'), recruitPlural(by.application || 0, 'application'));
+  for (const key of recruitSectionKeys(cycle)) parts.push(`${recruitSectionTitle(key, cycle)} ${Number(by[key] || 0).toLocaleString('en-US')}`);
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -8871,7 +8944,8 @@ function recruitCycleShellHtml(id) {
   const role = c.role;
   const panels = RECRUIT.panels(cycle, role);
   const active = recruitActivePanel();
-  const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}</nav>` : '';
+  const addTab = recruitCan('lead') && cycle.status !== 'archived' ? `<button type="button" class="rc-tabs__add" data-action="recruit-form-new" aria-label="Add a form" title="Add a form">${I.plus}</button>` : '';
+  const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}${addTab}</nav>` : '';
   const list = st.cycles?.list || [];
   const switchOptions = (list.length ? list : [{ id: cycle.id, name: cycle.name, term: cycle.term, status: cycle.status }])
     .map((x) => ({ value: x.id, label: recruitCycleChoiceLabel(x) }));
@@ -8906,7 +8980,7 @@ function recruitCycleShellHtml(id) {
 
 function recruitCycleRowHtml(c, intakeCycleId) {
   const by = c.counts?.bySection || {};
-  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), `${Number(by.interest || 0)} interest`, recruitPlural(by.coffee || 0, 'coffee chat'), recruitPlural(by.application || 0, 'application'), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
+  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), ...recruitSectionKeys(c).map((key) => `${recruitSectionTitle(key, c)} ${Number(by[key] || 0).toLocaleString('en-US')}`), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
   return `<div class="sheet__archive">
     <button class="sheet__archivename" data-action="recruit-cycle-open" data-id="${MD.esc(c.id)}"><span class="sheet__archivetitle">${MD.esc(c.name)}</span>
       <span class="sheet__archivemeta">${MD.esc(meta)}</span></button>
@@ -9556,7 +9630,12 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   const count = Number(st.cycle?.counts?.bySection?.[key] || 0);
   const receiving = st.cycles ? st.cycles.intakeCycleId === cycle.id : null;
   const open = sec?.open === true;
-  const status = !sec ? '' : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
+  const lead = recruitCan('lead') && cycle.status !== 'archived';
+  const busy = st.busy.has('mode-open:' + key);
+  // Leads flip the form open or closed right here; everyone else reads it.
+  const status = !sec ? '' : lead
+    ? `<label class="fe-switch rc-mode__switch"><input type="checkbox" data-action="recruit-mode-open" data-form="${MD.esc(key)}" ${open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>${open && receiving === false ? '<span class="rc-mode__also">but another cycle receives the website</span>' : ''}`
+    : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
     : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website'
     : '<span class="rc-mode__dot rc-mode__dot--on"></span>Open on the website';
   // Every form has a page of its own on the club site; the address is always
@@ -9564,28 +9643,63 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   // chosen for it, else the first open one.
   const landing = recruitLandingKey(cycle);
   const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(key)}/`;
-  const link = `<span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}`;
+  // The address is its own group so a phone can drop it under the switch.
+  const link = `<span class="rc-mode__addr"><span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}</span>`;
   const responses = `Responses <span class="count" data-rc-count="${MD.esc(key)}">${count.toLocaleString('en-US')}</span>`;
+  // The thumb slides from where the view was last time this tab was drawn.
+  const was = st.modeWas?.[key];
+  const from = was === undefined || was === editing ? '' : ` data-seg-from="${was ? 1 : 0}"`;
+  if (recruitCan('lead')) { st.modeWas ||= {}; st.modeWas[key] = editing; }
   const seg = recruitCan('lead')
-    ? `<nav class="rc-seg" aria-label="View"><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Form</a></nav>`
+    ? `<nav class="rc-seg rc-seg--mode" aria-label="View"${from}><span class="rc-seg__thumb" aria-hidden="true"></span><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Edit form</a></nav>`
     : `<span class="rc-mode__plain">${responses}</span>`;
   return `<span class="rc-mode__status" data-rc="mode-status">${status}${link}</span>${seg}`;
 }
 
 const recruitModeBarHtml = (cycle, key, editing) => `<div class="rc-mode" data-rc="mode-bar">${recruitModeBarInnerHtml(cycle, key, editing)}</div>`;
 
+// Open or close a form from its tab bar: one save, then the bar, the
+// editor's own switch, and the address line follow.
+async function recruitToggleFormOpen(el) {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  const key = el.dataset.form || recruitSection();
+  const want = Boolean(el.checked);
+  if (!cycle || !recruitCan('lead') || st.busy.has('mode-open:' + key)) return;
+  st.busy.add('mode-open:' + key);
+  recruitPaintModeBar(cycle, key, recruitEditingForm());
+  try {
+    await recruitPutSettings(cycle, 'site', { sections: { [key]: { open: want } } });
+    const sections = recruitSections(recruitCycleRow() || cycle);
+    if (st.cycle?.data?.id === cycle.id) st.cycle.sections = { ...sections, [key]: { ...(sections[key] || {}), open: want } };
+    // The editor's draft, if any, learns the saved state without turning dirty.
+    const fe = st.forms?.[`${cycle.id}:${key}`];
+    if (fe) { fe.model.open = want; const saved = JSON.parse(fe.saved); saved.open = want; fe.saved = JSON.stringify(saved); }
+    toast(want ? `${recruitSectionTitle(key)} is open on the website` : `${recruitSectionTitle(key)} is closed on the website`);
+  } catch (e) { toast(`Could not change it: ${recruitError(e)}`); }
+  finally {
+    st.busy.delete('mode-open:' + key);
+    recruitPaintModeBar(recruitCycleRow() || cycle, key, recruitEditingForm());
+    const host = $('[data-rc="form-editor"]');
+    const fe = st.forms?.[`${cycle.id}:${key}`];
+    if (host?.dataset.section === key && fe) { recruitRepaint($('[data-rc="fe-options"]', host), recruitFormOptionsHtml(fe)); recruitRepaint($('[data-rc="fe-foot"]', host), recruitFormFootHtml(fe)); }
+  }
+}
+
 // The form /apply shows: the cycle's choice when that form is open, else the
 // first open form in section order.
 function recruitLandingKey(cycle) {
   const sections = recruitSections(cycle);
   const chosen = cycle?.doc?.site?.landing;
-  if (RECRUIT_SECTION_KEYS.includes(chosen) && sections[chosen]?.open) return chosen;
-  return RECRUIT_SECTION_KEYS.find((k) => sections[k]?.open) || null;
+  if (sections[chosen]?.open) return chosen;
+  return Object.keys(sections).find((k) => sections[k]?.open) || null;
 }
 
 function recruitPaintModeBar(cycle, key, editing) {
   const bar = $('[data-rc="mode-bar"]');
-  if (bar) bar.innerHTML = recruitModeBarInnerHtml(cycle, key, editing);
+  if (!bar) return;
+  bar.innerHTML = recruitModeBarInnerHtml(cycle, key, editing);
+  recruitSegSlide($('.rc-seg--mode', bar));
 }
 
 /* ------------------------------- model ----------------------------------- */
@@ -9609,7 +9723,7 @@ function recruitFormModel(sec, key, landing = null) {
     return out;
   });
   return {
-    title: sec?.title || RECRUIT_SECTION_LABELS[key], description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
+    title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
     notify: sec?.notify !== false, replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
   };
 }
@@ -9634,7 +9748,7 @@ const recruitFormsDirty = () => Object.values(recruitState().forms || {}).some(r
 function recruitFormEditorHtml(cycle, key) {
   const fe = recruitFormEditor(cycle, key);
   const m = fe.model;
-  return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(RECRUIT_SECTION_LABELS[key])} editor">
+  return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(recruitSectionTitle(key, cycle))} editor">
     <div class="fe__head">
       <input class="fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
       <textarea class="fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
@@ -9657,7 +9771,77 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers', 'Off: a second submission with the same email is refused.')}
-    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>`;
+    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
+    ${recruitFormRemoveHtml(fe)}`;
+}
+
+// Any form can go once it has no responses.
+function recruitFormRemoveHtml(fe) {
+  const n = Number(recruitState().cycle?.counts?.bySection?.[fe.key] || 0);
+  return `<div class="fe-options__remove"><span class="fe-switch__text">Remove this form${n ? `<small>${MD.esc(recruitPlural(n, 'response'))} so far. Close it instead; a form with responses cannot be removed.</small>` : '<small>It has no responses yet.</small>'}</span><button type="button" class="btn btn--sm ${n ? '' : 'btn--danger'}" data-action="recruit-form-remove" data-form="${MD.esc(fe.key)}" ${n ? 'disabled' : ''}>Remove</button></div>`;
+}
+
+/* ------------------------------- new and removed forms ------------------- */
+
+const recruitFormKey = (title) => { const k = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); return /^[a-z]/.test(k) ? k : 'form-' + k; };
+
+function recruitFormNewModalHtml() {
+  const cycle = recruitCycleRow();
+  const sections = cycle ? recruitSections(cycle) : {};
+  const from = [{ value: '', label: 'A blank form (name and email)' }, ...Object.keys(sections).map((k) => ({ value: k, label: `A copy of ${sections[k].title}` }))];
+  return `<div class="modal rc-form-new" role="dialog" aria-label="New form">
+    <div class="modal__head"><h3>New form</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    <form class="modal__body rc-form" data-action="recruit-form-create">
+      ${recruitFormField('Name', `<input class="text-input" name="title" placeholder="e.g. Coffee chats, round 2" maxlength="80" required autocomplete="off" spellcheck="false">`, 'The tab, the column on People, and the title applicants see.')}
+      ${recruitFormField('Start from', dd('recruit-form-from', from, ''))}
+      <p class="rc-set__note">It starts closed. Open it on the website from its Form view when it is ready.</p>
+    </form>
+    <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-form-create-go">Create form</button></div>
+  </div>`;
+}
+
+async function recruitCreateForm() {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  const form = $('.rc-form-new form');
+  if (!cycle || !form || st.busy.has('form-new')) return;
+  const title = String(form.elements.title.value || '').trim();
+  if (!title) { form.elements.title.focus(); toast('Give the form a name'); return; }
+  const sections = recruitSections(cycle);
+  let key = recruitFormKey(title);
+  for (let n = 2; sections[key] !== undefined; n += 1) key = `${recruitFormKey(title).slice(0, 37)}-${n}`;
+  const fromKey = $('[data-m="recruit-form-from"]', form)?.dataset.value || '';
+  const questions = fromKey && sections[fromKey] ? JSON.parse(JSON.stringify(sections[fromKey].form.questions)) : [
+    { key: 'name', type: 'short', label: 'Name', required: true, max: 100 }, { key: 'email', type: 'email', label: 'Email', required: true, max: 200 },
+  ];
+  st.busy.add('form-new');
+  try {
+    await recruitPutSettings(cycle, 'site', { sections: { [key]: { title, description: fromKey && sections[fromKey] ? sections[fromKey].description : '', open: false, form: { questions } } } });
+    toast(`${title} added`);
+    closeModal(() => { RECRUIT.reset(cycle.id); nav(recruitPanelHref(cycle.id, key, { edit: 1 })); });
+  } catch (e) { toast(`Could not add: ${recruitError(e)}`); }
+  finally { st.busy.delete('form-new'); }
+}
+
+function recruitConfirmRemoveForm(key) {
+  const cycle = recruitCycleRow();
+  const sec = cycle ? recruitSections(cycle)[key] : null;
+  if (!cycle || !sec || !recruitCan('lead')) return;
+  UI.modal = {
+    kind: 'confirm', title: `Remove ${sec.title}?`, danger: true, confirm: 'Remove form',
+    text: `The form and its questions go; it has no responses. The website stops showing it at once.`,
+    onGo: async () => {
+      try {
+        await recruitPutSettings(cycle, 'site', { remove: [key] });
+        const st = recruitState();
+        delete st.forms?.[`${cycle.id}:${key}`];
+        toast(`${sec.title} removed`);
+        RECRUIT.reset(cycle.id);
+        nav(recruitPanelHref(cycle.id, 'people'));
+      } catch (e) { toast(`Could not remove: ${recruitError(e)}`); }
+    },
+  };
+  render();
 }
 
 const recruitQuestionCardsHtml = (fe, cycle) => fe.model.questions.map((q, i, all) => recruitQuestionCardHtml(q, i, all.length, cycle)).join('');
@@ -9878,7 +10062,7 @@ function recruitFormPayload(fe) {
     return out;
   });
   return {
-    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key], description: String(fe.model.description || '').trim(), open: fe.model.open === true,
+    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), open: fe.model.open === true,
     notify: fe.model.notify !== false, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
   };
 }
@@ -9902,7 +10086,10 @@ async function recruitSaveForm(el) {
     fe.model = recruitFormModel(payload, key, landing);
     fe.saved = JSON.stringify(fe.model);
     fe.savedAt = Date.now();
-    toast(`${RECRUIT_SECTION_LABELS[key]} saved${payload.open ? ' · live on the website' : ''}`);
+    toast(`${payload.title} saved${payload.open ? ' · live on the website' : ''}`);
+    // A new title is the tab's label too.
+    const tab = $(`.rc-tabs [role="tab"][href$="/${key}"]`);
+    if (tab && tab.textContent !== payload.title) tab.textContent = payload.title;
   } catch (e) { fe.error = recruitError(e); }
   fe.saving = false;
   const host = $('[data-rc="form-editor"]');
@@ -9960,6 +10147,11 @@ RECRUIT.register({
       catch { toast('Could not copy; the address is next to the button'); }
     },
     'recruit-fe-save': (el) => recruitSaveForm(el),
+    'recruit-mode-open': (el) => recruitToggleFormOpen(el),
+    'recruit-form-new': () => { if (!recruitCycleRow() || !recruitCan('lead')) return; UI.modal = { kind: 'recruit-form-new' }; render(); $('.rc-form-new [name="title"]')?.focus(); },
+    'recruit-form-create': () => recruitCreateForm(),
+    'recruit-form-create-go': () => recruitCreateForm(),
+    'recruit-form-remove': (el) => recruitConfirmRemoveForm(el.dataset.form),
     'recruit-fe-discard': (el) => {
       const c = recruitFeCtx(el);
       if (!c) return;
@@ -9992,6 +10184,7 @@ RECRUIT.register({
       $(`[data-m="recruit-fe-type"][data-i="${c.i}"]`, c.host)?.focus({ preventScroll: true });
     },
   },
+  modals: { 'recruit-form-new': recruitFormNewModalHtml },
   keydown(ev) {
     const grip = typeof ev.target?.matches === 'function' && ev.target.matches('.fe-q__grip') ? ev.target : null;
     if (!grip || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return false;
@@ -10061,7 +10254,8 @@ function recruitPeopleCountsLine() {
   const c = recruitState().people?.counts;
   if (!c) return '';
   const by = c.bySection || {};
-  return `${recruitPlural(c.people || 0, 'person', 'people')} · ${Number(by.interest || 0).toLocaleString('en-US')} interest · ${recruitPlural(by.coffee || 0, 'coffee chat')} · ${recruitPlural(by.application || 0, 'application')}${c.flagged ? ` · ${c.flagged} flagged` : ''}`;
+  const forms = recruitSectionKeys().map((key) => `${recruitSectionTitle(key)} ${Number(by[key] || 0).toLocaleString('en-US')}`);
+  return [recruitPlural(c.people || 0, 'person', 'people'), c.flagged ? `${c.flagged} flagged` : '', ...forms].filter(Boolean).join(' · ');
 }
 
 function recruitPeopleFootText() {
@@ -10098,15 +10292,14 @@ function recruitPersonReviewCellHtml(p) {
 
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const span = 8;
+  const keys = recruitSectionKeys();
+  const span = 5 + keys.length;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No people match.' : 'Nobody yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
     <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
-    <td data-col="interest">${recruitSentCell(x.sections?.interest, x)}</td>
-    <td data-col="coffee">${recruitSentCell(x.sections?.coffee, x)}</td>
-    <td data-col="application">${recruitSentCell(x.sections?.application, x)}</td>
+    ${keys.map((key) => `<td data-col="${MD.esc(key)}" class="rc-people__form">${recruitSentCell(x.sections?.[key], x)}</td>`).join('')}
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
@@ -10116,7 +10309,7 @@ function recruitPeopleRowsHtml(rows) {
 
 function recruitPeopleHtml(cycle) {
   const p = recruitState().people;
-  const th = (id, label) => `<th data-col="${id}"><span class="sheet__sort sheet__sort--static">${label}</span></th>`;
+  const th = (id, label) => `<th data-col="${id}"><span class="sheet__sort sheet__sort--static">${MD.esc(label)}</span></th>`;
   const lead = recruitCan('lead');
   return `<div class="rc-mode"><span class="rc-mode__status" data-rc="people-counts">${MD.esc(recruitPeopleCountsLine())}</span></div>
   <div class="sheet sheet--recruit sheet--people">
@@ -10128,7 +10321,7 @@ function recruitPeopleHtml(cycle) {
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest')}${th('coffee', 'Coffee')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
+      <thead><tr>${th('person', 'Person')}${recruitSectionKeys(cycle).map((key) => `<th data-col="${MD.esc(key)}" class="rc-people__form"><span class="sheet__sort sheet__sort--static">${MD.esc(recruitSectionTitle(key, cycle))}</span></th>`).join('')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
         <th class="sheet__review-cell" data-col="review"><span class="sheet__sort sheet__sort--static">Review</span></th></tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
@@ -10249,8 +10442,11 @@ function recruitPersonMainHtml(email, want) {
   if (!subs.length) return '<p class="faint">Nothing from this person in this cycle. Close this window to refresh the list.</p>';
   const sub = subs.find((s) => s.application.section === form) || subs[0];
   const a = sub.application;
+  const was = d.shown;
+  d.shown = a.section;
+  const from = was && was !== a.section ? subs.findIndex((s) => s.application.section === was) : -1;
   const switcher = subs.length > 1
-    ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent">${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionNoun(s.application.section))}</button>`).join('')}</nav>`
+    ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent"${from >= 0 ? ` data-seg-from="${from}"` : ''}><span class="rc-seg__thumb" aria-hidden="true"></span>${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionNoun(s.application.section))}</button>`).join('')}</nav>`
     : `<h4 class="interest-subhead">${MD.esc(recruitSectionNoun(a.section))}</h4>`;
   const basics = `<dl class="interest-detail">
     <dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>
@@ -10326,6 +10522,7 @@ function recruitPaintPerson(email) {
   const row = d?.person || recruitPersonRow(email);
   if (row && cycle) { recruitRepaint($('[data-rc="person-identity"]', dialog), recruitPersonIdentityHtml(row, cycle)); dialog.setAttribute('aria-label', row.name); }
   recruitRepaint($('[data-rc="person-main"]', dialog), recruitPersonMainHtml(email, UI.modal.form));
+  recruitSegSlide($('[data-rc="person-main"] .rc-seg--forms', dialog));
   recruitRepaint($('[data-rc="person-side"]', dialog), recruitPersonSideHtml(email, UI.modal.form));
   const flag = $('[data-rc="person-flag"]', dialog);
   if (flag) recruitRepaint(flag, recruitPersonFlagHtml(email));
@@ -10336,6 +10533,7 @@ function recruitPaintPerson(email) {
 function recruitOpenPerson(email, { form = null, comments = false } = {}) {
   if (!email) return;
   recruitShowModal({ kind: 'recruit-person', email, form, inPlace: true });
+  recruitSegSlide($('.rc-person .rc-seg--forms'));
   const d = recruitPerson(email);
   if (d === undefined || d?.error) recruitLoadPerson(email);
   recruitPrefetchPeople(email);
@@ -10985,7 +11183,7 @@ function recruitSheetHtml(cycle) {
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
     </div>
-    <div class="sheet__scroll"><table aria-label="${MD.esc(RECRUIT_SECTION_LABELS[section])} in ${MD.esc(cycle.name)}">
+    <div class="sheet__scroll"><table aria-label="${MD.esc(recruitSectionTitle(section, cycle))} in ${MD.esc(cycle.name)}">
       <thead><tr>
         <th class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select-visible" aria-label="Select all visible people" ${rows.length && visibleSelected === rows.length ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label></th>
         ${th('name', 'Person', 'person')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
@@ -11132,10 +11330,12 @@ RECRUIT.register({
   name: 'applications',
   order: 10,
   kernel: true,
-  panels: RECRUIT_SECTION_KEYS.map((key, i) => ({ id: key, label: RECRUIT_SECTION_LABELS[key], order: 10 + i, when: () => true })),
+  panels: (cycle) => recruitSectionKeys(cycle).map((key, i) => ({ id: key, label: recruitSectionTitle(key, cycle), order: 10 + i, when: () => true })),
   view: recruitApplicationsView,
   mount(cycle) {
     const st = recruitState();
+    const seg = $('.rc-seg--mode');
+    if (seg) { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => recruitSegSlide($('.rc-seg--mode'))); else recruitSegSlide(seg); }
     if (st.apps === undefined || st.apps.key !== st.key + ':' + cycle.id + ':' + recruitSection()) recruitLoadApps();
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },

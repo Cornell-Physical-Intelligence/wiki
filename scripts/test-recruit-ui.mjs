@@ -225,6 +225,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   f.mount();
   const tabs = f.app.querySelectorAll('.rc-tabs [role="tab"]');
   same(tabs.map((t) => t.textContent), ['People', 'Zeta', 'Interest form', 'Coffee chats', 'Applications']);
+  assert.ok(f.app.querySelector('.rc-tabs .rc-tabs__add[data-action="recruit-form-new"]'), 'a + after the tabs adds a form');
   assert.equal(tabs[2].getAttribute('aria-current'), 'page');
   tabs[2].focus(); f.ctx.evt.target = tabs[2];
   assert.equal(f.run('RECRUIT.keydown(evt)'), true); assert.ok(f.document.activeElement === tabs[3], 'arrow keys rove the tablist');
@@ -263,7 +264,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   ], intakeCycleId: 'cy-a', migration: { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 } };
   const html = f.run('viewRecruit()');
   assert.match(html, /&lt;b&gt;Fall&lt;\/b&gt; 2026/, 'cycle names are escaped'); assert.doesNotMatch(html, /<b>Fall<\/b>/);
-  assert.match(html, /Open · receives the website form · 10 interest · 2 coffee chats · 0 applications/);
+  assert.match(html, /Open · receives the website form · Interest form 10 · Coffee chats 2 · Applications 0/);
   assert.match(html, /Archived<\/h2>/, 'archived cycles sit under a second heading');
   assert.match(html, /Import the current list and archives/); assert.match(html, /40 submissions and 1 archive/);
   assert.match(html, /data-action="recruit-cycle-new"/);
@@ -375,12 +376,28 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   st.cycle.sections = sections();
   f.ctx.UI.route.params.sub = 'coffee';
   f.mount();
-  assert.match(f.app.innerHTML, /class="rc-seg"/, 'a lead sees Responses | Form on the tab');
-  assert.match(f.app.innerHTML, /Closed on the website/);
+  assert.match(f.app.innerHTML, /class="rc-seg rc-seg--mode"/, 'a lead sees Responses | Edit form on the tab');
+  assert.match(f.app.innerHTML, /rc-seg__thumb/, 'with a thumb that slides');
+  assert.match(f.app.innerHTML, />Edit form</);
+  const barSwitch = f.app.querySelector('[data-action="recruit-mode-open"][data-form="coffee"]');
+  assert.ok(barSwitch && !barSwitch.checked, 'the tab bar carries a switch for the form, off while it is closed');
+  // Flipping it saves at once; the editor's own switch follows without turning dirty.
+  barSwitch.checked = true;
+  const flipping = f.run('RECRUIT.click.bind(RECRUIT)')('recruit-mode-open', barSwitch, { stopPropagation() {} }, () => {});
+  await f.settle();
+  const flip = f.requests.filter((r) => r.method === 'PUT').at(-1);
+  assert.equal(flip.url, '/recruit/cycles/cy-a/settings/site'); same(flip.body.settings, { sections: { coffee: { open: true } } });
+  flip.resolve({ cycle: { ...cycleRow(), version: 4 } }); await flipping; await f.settle();
+  assert.equal(f.toasts.at(-1), 'Coffee chats is open on the website');
+  assert.ok(f.app.querySelector('[data-action="recruit-mode-open"][data-form="coffee"]').checked, 'the bar repaints with the saved state');
+  assert.equal(f.run("recruitSections(recruitCycleRow()).coffee.open"), true);
+  f.ctx.st = st;
+  f.run("recruitSections(recruitCycleRow()).coffee.open = false; recruitState().cycle.sections.coffee.open = false");
   assert.match(f.app.innerHTML, /href="#\/applications\/cy-a\/coffee\?edit=1"/, 'the Form view is a link');
   assert.match(f.app.innerHTML, /href="https:\/\/cornellphysicalintelligence\.com\/apply\/coffee\/"[^>]*>cornellphysicalintelligence\.com\/apply\/coffee</, 'the address of the form is shown even while closed');
   assert.match(f.app.innerHTML, /data-action="recruit-copy-link" data-link="https:\/\/cornellphysicalintelligence\.com\/apply\/coffee\/"/, 'and can be copied');
   assert.doesNotMatch(f.app.innerHTML, /and at/, 'a closed form is not the /apply form');
+  f.mount();
   assert.ok(f.app.querySelector('.sheet--recruit'), 'Responses is the sheet');
   f.ctx.UI.route.params.edit = '1';
   f.mount();
@@ -441,7 +458,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const saving = click('recruit-fe-save');
   await f.settle();
   const put = f.requests.at(-1);
-  assert.equal(put.url, '/recruit/cycles/cy-a/settings/site'); assert.equal(put.method, 'PUT'); assert.equal(put.body.version, 3);
+  assert.equal(put.url, '/recruit/cycles/cy-a/settings/site'); assert.equal(put.method, 'PUT'); assert.equal(put.body.version, 4, 'the version the bar switch brought back');
   const saved = put.body.settings.sections.coffee;
   assert.equal(put.body.settings.landing, 'coffee', 'the /apply choice rides with the save');
   assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.');
@@ -452,7 +469,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   put.resolve({ cycle: { ...cycleRow(), version: 4, doc: { ...cycleRow().doc, site: { landing: 'coffee' } } } }); await saving; await f.settle();
   assert.ok(f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'Save settles');
   assert.equal(f.toasts.at(-1), 'Coffee chats saved · live on the website');
-  assert.match(f.app.innerHTML, /Open on the website/, 'the tab bar shows the saved state');
+  assert.ok(f.app.querySelector('[data-action="recruit-mode-open"][data-form="coffee"]').checked, 'the tab bar shows the saved state');
   assert.match(f.app.innerHTML, /and at <a class="rc-mode__link" href="https:\/\/cornellphysicalintelligence\.com\/apply\/"/, 'the tab bar says this form is the one at /apply');
   await click('recruit-copy-link');
   assert.equal(f.toasts.at(-1), 'Link copied');
@@ -468,6 +485,39 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   await click('recruit-fe-remove', 3);
   await click('recruit-fe-discard');
   assert.equal(f.app.querySelectorAll('.fe-q').length, 3);
+  // The + opens a small dialog; creating a form is one PUT, then the cycle reloads on that form's editor.
+  await click('recruit-form-new');
+  assert.equal(f.ctx.UI.modal.kind, 'recruit-form-new');
+  const newForm = f.mountModal();
+  newForm.querySelector('[name="title"]').value = 'Coffee chats, round 2';
+  const fromDd = newForm.querySelector('[data-m="recruit-form-from"]');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(fromDd); f.menus.at(-1).items.find((i) => i.label === 'A copy of Coffee chats').run();
+  const creating = f.run('recruitCreateForm()');
+  await f.settle();
+  const create = f.requests.filter((r) => r.method === 'PUT').at(-1);
+  assert.equal(create.url, '/recruit/cycles/cy-a/settings/site');
+  const newKey = Object.keys(create.body.settings.sections)[0];
+  assert.equal(newKey, 'coffee-chats-round-2', 'the key comes from the title');
+  assert.equal(create.body.settings.sections[newKey].title, 'Coffee chats, round 2');
+  assert.equal(create.body.settings.sections[newKey].open, false, 'a new form starts closed');
+  assert.deepEqual(create.body.settings.sections[newKey].form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a copy takes the source form\'s questions');
+  create.resolve({ cycle: { ...cycleRow(), version: 5 } }); await creating; await f.settle();
+  assert.equal(f.toasts.at(-1), 'Coffee chats, round 2 added');
+  assert.equal(f.navs.at(-1), `#/applications/cy-a/${newKey}?edit=1`, 'it opens on the new form\'s editor');
+  // A cycle with its own forms shows them as tabs and columns.
+  const g = fixture();
+  const gst = loadCycle(g);
+  gst.cycle.sections = { ...sections(), 'coffee-2': { title: 'Round 2', description: '', open: true, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } } };
+  same(g.run("RECRUIT.panels(recruitCycleRow(), 'admin').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application', 'coffee-2'], 'the tabs are the cycle\'s forms');
+  g.ctx.UI.route.params.sub = 'coffee-2'; g.mount();
+  assert.match(g.app.innerHTML, /aria-current="page"[^>]*>Round 2</, 'a form of the cycle\'s own is a tab by its title');
+  g.ctx.UI.route.params.sub = 'people'; g.mount();
+  assert.match(g.app.querySelector('.sheet--people thead').innerHTML, /Round 2/, 'and a column on People');
+  g.ctx.UI.route.params.sub = 'coffee-2'; g.ctx.UI.route.params.edit = '1'; g.mount();
+  assert.match(g.app.querySelector('[data-rc="fe-options"]').innerHTML, /Remove this form/, 'a form of the cycle\'s own can be removed from its editor');
+  g.ctx.UI.route.params.sub = 'interest'; g.mount();
+  assert.match(g.app.querySelector('[data-rc="fe-options"]').innerHTML, /Remove this form/, 'so can the interest form');
+  assert.ok(g.app.querySelector('[data-action="recruit-form-remove"][data-form="interest"]').disabled, 'but not while it has responses');
   // Reviewers get the responses only.
   const r = fixture({ admin: false });
   const rst = loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
@@ -546,7 +596,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const bo = body.querySelector('tr[data-email="b@cornell.edu"]');
   assert.ok(!bo.querySelector('.interest-flag.is-flagged') && !bo.querySelector('.interest-comments.has-comments'), 'an unflagged person without comments shows quiet controls');
   assert.match(f.app.querySelector('.sheet--people thead').innerHTML, /data-col="review"/, 'People has the review column');
-  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 interest · 1 coffee chat · 1 application · 1 flagged');
+  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 flagged · Interest form 1 · Coffee chats 1 · Applications 1');
   const q = f.app.querySelector('[data-m="recruit-people-q"]');
   q.value = 'bo'; assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' }), true);
   assert.equal(f.app.querySelector('[data-rc="people-rows"]').querySelectorAll('tr').length, 1, 'search narrows the list in place');

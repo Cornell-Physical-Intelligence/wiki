@@ -12,7 +12,7 @@
 
 function recruitCycleRowHtml(c, intakeCycleId) {
   const by = c.counts?.bySection || {};
-  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), `${Number(by.interest || 0)} interest`, recruitPlural(by.coffee || 0, 'coffee chat'), recruitPlural(by.application || 0, 'application'), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
+  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), ...recruitSectionKeys(c).map((key) => `${recruitSectionTitle(key, c)} ${Number(by[key] || 0).toLocaleString('en-US')}`), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
   return `<div class="sheet__archive">
     <button class="sheet__archivename" data-action="recruit-cycle-open" data-id="${MD.esc(c.id)}"><span class="sheet__archivetitle">${MD.esc(c.name)}</span>
       <span class="sheet__archivemeta">${MD.esc(meta)}</span></button>

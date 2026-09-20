@@ -39,7 +39,8 @@ const RECRUIT = {
   panels(cycle, role) {
     const out = [];
     for (const m of this.active(cycle)) {
-      for (const p of (m.panels || (m.panel ? [m.panel] : []))) {
+      const list = typeof m.panels === 'function' ? m.panels(cycle, role) : (m.panels || (m.panel ? [m.panel] : []));
+      for (const p of list) {
         if (!p || (p.when && !p.when(cycle, role))) continue;
         out.push({ id: p.id, label: p.label, order: p.order ?? m.order, module: m });
       }
@@ -273,13 +274,29 @@ const RECRUIT = {
   },
 };
 
+// The forms every cycle starts with; a cycle can add its own and drop any
+// but the interest form. The cycle's own list (in order) is the truth.
 const RECRUIT_SECTION_KEYS = ['interest', 'coffee', 'application'];
-// One row of a section, as a noun: what the dialog is showing.
-const RECRUIT_SECTION_NOUNS = { interest: 'Interest form', coffee: 'Coffee chat', application: 'Application' };
-const recruitSectionNoun = (key) => RECRUIT_SECTION_NOUNS[key] || 'Application';
 const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Applications' };
-// The section a cycle URL points at; the interest form when it names none.
-function recruitSection() { const sub = UI.route?.params?.sub; return RECRUIT_SECTION_KEYS.includes(sub) ? sub : 'interest'; }
+// The open cycle carries its merged, ordered forms from the server; any
+// other row (the index) is read from its saved settings over the defaults.
+function recruitSectionKeys(cycle = recruitCycleRow()) {
+  const st = recruitState();
+  if (cycle && st.cycle?.data?.id === cycle.id && st.cycle.sections) return Object.keys(st.cycle.sections).filter((k) => st.cycle.sections[k]);
+  const saved = cycle?.doc?.site?.sections && typeof cycle.doc.site.sections === 'object' ? cycle.doc.site.sections : {};
+  const order = Array.isArray(cycle?.doc?.site?.order) ? cycle.doc.site.order : [];
+  const known = [...RECRUIT_SECTION_KEYS.filter((k) => saved[k] !== null), ...Object.keys(saved).filter((k) => !RECRUIT_SECTION_KEYS.includes(k) && saved[k] && typeof saved[k] === 'object')];
+  return [...order.filter((k) => known.includes(k)), ...known.filter((k) => !order.includes(k))];
+}
+function recruitSectionTitle(key, cycle = recruitCycleRow()) {
+  const st = recruitState();
+  const merged = cycle && st.cycle?.data?.id === cycle.id ? st.cycle.sections?.[key] : null;
+  return merged?.title || cycle?.doc?.site?.sections?.[key]?.title || RECRUIT_SECTION_LABELS[key] || key;
+}
+// One row of a form, as a noun: what a dialog is showing.
+const recruitSectionNoun = (key, cycle = recruitCycleRow()) => recruitSectionTitle(key, cycle);
+// The form a cycle URL points at; the first form when it names none.
+function recruitSection() { const sub = UI.route?.params?.sub; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
 
 const RECRUIT_TIMEOUT_MS = 20000;
 const RECRUIT_SYNC_MS = 30000;
@@ -372,6 +389,32 @@ function recruitActivePanel() {
   return panels.find((p) => p.id === sub) || panels[0] || null;
 }
 
+// Segmented controls carry a thumb that slides to the current item. On a
+// fresh paint the thumb starts on the item it came from (data-seg-from, an
+// index) and glides over; with nothing to come from it just sits.
+function recruitSegSlide(nav) {
+  if (!nav || typeof nav.getBoundingClientRect !== 'function') return;
+  const items = [...nav.querySelectorAll('a, button')].filter((el) => el.parentElement === nav);
+  const thumb = nav.querySelector('.rc-seg__thumb');
+  const to = items.findIndex((el) => el.getAttribute('aria-current') === 'page');
+  if (!thumb || !thumb.style || to < 0 || typeof items[to].getBoundingClientRect !== 'function') return;
+  const box = nav.getBoundingClientRect();
+  const place = (el, animate) => {
+    const r = el.getBoundingClientRect();
+    thumb.style.transition = animate ? '' : 'none';
+    thumb.style.transform = `translateX(${r.left - box.left - nav.clientLeft}px)`;
+    thumb.style.width = `${r.width}px`;
+  };
+  const from = Number(nav.dataset.segFrom);
+  if (Number.isInteger(from) && from !== to && items[from] && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    place(items[from], false);
+    void thumb.offsetWidth;
+    place(items[to], true);
+  } else place(items[to], false);
+  nav.classList.add('is-live');
+  delete nav.dataset.segFrom;
+}
+
 // Region repaint that keeps the reader's focus (the caret's element is found
 // again by its data attributes after the HTML is replaced).
 function recruitRepaint(node, html) {
@@ -460,7 +503,7 @@ function recruitCountsLine(cycle = recruitCycleRow(), counts = recruitState().cy
   const parts = [recruitStatusText(cycle, st.cycles?.intakeCycleId)];
   if (cycle.status === 'open' && cycle.closesAt) parts.push('closes ' + new Date(Number(cycle.closesAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
   const by = counts?.bySection || {};
-  parts.push(`${Number(by.interest || 0).toLocaleString('en-US')} interest`, recruitPlural(by.coffee || 0, 'coffee chat'), recruitPlural(by.application || 0, 'application'));
+  for (const key of recruitSectionKeys(cycle)) parts.push(`${recruitSectionTitle(key, cycle)} ${Number(by[key] || 0).toLocaleString('en-US')}`);
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -560,7 +603,8 @@ function recruitCycleShellHtml(id) {
   const role = c.role;
   const panels = RECRUIT.panels(cycle, role);
   const active = recruitActivePanel();
-  const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}</nav>` : '';
+  const addTab = recruitCan('lead') && cycle.status !== 'archived' ? `<button type="button" class="rc-tabs__add" data-action="recruit-form-new" aria-label="Add a form" title="Add a form">${I.plus}</button>` : '';
+  const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}${addTab}</nav>` : '';
   const list = st.cycles?.list || [];
   const switchOptions = (list.length ? list : [{ id: cycle.id, name: cycle.name, term: cycle.term, status: cycle.status }])
     .map((x) => ({ value: x.id, label: recruitCycleChoiceLabel(x) }));

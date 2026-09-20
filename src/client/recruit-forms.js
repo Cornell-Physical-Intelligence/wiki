@@ -42,7 +42,12 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   const count = Number(st.cycle?.counts?.bySection?.[key] || 0);
   const receiving = st.cycles ? st.cycles.intakeCycleId === cycle.id : null;
   const open = sec?.open === true;
-  const status = !sec ? '' : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
+  const lead = recruitCan('lead') && cycle.status !== 'archived';
+  const busy = st.busy.has('mode-open:' + key);
+  // Leads flip the form open or closed right here; everyone else reads it.
+  const status = !sec ? '' : lead
+    ? `<label class="fe-switch rc-mode__switch"><input type="checkbox" data-action="recruit-mode-open" data-form="${MD.esc(key)}" ${open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>${open && receiving === false ? '<span class="rc-mode__also">but another cycle receives the website</span>' : ''}`
+    : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
     : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website'
     : '<span class="rc-mode__dot rc-mode__dot--on"></span>Open on the website';
   // Every form has a page of its own on the club site; the address is always
@@ -50,28 +55,63 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   // chosen for it, else the first open one.
   const landing = recruitLandingKey(cycle);
   const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(key)}/`;
-  const link = `<span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}`;
+  // The address is its own group so a phone can drop it under the switch.
+  const link = `<span class="rc-mode__addr"><span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}</span>`;
   const responses = `Responses <span class="count" data-rc-count="${MD.esc(key)}">${count.toLocaleString('en-US')}</span>`;
+  // The thumb slides from where the view was last time this tab was drawn.
+  const was = st.modeWas?.[key];
+  const from = was === undefined || was === editing ? '' : ` data-seg-from="${was ? 1 : 0}"`;
+  if (recruitCan('lead')) { st.modeWas ||= {}; st.modeWas[key] = editing; }
   const seg = recruitCan('lead')
-    ? `<nav class="rc-seg" aria-label="View"><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Form</a></nav>`
+    ? `<nav class="rc-seg rc-seg--mode" aria-label="View"${from}><span class="rc-seg__thumb" aria-hidden="true"></span><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Edit form</a></nav>`
     : `<span class="rc-mode__plain">${responses}</span>`;
   return `<span class="rc-mode__status" data-rc="mode-status">${status}${link}</span>${seg}`;
 }
 
 const recruitModeBarHtml = (cycle, key, editing) => `<div class="rc-mode" data-rc="mode-bar">${recruitModeBarInnerHtml(cycle, key, editing)}</div>`;
 
+// Open or close a form from its tab bar: one save, then the bar, the
+// editor's own switch, and the address line follow.
+async function recruitToggleFormOpen(el) {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  const key = el.dataset.form || recruitSection();
+  const want = Boolean(el.checked);
+  if (!cycle || !recruitCan('lead') || st.busy.has('mode-open:' + key)) return;
+  st.busy.add('mode-open:' + key);
+  recruitPaintModeBar(cycle, key, recruitEditingForm());
+  try {
+    await recruitPutSettings(cycle, 'site', { sections: { [key]: { open: want } } });
+    const sections = recruitSections(recruitCycleRow() || cycle);
+    if (st.cycle?.data?.id === cycle.id) st.cycle.sections = { ...sections, [key]: { ...(sections[key] || {}), open: want } };
+    // The editor's draft, if any, learns the saved state without turning dirty.
+    const fe = st.forms?.[`${cycle.id}:${key}`];
+    if (fe) { fe.model.open = want; const saved = JSON.parse(fe.saved); saved.open = want; fe.saved = JSON.stringify(saved); }
+    toast(want ? `${recruitSectionTitle(key)} is open on the website` : `${recruitSectionTitle(key)} is closed on the website`);
+  } catch (e) { toast(`Could not change it: ${recruitError(e)}`); }
+  finally {
+    st.busy.delete('mode-open:' + key);
+    recruitPaintModeBar(recruitCycleRow() || cycle, key, recruitEditingForm());
+    const host = $('[data-rc="form-editor"]');
+    const fe = st.forms?.[`${cycle.id}:${key}`];
+    if (host?.dataset.section === key && fe) { recruitRepaint($('[data-rc="fe-options"]', host), recruitFormOptionsHtml(fe)); recruitRepaint($('[data-rc="fe-foot"]', host), recruitFormFootHtml(fe)); }
+  }
+}
+
 // The form /apply shows: the cycle's choice when that form is open, else the
 // first open form in section order.
 function recruitLandingKey(cycle) {
   const sections = recruitSections(cycle);
   const chosen = cycle?.doc?.site?.landing;
-  if (RECRUIT_SECTION_KEYS.includes(chosen) && sections[chosen]?.open) return chosen;
-  return RECRUIT_SECTION_KEYS.find((k) => sections[k]?.open) || null;
+  if (sections[chosen]?.open) return chosen;
+  return Object.keys(sections).find((k) => sections[k]?.open) || null;
 }
 
 function recruitPaintModeBar(cycle, key, editing) {
   const bar = $('[data-rc="mode-bar"]');
-  if (bar) bar.innerHTML = recruitModeBarInnerHtml(cycle, key, editing);
+  if (!bar) return;
+  bar.innerHTML = recruitModeBarInnerHtml(cycle, key, editing);
+  recruitSegSlide($('.rc-seg--mode', bar));
 }
 
 /* ------------------------------- model ----------------------------------- */
@@ -95,7 +135,7 @@ function recruitFormModel(sec, key, landing = null) {
     return out;
   });
   return {
-    title: sec?.title || RECRUIT_SECTION_LABELS[key], description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
+    title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
     notify: sec?.notify !== false, replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
   };
 }
@@ -120,7 +160,7 @@ const recruitFormsDirty = () => Object.values(recruitState().forms || {}).some(r
 function recruitFormEditorHtml(cycle, key) {
   const fe = recruitFormEditor(cycle, key);
   const m = fe.model;
-  return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(RECRUIT_SECTION_LABELS[key])} editor">
+  return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(recruitSectionTitle(key, cycle))} editor">
     <div class="fe__head">
       <input class="fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
       <textarea class="fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
@@ -143,7 +183,77 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers', 'Off: a second submission with the same email is refused.')}
-    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>`;
+    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
+    ${recruitFormRemoveHtml(fe)}`;
+}
+
+// Any form can go once it has no responses.
+function recruitFormRemoveHtml(fe) {
+  const n = Number(recruitState().cycle?.counts?.bySection?.[fe.key] || 0);
+  return `<div class="fe-options__remove"><span class="fe-switch__text">Remove this form${n ? `<small>${MD.esc(recruitPlural(n, 'response'))} so far. Close it instead; a form with responses cannot be removed.</small>` : '<small>It has no responses yet.</small>'}</span><button type="button" class="btn btn--sm ${n ? '' : 'btn--danger'}" data-action="recruit-form-remove" data-form="${MD.esc(fe.key)}" ${n ? 'disabled' : ''}>Remove</button></div>`;
+}
+
+/* ------------------------------- new and removed forms ------------------- */
+
+const recruitFormKey = (title) => { const k = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); return /^[a-z]/.test(k) ? k : 'form-' + k; };
+
+function recruitFormNewModalHtml() {
+  const cycle = recruitCycleRow();
+  const sections = cycle ? recruitSections(cycle) : {};
+  const from = [{ value: '', label: 'A blank form (name and email)' }, ...Object.keys(sections).map((k) => ({ value: k, label: `A copy of ${sections[k].title}` }))];
+  return `<div class="modal rc-form-new" role="dialog" aria-label="New form">
+    <div class="modal__head"><h3>New form</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    <form class="modal__body rc-form" data-action="recruit-form-create">
+      ${recruitFormField('Name', `<input class="text-input" name="title" placeholder="e.g. Coffee chats, round 2" maxlength="80" required autocomplete="off" spellcheck="false">`, 'The tab, the column on People, and the title applicants see.')}
+      ${recruitFormField('Start from', dd('recruit-form-from', from, ''))}
+      <p class="rc-set__note">It starts closed. Open it on the website from its Form view when it is ready.</p>
+    </form>
+    <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-form-create-go">Create form</button></div>
+  </div>`;
+}
+
+async function recruitCreateForm() {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  const form = $('.rc-form-new form');
+  if (!cycle || !form || st.busy.has('form-new')) return;
+  const title = String(form.elements.title.value || '').trim();
+  if (!title) { form.elements.title.focus(); toast('Give the form a name'); return; }
+  const sections = recruitSections(cycle);
+  let key = recruitFormKey(title);
+  for (let n = 2; sections[key] !== undefined; n += 1) key = `${recruitFormKey(title).slice(0, 37)}-${n}`;
+  const fromKey = $('[data-m="recruit-form-from"]', form)?.dataset.value || '';
+  const questions = fromKey && sections[fromKey] ? JSON.parse(JSON.stringify(sections[fromKey].form.questions)) : [
+    { key: 'name', type: 'short', label: 'Name', required: true, max: 100 }, { key: 'email', type: 'email', label: 'Email', required: true, max: 200 },
+  ];
+  st.busy.add('form-new');
+  try {
+    await recruitPutSettings(cycle, 'site', { sections: { [key]: { title, description: fromKey && sections[fromKey] ? sections[fromKey].description : '', open: false, form: { questions } } } });
+    toast(`${title} added`);
+    closeModal(() => { RECRUIT.reset(cycle.id); nav(recruitPanelHref(cycle.id, key, { edit: 1 })); });
+  } catch (e) { toast(`Could not add: ${recruitError(e)}`); }
+  finally { st.busy.delete('form-new'); }
+}
+
+function recruitConfirmRemoveForm(key) {
+  const cycle = recruitCycleRow();
+  const sec = cycle ? recruitSections(cycle)[key] : null;
+  if (!cycle || !sec || !recruitCan('lead')) return;
+  UI.modal = {
+    kind: 'confirm', title: `Remove ${sec.title}?`, danger: true, confirm: 'Remove form',
+    text: `The form and its questions go; it has no responses. The website stops showing it at once.`,
+    onGo: async () => {
+      try {
+        await recruitPutSettings(cycle, 'site', { remove: [key] });
+        const st = recruitState();
+        delete st.forms?.[`${cycle.id}:${key}`];
+        toast(`${sec.title} removed`);
+        RECRUIT.reset(cycle.id);
+        nav(recruitPanelHref(cycle.id, 'people'));
+      } catch (e) { toast(`Could not remove: ${recruitError(e)}`); }
+    },
+  };
+  render();
 }
 
 const recruitQuestionCardsHtml = (fe, cycle) => fe.model.questions.map((q, i, all) => recruitQuestionCardHtml(q, i, all.length, cycle)).join('');
@@ -364,7 +474,7 @@ function recruitFormPayload(fe) {
     return out;
   });
   return {
-    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key], description: String(fe.model.description || '').trim(), open: fe.model.open === true,
+    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), open: fe.model.open === true,
     notify: fe.model.notify !== false, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
   };
 }
@@ -388,7 +498,10 @@ async function recruitSaveForm(el) {
     fe.model = recruitFormModel(payload, key, landing);
     fe.saved = JSON.stringify(fe.model);
     fe.savedAt = Date.now();
-    toast(`${RECRUIT_SECTION_LABELS[key]} saved${payload.open ? ' · live on the website' : ''}`);
+    toast(`${payload.title} saved${payload.open ? ' · live on the website' : ''}`);
+    // A new title is the tab's label too.
+    const tab = $(`.rc-tabs [role="tab"][href$="/${key}"]`);
+    if (tab && tab.textContent !== payload.title) tab.textContent = payload.title;
   } catch (e) { fe.error = recruitError(e); }
   fe.saving = false;
   const host = $('[data-rc="form-editor"]');
@@ -446,6 +559,11 @@ RECRUIT.register({
       catch { toast('Could not copy; the address is next to the button'); }
     },
     'recruit-fe-save': (el) => recruitSaveForm(el),
+    'recruit-mode-open': (el) => recruitToggleFormOpen(el),
+    'recruit-form-new': () => { if (!recruitCycleRow() || !recruitCan('lead')) return; UI.modal = { kind: 'recruit-form-new' }; render(); $('.rc-form-new [name="title"]')?.focus(); },
+    'recruit-form-create': () => recruitCreateForm(),
+    'recruit-form-create-go': () => recruitCreateForm(),
+    'recruit-form-remove': (el) => recruitConfirmRemoveForm(el.dataset.form),
     'recruit-fe-discard': (el) => {
       const c = recruitFeCtx(el);
       if (!c) return;
@@ -478,6 +596,7 @@ RECRUIT.register({
       $(`[data-m="recruit-fe-type"][data-i="${c.i}"]`, c.host)?.focus({ preventScroll: true });
     },
   },
+  modals: { 'recruit-form-new': recruitFormNewModalHtml },
   keydown(ev) {
     const grip = typeof ev.target?.matches === 'function' && ev.target.matches('.fe-q__grip') ? ev.target : null;
     if (!grip || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return false;

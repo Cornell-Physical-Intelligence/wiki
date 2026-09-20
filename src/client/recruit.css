@@ -15,6 +15,12 @@
 .rc-tabs [role="tab"]:hover { color: var(--fg); background: var(--hover); }
 .rc-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+/* The + after the tabs adds a form to the cycle. */
+.rc-tabs__add { flex: none; align-self: center; width: 30px; height: 30px; margin: 0 0 2px 4px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--faint); }
+.rc-tabs__add svg { width: 15px; height: 15px; }
+.rc-tabs__add:hover, .rc-tabs__add:focus-visible { color: var(--fg); background: var(--hover); outline: none; }
+.rc-tabs__add:focus-visible { box-shadow: inset 0 0 0 2px var(--fg); }
+.rc-form-new .modal__body { gap: 12px; }
 .rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .rc-panel--enter { animation: none; } }
@@ -43,7 +49,6 @@
 /* People: one column per form. A sent form is its date, set like Received
    and Latest; it opens that form. Nothing sent is the same dash as an empty
    year. */
-.sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 100px; }
 .sheet.sheet--people th[data-col="last"] { width: 88px; }
 .rc-sent {
   display: inline-block; max-width: 100%; padding: 2px 0; background: none; border: 0; border-radius: 4px; cursor: pointer;
@@ -54,10 +59,8 @@
 .rc-sent:hover { color: var(--fg); text-decoration-color: var(--rule); }
 .rc-sent:focus-visible { color: var(--fg); outline: 2px solid var(--fg); outline-offset: 2px; }
 @container (max-width: 36em) {
-  .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people td[data-col="interest"],
-  .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people td[data-col="coffee"],
-  .sheet.sheet--people th[data-col="application"], .sheet.sheet--people td[data-col="application"] { display: table-cell; }
-  .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 92px; }
+  .sheet.sheet--people th.rc-people__form, .sheet.sheet--people td.rc-people__form { display: table-cell; }
+  .sheet.sheet--people th.rc-people__form { width: 92px; }
   .sheet.sheet--people th[data-col="review"], .sheet.sheet--people td[data-col="review"] { display: table-cell; }
 }
 /* Settings forms: one column of labelled fields, actions on a footer rail. */
@@ -89,19 +92,24 @@
 
 /* ---------------------------------------------------------------------------
    Cycle title: the name is the switch. */
+/* The name, its chevron and the gear sit on one axis: the h1 is a flex row,
+   so both icons centre on the same line as the text, at one size and one
+   shade, with even spacing between them. */
 .plain-head--cycle { margin-bottom: 18px; }
+.plain-head--cycle h1 { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .rc-cycle-title {
-  display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
-  margin: 0 0 0 -8px; padding: 2px 10px 2px 8px; border-radius: 10px;
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%;
+  margin: 0 0 0 -8px; padding: 2px 8px; border-radius: 10px;
   font: inherit; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer;
 }
 .rc-cycle-title:hover, .rc-cycle-title[aria-expanded="true"] { background: var(--hover); }
 .rc-cycle-title:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .rc-cycle-title .dd__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rc-cycle-title .dd__chev { width: 20px; height: 20px; color: var(--faint); flex: none; margin-top: 4px; }
-.rc-cycle-gear { width: 36px; height: 36px; margin: 0 0 0 2px; color: var(--faint); vertical-align: middle; border-radius: 10px; }
-.rc-cycle-gear svg { width: 20px; height: 20px; }
+.rc-cycle-title .dd__chev, .rc-cycle-gear svg { width: 18px; height: 18px; color: var(--faint); flex: none; }
+.rc-cycle-title:hover .dd__chev { color: var(--fg); }
+.rc-cycle-gear { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 8px; color: var(--faint); flex: none; }
 .rc-cycle-gear:hover { color: var(--fg); }
+.rc-cycle-gear:hover svg { color: var(--fg); }
 
 /* ---------------------------------------------------------------------------
    Settings dialog: a few short groups under hairlines, actions in the foot. */
@@ -132,7 +140,14 @@
 /* ---------------------------------------------------------------------------
    Section tab bar: Responses | Form, and the website status. */
 .rc-mode { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: -6px 0 16px; }
-.rc-seg { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
+.rc-seg { position: relative; display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
+/* The thumb: placed by script on the current item, sliding between items. */
+.rc-seg__thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: 0; border-radius: 999px; background: var(--fg); transition: transform 240ms cubic-bezier(0.2, 0, 0, 1), width 240ms cubic-bezier(0.2, 0, 0, 1); pointer-events: none; }
+.rc-seg a, .rc-seg button { position: relative; z-index: 1; }
+.rc-seg.is-live a[aria-current="page"], .rc-seg.is-live button[aria-current="page"] { background: transparent; }
+.rc-seg.is-live a[aria-current="page"]:hover, .rc-seg.is-live button[aria-current="page"]:hover { background: transparent; }
+.rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { transition: color 180ms ease; }
+@media (prefers-reduced-motion: reduce) { .rc-seg__thumb { transition: none; } }
 .rc-seg a, .rc-seg button { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; font: inherit; font-size: 13px; color: var(--muted); background: transparent; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .rc-seg a:hover, .rc-seg button:hover { color: var(--fg); background: var(--hover); }
 .rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { color: var(--page); background: var(--fg); }
@@ -141,11 +156,14 @@
 .rc-seg--forms { margin: 0 0 18px; }
 .rc-seg .count, .rc-mode__plain .count { font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7; }
 .rc-mode__plain { font-size: 13px; color: var(--muted); }
-.rc-mode__status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.rc-mode__status { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; max-width: 100%; font-size: 13px; color: var(--muted); }
+.rc-mode__addr { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.rc-mode__switch { font-size: 13px; }
+.rc-mode__switch input:checked ~ .fe-switch__text { color: var(--fg); }
 .rc-mode__status a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); margin-left: 4px; }
 .rc-mode__status a:hover { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-mode__sep { color: var(--faint); margin: 0 2px; }
-.rc-mode__link { font-variant-numeric: tabular-nums; }
+.rc-mode__link { min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .rc-mode__copy { width: 24px; height: 24px; margin-left: -2px; }
 .rc-mode__copy svg { width: 13px; height: 13px; }
 .rc-mode__also { color: var(--faint); }
@@ -240,6 +258,10 @@
 .fe-switch--row small { font-size: 12.5px; color: var(--faint); }
 .fe-options__cap { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
 .fe-options__n { width: 96px; font-variant-numeric: tabular-nums; }
+.fe-options__remove { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
+.fe-options__remove .fe-switch__text { display: flex; flex-direction: column; gap: 2px; }
+.fe-options__remove small { font-size: 12.5px; color: var(--faint); }
+.sheet.sheet--people th.rc-people__form { width: 100px; }
 .fe-options__n::placeholder { color: var(--faint); }
 .fe__foot { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 12px 0; border-top: 1px solid var(--hairline); background: var(--page); }
 .fe__status, .fe__error { margin-left: auto; font-size: 12.5px; color: var(--faint); }
@@ -250,7 +272,15 @@
   .fe-q__help { width: calc(100% - 12px); margin: 2px 6px 0; }
   .fe-q__answer { margin: 12px 6px 10px; }
   .fe__title { font-size: 24px; }
-  .rc-mode { margin-top: 0; }
+  .rc-mode { margin-top: 0; gap: 12px; }
+  /* The address takes a row of its own under the switch; no dot between. */
+  .rc-mode__addr { flex-basis: 100%; }
+  .rc-mode__sep { display: none; }
+  /* Stepping through people on a phone: the head's × closes, so the foot is
+     Previous and Next at the two ends, where thumbs are. */
+  .rc-app .modal__foot > [data-action="modal-close"], .rc-app .modal__foot > span[style] { display: none; }
+  .rc-app__nav { flex: 1; justify-content: space-between; }
+  .rc-app__index { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .fe-q, .fe-switch__track, .fe-switch__track::after, .fe-opt .icon-btn { transition: none; } }
 
