@@ -182,7 +182,7 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-open', m.open, 'Open on the website', `cornellphysicalintelligence.com/apply/${MD.esc(fe.key)}`)}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
-    ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers', 'Off: a second submission with the same email is refused.')}
+    ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
 }
@@ -190,7 +190,7 @@ function recruitFormOptionsHtml(fe) {
 // Any form can go once it has no responses.
 function recruitFormRemoveHtml(fe) {
   const n = Number(recruitState().cycle?.counts?.bySection?.[fe.key] || 0);
-  return `<div class="fe-options__remove"><span class="fe-switch__text">Remove this form${n ? `<small>${MD.esc(recruitPlural(n, 'response'))} so far. Close it instead; a form with responses cannot be removed.</small>` : '<small>It has no responses yet.</small>'}</span><button type="button" class="btn btn--sm ${n ? '' : 'btn--danger'}" data-action="recruit-form-remove" data-form="${MD.esc(fe.key)}" ${n ? 'disabled' : ''}>Remove</button></div>`;
+  return `<div class="fe-options__remove"><span class="fe-switch__text">Remove this form${n ? `<small>${MD.esc(recruitPlural(n, 'response'))} so far. Close it instead; a form with responses cannot be removed.</small>` : ''}</span><button type="button" class="btn btn--sm ${n ? '' : 'btn--danger'}" data-action="recruit-form-remove" data-form="${MD.esc(fe.key)}" ${n ? 'disabled' : ''}>Remove</button></div>`;
 }
 
 /* ------------------------------- new and removed forms ------------------- */
@@ -204,9 +204,8 @@ function recruitFormNewModalHtml() {
   return `<div class="modal rc-form-new" role="dialog" aria-label="New form">
     <div class="modal__head"><h3>New form</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <form class="modal__body rc-form" data-action="recruit-form-create">
-      ${recruitFormField('Name', `<input class="text-input" name="title" placeholder="e.g. Coffee chats, round 2" maxlength="80" required autocomplete="off" spellcheck="false">`, 'The tab, the column on People, and the title applicants see.')}
+      ${recruitFormField('Name', `<input class="text-input" name="title" placeholder="e.g. Coffee chats, round 2" maxlength="80" required autocomplete="off" spellcheck="false">`)}
       ${recruitFormField('Start from', dd('recruit-form-from', from, ''))}
-      <p class="rc-set__note">It starts closed. Open it on the website from its Form view when it is ready.</p>
     </form>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-form-create-go">Create form</button></div>
   </div>`;

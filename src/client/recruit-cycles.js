@@ -446,7 +446,7 @@ const RECRUIT_SETTINGS = [
     id: 'about', label: 'About', when: () => recruitCan('lead'),
     view: (cycle) => `<form class="rc-form" data-action="recruit-settings-about">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`, 'Shown with the cycle. Nothing opens or closes on its own.')}
+      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`, 'Nothing opens or closes on its own.')}
       <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
     </form>`,
     submit: async (form, cycle) => {
@@ -476,7 +476,8 @@ const RECRUIT_SETTINGS = [
       const receiving = current === cycle.id;
       const holder = current && !receiving ? (st.cycles?.list || []).find((c) => c.id === current) : null;
       const canToggle = recruitCan('admin') && (receiving || cycle.status === 'open');
-      const note = receiving ? 'The website posts every form here.'
+      // A note only when the box cannot simply be ticked.
+      const note = receiving ? ''
         : holder ? `${holder.name} receives them now. Only one cycle can.`
         : cycle.status !== 'open' ? 'Open the cycle first.'
         : st.cycles === undefined ? '' : 'No cycle receives them right now.';
@@ -491,7 +492,6 @@ const RECRUIT_SETTINGS = [
     view: (cycle) => {
       const teams = recruitSubteams(cycle);
       return `<form class="rc-form rc-form--rows" data-action="recruit-settings-subteams">
-        <p class="rc-set__note">The choices on the forms' subteam question and the subteam filter.</p>
         <div class="rc-rows" data-rc="subteam-rows">${teams.map((t) => recruitSubteamRowHtml(t)).join('')}</div>
         <div class="rc-form__foot"><button type="button" class="btn btn--sm" data-action="recruit-subteam-add">${I.plus} Add subteam</button><span style="flex:1"></span><button type="submit" class="btn btn--primary">Save</button></div>
       </form>`;

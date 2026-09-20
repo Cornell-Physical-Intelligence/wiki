@@ -399,11 +399,18 @@ function recruitSegSlide(nav) {
   const to = items.findIndex((el) => el.getAttribute('aria-current') === 'page');
   if (!thumb || !thumb.style || to < 0 || typeof items[to].getBoundingClientRect !== 'function') return;
   const box = nav.getBoundingClientRect();
+  // A dialog popping in is scaled while it measures; layout sizes are not.
+  // Within a percent it is only offsetWidth's rounding, so the rects stand.
+  const raw = nav.offsetWidth > 0 && box.width > 0 ? box.width / nav.offsetWidth : 1;
+  const scale = Math.abs(raw - 1) < 0.01 ? 1 : raw;
   const place = (el, animate) => {
     const r = el.getBoundingClientRect();
     thumb.style.transition = animate ? '' : 'none';
-    thumb.style.transform = `translateX(${r.left - box.left - nav.clientLeft}px)`;
-    thumb.style.width = `${r.width}px`;
+    // Measured from the nav's padding edge, where the thumb sits at 0,0: the
+    // item's own box, so padding, borders and wrapped rows all come out right.
+    thumb.style.transform = `translate(${(r.left - box.left) / scale - (nav.clientLeft || 0)}px, ${(r.top - box.top) / scale - (nav.clientTop || 0)}px)`;
+    thumb.style.width = `${r.width / scale}px`;
+    thumb.style.height = `${r.height / scale}px`;
   };
   const from = Number(nav.dataset.segFrom);
   if (Number.isInteger(from) && from !== to && items[from] && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) {

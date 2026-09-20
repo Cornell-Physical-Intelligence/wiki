@@ -494,8 +494,9 @@ RECRUIT.register({
   view: recruitApplicationsView,
   mount(cycle) {
     const st = recruitState();
-    const seg = $('.rc-seg--mode');
-    if (seg) { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => recruitSegSlide($('.rc-seg--mode'))); else recruitSegSlide(seg); }
+    // Placed now, in the same task as the paint: a frame callback waits for
+    // a visible tab, and a background tab would show the bare fallback.
+    recruitSegSlide($('.rc-seg--mode'));
     if (st.apps === undefined || st.apps.key !== st.key + ':' + cycle.id + ':' + recruitSection()) recruitLoadApps();
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },
