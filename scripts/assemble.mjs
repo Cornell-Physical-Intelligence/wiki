@@ -102,6 +102,7 @@ const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
     read('ai.js'),
     read('recruit-core.js'),
     read('recruit-cycles.js'),
+    read('recruit-forms.js'),
     read('recruit-applications.js'),
     ...(remote ? [readFileSync(new URL('../src/remote.js', import.meta.url), 'utf8')] : []),
     read('main.js'),

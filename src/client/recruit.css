@@ -66,3 +66,109 @@
 .rc-section { margin-bottom: 26px; }
 @media (max-width: 640px) { .rc-import-cols { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 860px) { .rc-scorecard__body { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------------------------------------------------------------------------
+   Cycle title: the name is the switch. */
+.plain-head--cycle { margin-bottom: 18px; }
+.rc-cycle-title {
+  display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
+  margin: 0 0 0 -8px; padding: 2px 10px 2px 8px; border-radius: 10px;
+  font: inherit; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer;
+}
+.rc-cycle-title:hover, .rc-cycle-title[aria-expanded="true"] { background: var(--hover); }
+.rc-cycle-title:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.rc-cycle-title .dd__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-cycle-title .dd__chev { width: 20px; height: 20px; color: var(--faint); flex: none; margin-top: 4px; }
+
+/* ---------------------------------------------------------------------------
+   Section tab bar: Responses | Form, and the website status. */
+.rc-mode { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: -6px 0 16px; }
+.rc-seg { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
+.rc-seg a { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border-radius: 999px; font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.rc-seg a:hover { color: var(--fg); background: var(--hover); }
+.rc-seg a[aria-current="page"] { color: var(--page); background: var(--fg); }
+.rc-seg a:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.rc-seg .count, .rc-mode__plain .count { font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7; }
+.rc-mode__plain { font-size: 13px; color: var(--muted); }
+.rc-mode__status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.rc-mode__status a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); margin-left: 4px; }
+.rc-mode__status a:hover { color: var(--fg); border-bottom-color: var(--fg); }
+.rc-mode__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.rc-mode__dot--on { background: var(--good); }
+
+/* ---------------------------------------------------------------------------
+   Form editor: every question as the applicant sees it, one card each. */
+.fe { max-width: 720px; }
+.fe__head { padding: 2px 0 20px; }
+.fe__title, .fe__desc, .fe-q__label, .fe-q__help, .fe-opt__text {
+  border: 0; background: transparent; color: var(--fg); outline: 0; border-bottom: 1px solid transparent;
+  transition: border-color 0.12s ease;
+}
+.fe__title:focus, .fe__desc:focus, .fe-q__label:focus, .fe-q__help:focus, input.fe-opt__text:focus { border-bottom-color: var(--rule); }
+.fe__title::placeholder, .fe__desc::placeholder, .fe-q__label::placeholder, .fe-q__help::placeholder, .fe-opt__text::placeholder { color: var(--faint); }
+.fe__title { display: block; width: 100%; padding: 4px 0; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.2; }
+.fe__desc { display: block; width: 100%; margin-top: 4px; padding: 4px 0; font: inherit; font-size: 14.5px; line-height: 1.55; color: var(--muted); resize: none; field-sizing: content; min-height: 30px; }
+.fe__desc:focus { color: var(--fg); }
+.fe__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.fe-q { border: 1px solid var(--hairline); border-radius: 12px; background: var(--page); padding: 16px 20px 12px; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.fe-q:focus-within { border-color: var(--rule); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px rgba(0, 0, 0, 0.06); }
+.fe-q__head { display: flex; align-items: center; gap: 14px; }
+.fe-q__label { flex: 1; min-width: 0; padding: 3px 0; font: inherit; font-size: 15.5px; font-weight: 500; }
+.fe-q__type { flex: none; }
+.fe-q__type--fixed { font-size: 12px; color: var(--faint); padding: 0 2px; white-space: nowrap; }
+.fe-q__help { display: block; width: 100%; margin-top: 2px; padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
+.fe-q__answer { margin: 14px 0 12px; }
+.fe-ans { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--faint); }
+.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 8px; width: min(100%, 380px); }
+.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); border-radius: 8px; align-items: flex-start; }
+.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 8px; width: min(100%, 380px); }
+.fe-ans svg { width: 15px; height: 15px; flex: none; }
+.fe-ans--check { color: var(--muted); }
+.fe-mark { width: 16px; height: 16px; flex: none; border: 1.5px solid var(--rule); border-radius: 4px; }
+.fe-mark--radio { border-radius: 50%; }
+.fe-mark--ghost { border-style: dashed; opacity: 0.6; }
+.fe-opts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.fe-opt { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.fe-opt__text { flex: 1; min-width: 0; max-width: 380px; padding: 4px 0; font: inherit; font-size: 14px; }
+.fe-opt--fixed .fe-opt__text { color: var(--muted); }
+.fe-opt .icon-btn { width: 26px; height: 26px; opacity: 0; transition: opacity 0.12s ease; }
+.fe-opt .icon-btn svg { width: 14px; height: 14px; }
+.fe-opt:hover .icon-btn, .fe-opt:focus-within .icon-btn { opacity: 1; }
+.fe-opt--add .linklike { font-size: 13.5px; color: var(--muted); }
+.fe-opt--add .linklike:hover { color: var(--fg); }
+.fe-q__note { margin: 8px 0 0; font-size: 12.5px; color: var(--faint); }
+.fe-q__foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.fe-q__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
+.fe-q__tools .icon-btn { width: 28px; height: 28px; }
+.fe-q__tools .icon-btn svg { width: 15px; height: 15px; }
+.fe-q__tools .icon-btn[disabled] { opacity: 0.25; pointer-events: none; }
+.fe-q__up svg { transform: rotate(180deg); }
+.fe-q__fixed { font-size: 12px; color: var(--faint); padding: 0 6px; }
+.fe-switch { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.fe-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.fe-switch__track { width: 30px; height: 18px; border-radius: 999px; background: var(--rule); position: relative; flex: none; transition: background 0.15s ease; }
+.fe-switch__track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--page); transition: transform 0.15s ease; }
+.fe-switch input:checked + .fe-switch__track { background: var(--fg); }
+.fe-switch input:checked + .fe-switch__track::after { transform: translateX(12px); }
+.fe-switch input:checked ~ .fe-switch__text { color: var(--fg); }
+.fe-switch input:focus-visible + .fe-switch__track { outline: 2px solid var(--fg); outline-offset: 2px; }
+.fe-switch--lg { font-size: 13.5px; }
+.fe__add { margin-top: 14px; }
+.fe__foot { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 12px 0; border-top: 1px solid var(--hairline); background: var(--page); }
+.fe__status, .fe__error { margin-left: auto; font-size: 12.5px; color: var(--faint); }
+.fe__status--dirty { color: var(--muted); }
+.fe__error { color: var(--bad); }
+@media (max-width: 640px) {
+  .fe-q { padding: 14px 14px 10px; border-radius: 10px; }
+  .fe__title { font-size: 24px; }
+  .rc-mode { margin-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .fe-q, .fe-switch__track, .fe-switch__track::after, .fe-opt .icon-btn { transition: none; } }
+
+/* ---------------------------------------------------------------------------
+   The application dialog keeps one size while stepping: the body scrolls,
+   Previous and Next never move. */
+.modal.rc-app { height: min(860px, 92dvh); }
+.modal.rc-app .modal__body { flex: 1 1 auto; min-height: 0; }
+.rc-app__nav { display: inline-flex; align-items: center; gap: 8px; }
+.rc-app__index { display: inline-block; min-width: 72px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }

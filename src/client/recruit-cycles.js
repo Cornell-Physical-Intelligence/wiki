@@ -381,52 +381,6 @@ const RECRUIT_SETTINGS = [
     },
   },
   {
-    id: 'sections', label: 'Website sections', when: () => recruitCan('lead'),
-    view: (cycle) => {
-      const sections = recruitSections(cycle);
-      return RECRUIT_SECTION_KEYS.map((key) => {
-        const sec = sections[key] || { title: RECRUIT_SECTION_LABELS[key], description: '', open: false, form: { questions: [] } };
-        const locked = new Set(key === 'interest' ? ['name', 'email', 'subteam', 'year', 'project', 'file'] : ['name', 'email']);
-        return `<form class="rc-form rc-section-form" data-action="recruit-settings-sections" data-section="${key}" aria-label="${MD.esc(RECRUIT_SECTION_LABELS[key])}">
-          <h3 class="rc-section-form__title">${MD.esc(RECRUIT_SECTION_LABELS[key])}</h3>
-          <div class="rc-checks"><label class="rc-check"><input type="checkbox" name="open" ${sec.open ? 'checked' : ''}> Accepting responses on the website</label></div>
-          ${recruitFormField('Title', `<input class="text-input" name="title" value="${MD.esc(sec.title || '')}" maxlength="80" autocomplete="off">`)}
-          ${recruitFormField('Description', `<textarea class="text-input" name="description" rows="2" maxlength="600">${MD.esc(sec.description || '')}</textarea>`, 'Shown above the form on the website.')}
-          <div class="rc-questions" data-rc="question-rows">${(sec.form?.questions || []).map((q) => recruitQuestionRowHtml(q, locked.has(q.key))).join('')}</div>
-          <div class="rc-form__foot"><button type="button" class="btn btn--sm" data-action="recruit-question-add">${I.plus} Add question</button><span style="flex:1"></span><button type="submit" class="btn btn--primary">Save</button></div>
-        </form>`;
-      }).join('');
-    },
-    submit: async (form, cycle) => {
-      const key = form.dataset.section;
-      const questions = [];
-      const seen = new Set();
-      for (const row of $$('.rc-question', form)) {
-        const label = String($('[name="label"]', row)?.value || '').trim();
-        if (!label) continue;
-        const type = $('[data-m="recruit-qtype"]', row)?.dataset.value || row.dataset.type || 'short';
-        const k = row.dataset.key || recruitQuestionKey(label);
-        if (seen.has(k)) throw new Error(`Two questions share the key "${k}". Rename one.`);
-        seen.add(k);
-        const q = { key: k, type, label, required: Boolean($('[name="required"]', row)?.checked) };
-        const options = String($('[name="options"]', row)?.value || '').split(',').map((o) => o.trim()).filter(Boolean);
-        if (['single', 'multi'].includes(type)) { if (!options.length) throw new Error(`"${label}" needs options, comma separated.`); q.options = options; }
-        if (type === 'file') { q.accept = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif']; q.maxBytes = 2621440; }
-        questions.push(q);
-      }
-      if (!questions.length) throw new Error('A section needs at least one question.');
-      await recruitPutSettings(cycle, 'site', { sections: { [key]: {
-        title: String(form.elements.title.value || '').trim(), description: String(form.elements.description.value || '').trim(),
-        open: form.elements.open.checked, form: { questions },
-      } } });
-      const st = recruitState();
-      if (st.cycle?.data?.id === cycle.id) st.cycle.sections = null;   // the reload carries the saved sections
-      form.dataset.adminDirty = 'false';
-      toast(`${RECRUIT_SECTION_LABELS[key]} saved`);
-      RECRUIT.reset(cycle.id); render();
-    },
-  },
-  {
     id: 'intake', label: 'Intake', when: () => recruitCan('admin'),
     view: (cycle) => {
       const it = cycle.doc?.intake || {};
@@ -461,29 +415,6 @@ const RECRUIT_SETTINGS = [
 function recruitSections(cycle) {
   const st = recruitState();
   return (st.cycle?.data?.id === cycle?.id && st.cycle.sections) || cycle?.doc?.site?.sections || {};
-}
-
-const RECRUIT_QUESTION_TYPES = [
-  { value: 'short', label: 'Short text' }, { value: 'long', label: 'Long text' }, { value: 'email', label: 'Email' },
-  { value: 'single', label: 'Choose one' }, { value: 'multi', label: 'Choose many' }, { value: 'checkbox', label: 'Checkbox' },
-  { value: 'link', label: 'Link' }, { value: 'file', label: 'File' },
-];
-const recruitQuestionKey = (label) => { const k = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40); return /^[a-z]/.test(k) ? k : 'q_' + k; };
-
-function recruitQuestionRowHtml(q = {}, locked = false) {
-  const options = Array.isArray(q.options) ? q.options.join(', ') : '';
-  const typeLabel = (RECRUIT_QUESTION_TYPES.find((t) => t.value === q.type) || RECRUIT_QUESTION_TYPES[0]).label;
-  return `<div class="rc-question" data-key="${MD.esc(q.key || '')}" data-type="${MD.esc(q.type || 'short')}">
-    <input class="text-input" name="label" value="${MD.esc(q.label || '')}" placeholder="Question" maxlength="120" aria-label="Question" autocomplete="off">
-    ${locked ? `<span class="rc-question__type faint">${MD.esc(typeLabel)}</span>` : dd('recruit-qtype', RECRUIT_QUESTION_TYPES, q.type || 'short', { small: true })}
-    <input class="text-input" name="options" value="${MD.esc(options)}" placeholder="Options, comma separated" maxlength="600" aria-label="Options for choice questions" autocomplete="off">
-    <label class="rc-check rc-question__req"><input type="checkbox" name="required" ${q.required ? 'checked' : ''}> Required</label>
-    <span class="rc-question__move">
-      <button type="button" class="icon-btn rc-question__up" data-action="recruit-question-up" aria-label="Move ${MD.esc(q.label || 'question')} up">${I.chev}</button>
-      <button type="button" class="icon-btn" data-action="recruit-question-down" aria-label="Move ${MD.esc(q.label || 'question')} down">${I.chev}</button>
-    </span>
-    ${locked ? '<span class="rc-question__lock faint" title="The website needs this question">Fixed</span>' : `<button type="button" class="icon-btn" data-action="recruit-question-remove" aria-label="Remove ${MD.esc(q.label || 'question')}">${I.x}</button>`}
-  </div>`;
 }
 
 function recruitSubteamRowHtml(t = {}) {
@@ -551,23 +482,6 @@ RECRUIT.register({
       el.closest('form').dataset.adminDirty = 'true';
       $$('.rc-row [name="name"]', rows).at(-1)?.focus();
     },
-    'recruit-question-add': (el) => {
-      const form = el.closest('form'), rows = $('[data-rc="question-rows"]', form);
-      if (!rows) return;
-      rows.insertAdjacentHTML('beforeend', recruitQuestionRowHtml());
-      form.dataset.adminDirty = 'true';
-      $$('.rc-question [name="label"]', rows).at(-1)?.focus();
-    },
-    'recruit-question-remove': (el) => {
-      const form = el.closest('form'), row = el.closest('.rc-question');
-      if (!row) return;
-      const rows = row.parentElement;
-      row.remove();
-      if (form) form.dataset.adminDirty = 'true';
-      ($$('.rc-question [name="label"]', rows).at(-1) || $('[data-action="recruit-question-add"]', form))?.focus();
-    },
-    'recruit-question-up': (el) => { const row = el.closest('.rc-question'); const prev = row?.previousElementSibling; if (prev) { row.parentElement.insertBefore(row, prev); el.closest('form').dataset.adminDirty = 'true'; el.focus(); } },
-    'recruit-question-down': (el) => { const row = el.closest('.rc-question'); const next = row?.nextElementSibling; if (next) { row.parentElement.insertBefore(next, row); el.closest('form').dataset.adminDirty = 'true'; el.focus(); } },
     'recruit-subteam-remove': (el) => {
       const form = el.closest('form'), row = el.closest('.rc-row');
       if (!row) return;

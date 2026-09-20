@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
-const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', applications: 'recruit-applications.js' };
+const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', forms: 'recruit-forms.js', applications: 'recruit-applications.js' };
 const src = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([k, f]) => [k, await read(`../src/client/${f}`)])));
 const ui2 = await read('../src/client/ui2.js');
 const main = await read('../src/client/main.js');
@@ -161,7 +161,7 @@ function fixture({ remote = true, admin = true } = {}) {
   };
   if (remote) base.REMOTE = { pending: 0 };
   const ctx = vm.createContext(base);
-  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
+  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.forms + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
   const run = (code) => vm.runInContext(code, ctx);
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   return { ctx, document, app, requests, renders, backgrounds, toasts, menus, navs, closes, run, settle,
@@ -189,7 +189,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
 /* ------------------------------- registry -------------------------------- */
 {
   const f = fixture();
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'applications'], 'kernel modules register in order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'applications', 'forms'], 'kernel modules register in order');
   f.ctx.zetaCalls = [];
   f.run(`RECRUIT.register({ name: 'zeta', order: 5, panel: { id: 'zeta', label: 'Zeta', when: (cycle, role) => role === 'admin' || role === 'lead' }, view: () => '<p>zeta</p>',
     actions: { 'recruit-zeta': (el, ev, stop) => zetaCalls.push(el.dataset.id) }, modals: { 'recruit-zeta': (m) => '<div class="modal" data-zeta></div>' },
@@ -197,7 +197,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
     filters: [{ group: 'review', value: 'unscored', label: 'Unscored', query: { unscored: 1 } }],
     selectionActions: (ids) => [{ id: 'zeta-move', label: 'Zeta ' + ids.length, run: () => {} }],
     detailSections: (app) => ({ id: 'zeta', title: 'Zeta', html: '<p data-zeta-section>' + app.id + '</p>' }) })`);
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'applications'], 'registry sorts by order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'applications', 'forms'], 'registry sorts by order');
   assert.throws(() => f.run("RECRUIT.register({ name: 'zeta', order: 9 })"), /already registered/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, actions: { 'nope': () => {} } })"), /must start with recruit-/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'noorder' })"), /needs an order/);
@@ -287,7 +287,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.match(html, /&quot;x&quot;@cornell\.edu/, 'emails are escaped in rows and labels');
   assert.match(html, /data-m="recruit-filter"/); assert.match(html, /data-m="recruit-cycle-switch"/);
   assert.doesNotMatch(html, /<select|<datalist/);
-  assert.match(html, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026/); assert.match(html, /Open · receives the website form · 2 interest · 0 coffee chats · 0 applications/);
+  assert.match(html, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026/); assert.doesNotMatch(html, /receives the website form · 2 interest/, 'the cycle page has no counts subtitle'); assert.match(html, /class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch"/, 'the title is the cycle switch'); assert.match(html, /data-rc-count="interest">2</, 'the tab bar counts responses');
   assert.match(html, /2 of 200 shown · <\/span><button class="linklike" data-action="recruit-load-more">Load more/);
   assert.match(html, /applications\.csv\?section=interest/, 'the export link names the section');
   f.mount();
@@ -326,6 +326,138 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const sw = f.app.querySelector('[data-m="recruit-cycle-switch"]');
   f.run('RECRUIT.dd.bind(RECRUIT)')(sw, 'cy-b'); assert.equal(f.navs.at(-1), '#/applications/cy-b/settings', 'switching cycles keeps the panel');
   console.log('PASS: sheet rows escape user data, focus survives repaints, dd() drives every choice with composed labels, and no template contains a native select');
+}
+
+/* ------------------------------- form editor ----------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f);
+  const sections = () => ({
+    interest: { title: 'Interest form', description: 'Say hi', open: true, form: { questions: [
+      { key: 'name', type: 'short', label: 'Name', required: true, max: 100 }, { key: 'email', type: 'email', label: 'Email', required: true, max: 200 },
+      { key: 'subteam', type: 'single', label: 'Subteam', options: ['Electrical', 'Software'] }, { key: 'year', type: 'single', label: 'Year', options: ['Freshman'] },
+      { key: 'project', type: 'long', label: 'Project', help: 'Tell us', max: 1000 }, { key: 'file', type: 'file', label: 'File', accept: ['application/pdf'], maxBytes: 100 },
+    ] } },
+    coffee: { title: 'Coffee chats', description: '', open: false, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } },
+    application: { title: 'Application', description: '', open: false, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } },
+  });
+  st.cycle.sections = sections();
+  f.ctx.UI.route.params.sub = 'coffee';
+  f.mount();
+  assert.match(f.app.innerHTML, /class="rc-seg"/, 'a lead sees Responses | Form on the tab');
+  assert.match(f.app.innerHTML, /Closed on the website/);
+  assert.match(f.app.innerHTML, /href="#\/applications\/cy-a\/coffee\?edit=1"/, 'the Form view is a link');
+  assert.ok(f.app.querySelector('.sheet--recruit'), 'Responses is the sheet');
+  f.ctx.UI.route.params.edit = '1';
+  f.mount();
+  const editor = f.app.querySelector('[data-rc="form-editor"]');
+  assert.ok(editor && !f.app.querySelector('.sheet--recruit'), 'Form draws the editor in the tab instead of the sheet');
+  assert.equal(f.app.querySelectorAll('.fe-q').length, 2);
+  assert.equal(f.app.querySelectorAll('.fe-q__type--fixed').length, 2, 'name and email keep their type');
+  assert.equal(f.app.querySelectorAll('[data-action="recruit-fe-remove"]').length, 0, 'fixed questions cannot be removed');
+  assert.doesNotMatch(editor.innerHTML, /<select/);
+  assert.ok(f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'nothing to save yet');
+  const click = async (action, i, j) => {
+    const el = f.app.querySelector(`[data-action="${action}"]${i === undefined ? '' : `[data-i="${i}"]`}${j === undefined ? '' : `[data-j="${j}"]`}`);
+    assert.ok(el, `${action} ${i ?? ''} ${j ?? ''} exists`);
+    assert.equal(await f.run('RECRUIT.click.bind(RECRUIT)')(action, el, { stopPropagation() {} }, () => {}), true);
+    return el;
+  };
+  const type = (m, value, i, j) => {
+    const el = f.app.querySelector(`[data-m="${m}"]${i === undefined ? '' : `[data-i="${i}"]`}${j === undefined ? '' : `[data-j="${j}"]`}`);
+    assert.ok(el, `${m} exists`);
+    el.value = value;
+    assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(el, { type: 'input' }), true);
+  };
+  await click('recruit-fe-add');
+  assert.equal(f.app.querySelectorAll('.fe-q').length, 3, 'Add question appends a card');
+  assert.ok(f.document.activeElement === f.app.querySelector('[data-m="recruit-fe-label"][data-i="2"]'), 'the new label takes focus');
+  type('recruit-fe-label', 'Which day works for you?', 2);
+  assert.ok(!f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'typing enables Save');
+  assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Unsaved changes/);
+  // The type menu is the app's own dd; picking "Choose one" seeds an option row.
+  const typeHost = f.app.querySelector('[data-m="recruit-fe-type"][data-i="2"]');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(typeHost);
+  f.menus.at(-1).items.find((it) => it.label === 'Choose one').run();
+  assert.equal(f.app.querySelectorAll('[data-m="recruit-fe-option"][data-i="2"]').length, 1, 'a choice question starts with one option row');
+  type('recruit-fe-option', 'Monday', 2, 0);
+  await click('recruit-fe-option-add', 2);
+  type('recruit-fe-option', 'Friday', 2, 1);
+  await click('recruit-fe-option-add', 2);
+  await click('recruit-fe-option-remove', 2, 2);
+  assert.equal(f.app.querySelectorAll('[data-m="recruit-fe-option"][data-i="2"]').length, 2, 'options add and remove in place');
+  f.app.querySelector('[data-action="recruit-fe-required"][data-i="2"]').checked = true;
+  await click('recruit-fe-required', 2);
+  await click('recruit-fe-up', 2);
+  assert.equal(f.app.querySelector('.fe-q[data-i="1"] [data-m="recruit-fe-label"]').value, 'Which day works for you?', 'Move up swaps the cards');
+  await click('recruit-fe-down', 1);
+  const open = f.app.querySelector('[data-action="recruit-fe-open"]'); open.checked = true; await click('recruit-fe-open');
+  type('recruit-fe-desc', 'Grab a coffee.');
+  const saving = click('recruit-fe-save');
+  await f.settle();
+  const put = f.requests.at(-1);
+  assert.equal(put.url, '/recruit/cycles/cy-a/settings/site'); assert.equal(put.method, 'PUT'); assert.equal(put.body.version, 3);
+  const saved = put.body.settings.sections.coffee;
+  assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.');
+  same(saved.form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a new question gets a key from its label');
+  same(saved.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
+  assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Saving…/);
+  put.resolve({ cycle: { ...cycleRow(), version: 4 } }); await saving; await f.settle();
+  assert.ok(f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'Save settles');
+  assert.equal(f.toasts.at(-1), 'Coffee chats saved · live on the website');
+  assert.match(f.app.innerHTML, /Open on the website/, 'the tab bar shows the saved state');
+  assert.equal(f.run('recruitSections(recruitCycleRow()).coffee.form.questions.length'), 3, 'the saved section is what the cycle now reports');
+  assert.equal(f.run('recruitCycleRow().version'), 4, 'the next save uses the new version');
+  assert.equal(f.renders.length, 0, 'the editor never re-renders the route');
+  // Validation happens before any request.
+  await click('recruit-fe-add'); type('recruit-fe-label', '', 3);
+  const before = f.requests.length;
+  await click('recruit-fe-save');
+  assert.equal(f.requests.length, before, 'an unlabelled question never reaches the server');
+  assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Question 4 needs a label/);
+  await click('recruit-fe-remove', 3);
+  await click('recruit-fe-discard');
+  assert.equal(f.app.querySelectorAll('.fe-q').length, 3);
+  // Reviewers get the responses only.
+  const r = fixture({ admin: false });
+  const rst = loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
+  rst.cycle.sections = sections();
+  r.ctx.UI.route.params.edit = '1';
+  r.mount();
+  assert.ok(!r.app.querySelector('[data-rc="form-editor"]') && r.app.querySelector('.sheet--recruit'), 'reviewers cannot open the editor');
+  assert.doesNotMatch(r.app.innerHTML, /class="rc-seg"/);
+  console.log('PASS: the form editor lives in the section tab, edits a model in place, saves one PUT with derived keys, validates first, and is leads-only');
+}
+
+/* ------------------------------- stepping -------------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f);
+  f.mount();
+  f.ctx.st = st;
+  st.detail['in-1'] = { application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', section: 'interest', answers: {}, files: [], review: { comments: [] } }, form: null, history: [], audit: [] };
+  f.run("recruitOpenApp('in-1')");
+  assert.equal(f.renders.length, 1, 'opening renders the dialog once');
+  f.mountModal();
+  const dialog = f.document.querySelector('.rc-app');
+  assert.equal(dialog.dataset.app, 'in-1');
+  assert.match(dialog.querySelector('[data-rc="app-nav"]').innerHTML, /1 of 2/);
+  assert.ok(f.requests.some((r) => r.url.endsWith('/applications/in-2')), 'the neighbour loads ahead of time');
+  const next = dialog.querySelector('[data-action="recruit-app-next"]');
+  next.focus();
+  f.run('recruitStepApp(1)');
+  assert.equal(f.renders.length, 1, 'stepping never re-renders: the window stays');
+  assert.equal(f.ctx.UI.modal.id, 'in-2');
+  assert.equal(dialog.dataset.app, 'in-2');
+  assert.match(dialog.querySelector('[data-rc="app-identity"]').innerHTML, /two@cornell\.edu/, 'the head repaints in place');
+  assert.match(dialog.querySelector('[data-rc="app-nav"]').innerHTML, /2 of 2/);
+  assert.ok(dialog.querySelector('[data-action="recruit-app-next"]').disabled, 'Next stays drawn, disabled at the end');
+  assert.ok(dialog.contains(f.document.activeElement), 'focus stays in the dialog');
+  f.run('recruitStepApp(1)');
+  assert.equal(f.ctx.UI.modal.id, 'in-2', 'a spare click at the end is harmless');
+  f.run('recruitStepApp(-1)');
+  assert.equal(f.ctx.UI.modal.id, 'in-1'); assert.equal(f.renders.length, 1);
+  console.log('PASS: Previous and Next swap the application inside the open dialog without a render, prefetch neighbours, and keep focus');
 }
 
 /* ------------------------------- loaders --------------------------------- */
@@ -381,12 +513,12 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const f = fixture();
   const st = loadCycle(f);
   f.mount();
-  assert.equal(f.app.querySelector('[data-rc="counts"]').textContent, 'Open · receives the website form · 2 interest · 0 coffee chats · 0 applications');
+  assert.equal(f.app.querySelector('[data-rc-count="interest"]').textContent, '2');
   const tick = f.run('recruitSyncTick()');
   assert.equal(f.requests[0].url, '/recruit/cycles?all=1');
   f.requests[0].resolve({ cycles: [{ id: 'cy-a', name: 'Fall 2026', status: 'open', counts: { total: 7, bySection: { interest: 4, coffee: 3 } }, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true } });
   await tick;
-  assert.equal(f.app.querySelector('[data-rc="counts"]').textContent, 'Open · receives the website form · 4 interest · 3 coffee chats · 0 applications', 'counts repaint in place');
+  assert.equal(f.app.querySelector('[data-rc-count="interest"]').textContent, '4', 'counts repaint in place');
   assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'the sync loop never repaints the whole route');
   assert.ok(st._syncTimer, 'the loop rescheduled itself'); f.run('clearTimeout(recruitState()._syncTimer)');
   f.ctx.UI.modal = { kind: 'confirm' };
@@ -464,7 +596,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   patch.resolve({ application: { id: 'in-1', reviewVersion: 5, review: { flagged: true, comments: [second, saved] } } }); await flagging;
   assert.equal(st.apps.byId['in-1'].flagged, true); assert.equal(f.toasts.at(-1), 'Flagged for follow-up');
   // Previous / Next walk the visible list.
-  f.run('recruitStepApp(1)'); assert.equal(f.ctx.UI.modal.id, 'in-2'); assert.equal(f.renders.length, 1, 'stepping is a user action and may render');
+  f.run('recruitStepApp(1)'); assert.equal(f.ctx.UI.modal.id, 'in-2'); assert.equal(f.renders.length, 0, 'stepping swaps the application in place; the dialog never remounts');
   console.log('PASS: the application dialog escapes everything, keeps a dirty comment draft across background refreshes, retries with the same ic- id, and never remounts while open');
 }
 

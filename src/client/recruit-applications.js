@@ -370,10 +370,14 @@ function recruitSheetHtml(cycle) {
   </div>`;
 }
 
+// A section tab: Responses (the sheet) or Form (the editor), behind one bar.
 function recruitApplicationsView(cycle, role, panel) {
   const st = recruitState();
+  const editing = recruitEditingForm();
+  const bar = recruitModeBarHtml(cycle, panel, editing);
+  if (editing) return bar + recruitFormEditorHtml(cycle, panel);
   const pending = panel === 'interest' && st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
-  return recruitSheetHtml(cycle) + pending;
+  return bar + recruitSheetHtml(cycle) + pending;
 }
 
 /* ------------------------------- queue block ----------------------------- */
@@ -584,19 +588,15 @@ function recruitAppModalHtml(m) {
   const cycle = recruitCycleRow();
   const row = recruitApp(id);
   if (!row || !cycle) return `<div class="modal" role="dialog" aria-label="Application unavailable"><div class="modal__head"><h3>Application unavailable</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div><div class="modal__body"><p>This application was removed. Close this window to refresh the list.</p></div></div>`;
-  const lead = recruitCan('lead') && cycle.status !== 'archived';
-  const rows = recruitVisibleRows(cycle);
-  const index = rows.findIndex((r) => r.id === id);
-  const foot = index >= 0 && rows.length > 1 ? `<button class="btn btn--sm" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint" style="font-size:12px;font-variant-numeric:tabular-nums">${index + 1} of ${rows.length}</span><button class="btn btn--sm" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>` : '';
   return `<div class="modal modal--wide interest-review rc-app" role="dialog" aria-label="${MD.esc(recruitSectionNoun(row.section))} from ${MD.esc(row.name)}" data-app="${MD.esc(id)}">
     <div class="modal__head">
-      <div class="interest-review__identity"><h3>${MD.esc(row.name)}</h3><span>${MD.esc(row.email)} · ${MD.esc(cycle.name)}</span></div>
+      <div class="interest-review__identity" data-rc="app-identity">${recruitIdentityHtml(row, cycle)}</div>
       <span data-rc="app-flag">${recruitFlagButton(row, { detail: true })}</span>
       <button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button>
     </div>
     <div class="modal__body interest-review__body">
       <section class="interest-application" aria-label="Application">
-        <h4 class="interest-subhead">${MD.esc(recruitSectionNoun(row.section))}</h4>
+        <h4 class="interest-subhead" data-rc="app-heading">${MD.esc(recruitSectionNoun(row.section))}</h4>
         <div data-rc="app-main">${recruitDetailMainHtml(id)}</div>
       </section>
       <section class="interest-discussion" aria-labelledby="recruit-comments-heading">
@@ -604,8 +604,18 @@ function recruitAppModalHtml(m) {
         <div data-rc="app-comments">${recruitDiscussionHtml(id)}</div>
       </section>
     </div>
-    <div class="modal__foot modal__foot--split">${foot}<span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split"><span class="rc-app__nav" data-rc="app-nav">${recruitAppNavHtml(id, cycle)}</span><span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
+}
+
+const recruitIdentityHtml = (row, cycle) => `<h3>${MD.esc(row.name)}</h3><span>${MD.esc(row.email)} · ${MD.esc(cycle.name)}</span>`;
+
+// Previous and Next keep their places: both always draw, one may be disabled.
+function recruitAppNavHtml(id, cycle) {
+  const rows = recruitVisibleRows(cycle);
+  const index = rows.findIndex((r) => r.id === id);
+  if (index < 0 || rows.length < 2) return '';
+  return `<button class="btn btn--sm" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${rows.length}</span><button class="btn btn--sm" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>`;
 }
 
 // Repaint the open dialog's regions in place; the composer keeps its text.
@@ -684,8 +694,43 @@ function recruitOpenApp(id, { comments = false } = {}) {
   UI.modal = { kind: 'recruit-app', id };
   render();
   if (st.detail[id] === undefined || st.detail[id]?.error) recruitLoadDetail(id);
+  recruitPrefetchNeighbors(id);
   if (comments) $('.rc-app .interest-compose textarea')?.focus();
   else $('.rc-app [data-action="modal-close"]')?.focus();
+}
+
+// The neighbours load while this one is read, so a step shows at once.
+function recruitPrefetchNeighbors(id) {
+  const st = recruitState();
+  const rows = recruitVisibleRows();
+  const i = rows.findIndex((r) => r.id === id);
+  if (i < 0) return;
+  for (const n of [rows[i + 1], rows[i - 1]]) if (n && st.detail[n.id] === undefined) recruitLoadDetail(n.id);
+}
+
+// Show another application in the open dialog: the window stays where and
+// how it is, its regions repaint, nothing animates, and the composer keeps
+// the draft that belongs to the new application.
+function recruitSwapApp(id) {
+  const st = recruitState();
+  const dialog = $('.rc-app');
+  const cycle = recruitCycleRow();
+  const row = recruitApp(id);
+  if (!dialog || !cycle || !row || UI.modal?.kind !== 'recruit-app') { recruitOpenApp(id); return; }
+  if (st.busy.has('delete:' + id)) { toast('Deletion is in progress'); return; }
+  UI.modal = { kind: 'recruit-app', id };
+  dialog.dataset.app = id;
+  dialog.setAttribute('aria-label', `${recruitSectionNoun(row.section)} from ${row.name}`);
+  recruitRepaint($('[data-rc="app-identity"]', dialog), recruitIdentityHtml(row, cycle));
+  const heading = $('[data-rc="app-heading"]', dialog);
+  if (heading) heading.textContent = recruitSectionNoun(row.section);
+  recruitRepaint($('[data-rc="app-nav"]', dialog), recruitAppNavHtml(id, cycle));
+  recruitRepaint($('[data-rc="app-comments"]', dialog), recruitDiscussionHtml(id));
+  recruitPaintDetail(id);
+  const scroller = $('.interest-review__body', dialog);
+  if (scroller) scroller.scrollTop = 0;
+  if (st.detail[id] === undefined || st.detail[id]?.error) recruitLoadDetail(id);
+  recruitPrefetchNeighbors(id);
 }
 
 function recruitStepApp(delta) {
@@ -695,8 +740,11 @@ function recruitStepApp(delta) {
   const i = rows.findIndex((r) => r.id === id);
   const next = rows[i + delta];
   if (i < 0 || !next) return;
-  recruitOpenApp(next.id);
-  $(`.rc-app [data-action="${delta > 0 ? 'recruit-app-next' : 'recruit-app-prev'}"]`)?.focus();
+  recruitSwapApp(next.id);
+  const dialog = $('.rc-app');
+  if (dialog && !dialog.contains(document.activeElement)) {
+    ($(`.rc-app [data-action="${delta > 0 ? 'recruit-app-next' : 'recruit-app-prev'}"]:not([disabled])`) || $(`.rc-app [data-action="${delta > 0 ? 'recruit-app-prev' : 'recruit-app-next'}"]:not([disabled])`) || $('.rc-app [data-action="modal-close"]'))?.focus({ preventScroll: true });
+  }
 }
 
 /* ------------------------------- review mutations ------------------------ */

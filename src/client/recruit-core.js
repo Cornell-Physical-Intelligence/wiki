@@ -473,7 +473,8 @@ function recruitStatusText(cycle, intakeCycleId) {
   return cycle.status || '';
 }
 
-// Counts repaint in place: the head line and every [data-rc-count] node.
+// Counts repaint in place: every [data-rc-count] node (the index rows, the
+// section tab's Responses count).
 function recruitPaintCounts() {
   const st = recruitState();
   const cycle = st.cycle?.data;
@@ -520,6 +521,15 @@ function viewRecruit() {
   return recruitCycleShellHtml(id);
 }
 
+// The cycle's name is the switch: the big title opens the list of cycles.
+function recruitCycleTitleHtml(cycle, options) {
+  return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+}
+const recruitCycleChoiceLabel = (x) => {
+  const name = x.term && x.term !== x.name ? `${x.name} · ${x.term}` : x.name;
+  return x.status && x.status !== 'open' ? `${name} · ${x.status}` : name;
+};
+
 function recruitCycleShellHtml(id) {
   const st = recruitState();
   const back = `<a href="#/applications?all=1">Applications</a>`;
@@ -539,17 +549,16 @@ function recruitCycleShellHtml(id) {
   const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}</nav>` : '';
   const list = st.cycles?.list || [];
   const switchOptions = (list.length ? list : [{ id: cycle.id, name: cycle.name, term: cycle.term, status: cycle.status }])
-    .map((x) => ({ value: x.id, label: x.term && x.term !== x.name ? `${x.name} · ${x.term}` : x.name }));
+    .map((x) => ({ value: x.id, label: recruitCycleChoiceLabel(x) }));
   if (!switchOptions.some((o) => o.value === cycle.id)) switchOptions.unshift({ value: cycle.id, label: cycle.name });
-  const right = `${dd('recruit-cycle-switch', switchOptions, cycle.id, { small: true })}
-    <button class="icon-btn" data-action="recruit-cycle-tools" aria-label="Cycle options" title="Cycle options" aria-haspopup="menu">${I.dots}</button>`;
+  const right = `<button class="icon-btn" data-action="recruit-cycle-tools" aria-label="Cycle options" title="Cycle options" aria-haspopup="menu">${I.dots}</button>`;
   let body = '';
   if (active) {
     let inner = '';
     try { inner = active.module.view ? String(active.module.view(cycle, role, active.id) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this section: ${MD.esc(e.message || 'error')}</p>`; }
     body = `<div class="rc-panel" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
   } else body = `<div class="empty">${I.info}<b>Nothing to show for your role in this cycle</b></div>`;
-  const head = `<div class="plain-head"><h1>${MD.esc(cycle.name)}</h1><p data-rc="counts">${MD.esc(recruitCountsLine(cycle, c.counts))}</p></div>`;
+  const head = `<div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>`;
   return recruitShellHtml(crumbs(MD.esc(cycle.name)), head + tabs + body, right);
 }
 
