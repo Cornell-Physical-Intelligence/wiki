@@ -283,7 +283,10 @@ function recruitSettingsBodyHtml(cycle, role) {
   return sections.map((s) => {
     let inner = '';
     try { inner = String(s.view?.(cycle, role) ?? ''); } catch (e) { console.error(e); inner = `<p class="field-error" role="alert">Could not draw this section.</p>`; }
-    return `<section class="rc-set" id="rc-set-${MD.esc(s.id)}" aria-labelledby="rc-set-${MD.esc(s.id)}-h"><h4 class="rc-set__title" id="rc-set-${MD.esc(s.id)}-h">${MD.esc(s.label || s.id)}</h4>${inner}</section>`;
+    // A group whose fields name themselves carries no heading of its own.
+    const head = s.heading === false ? '' : `<h4 class="rc-set__title" id="rc-set-${MD.esc(s.id)}-h">${MD.esc(s.label || s.id)}</h4>`;
+    const named = head ? `aria-labelledby="rc-set-${MD.esc(s.id)}-h"` : `aria-label="${MD.esc(s.label || s.id)}"`;
+    return `<section class="rc-set" id="rc-set-${MD.esc(s.id)}" ${named}>${head}${inner}</section>`;
   }).join('');
 }
 
@@ -443,10 +446,10 @@ function recruitFormField(label, inner, note) {
 
 const RECRUIT_SETTINGS = [
   {
-    id: 'about', label: 'About', when: () => recruitCan('lead'),
+    id: 'about', label: 'About', heading: false, when: () => recruitCan('lead'),
     view: (cycle) => `<form class="rc-form" data-action="recruit-settings-about">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`, 'Nothing opens or closes on its own.')}
+      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
       <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
     </form>`,
     submit: async (form, cycle) => {
