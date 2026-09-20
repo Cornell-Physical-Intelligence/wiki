@@ -277,7 +277,7 @@ const RECRUIT = {
 // The forms every cycle starts with; a cycle can add its own and drop any
 // but the interest form. The cycle's own list (in order) is the truth.
 const RECRUIT_SECTION_KEYS = ['interest', 'coffee', 'application'];
-const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Applications' };
+const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Application form' };
 // The open cycle carries its merged, ordered forms from the server; any
 // other row (the index) is read from its saved settings over the defaults.
 function recruitSectionKeys(cycle = recruitCycleRow()) {
@@ -540,6 +540,7 @@ function recruitPaintCounts() {
 /* ------------------------------- shell ----------------------------------- */
 
 const RC_ICONS = {
+  arrowR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
   flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V3m0 1c5-4 11 4 16 0v12c-5 4-11-4-16 0"/></svg>',
   comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5A8.5 8.5 0 0 1 9.5 3h3a8.5 8.5 0 0 1 8.5 8.5Z"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>',
@@ -562,8 +563,8 @@ function viewRecruit() {
   if (!me || me.loading) return recruitShellHtml(RECRUIT_CRUMBS_INDEX, head + '<p class="sheet__note">Loading…</p>');
   if (me.error) return recruitShellHtml(RECRUIT_CRUMBS_INDEX, head + `<p class="sheet__note">Could not load: ${MD.esc(me.error)}. <button class="linklike" data-action="recruit-refresh">Retry</button></p>`);
   if (!me.admin && !me.cycles?.length) {
-    return recruitShellHtml(RECRUIT_CRUMBS_INDEX, `<div class="empty">${I.mail}<b>Only admins and cycle reviewers can read applications</b>
-      <p>Applications carry personal info, so they stay with team leads and the people they assign.</p>
+    return recruitShellHtml(RECRUIT_CRUMBS_INDEX, `<div class="empty">${I.mail}<b>No access</b>
+      <p>Applications carry personal info, so they stay with admins, team leads and the reviewers they assign.</p>
       <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a></div>`);
   }
   const id = UI.route?.params?.id;
@@ -625,7 +626,7 @@ function recruitCycleShellHtml(id) {
     const enter = st.paintedPanel !== cycle.id + ':' + active.id;
     st.paintedPanel = cycle.id + ':' + active.id;
     body = `<div class="rc-panel ${enter ? 'rc-panel--enter' : ''}" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
-  } else body = `<div class="empty">${I.info}<b>Nothing to show for your role in this cycle</b></div>`;
+  } else body = `<div class="empty">${I.info}<b>Nothing to show</b><p>Your role in this cycle has no view here.</p></div>`;
   const head = `<div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>`;
   return recruitShellHtml(crumbs(MD.esc(cycle.name)), head + tabs + body, right);
 }

@@ -208,8 +208,8 @@ function recruitSelectionBarHtml() {
   const visible = recruitVisibleRows(cycle);
   const hidden = ids.filter((id) => !visible.some((r) => r.id === id)).length;
   return `<span data-rc-selection-count role="status">${ids.length} selected${hidden ? ` · ${hidden} hidden by filter` : ''}</span>
-    <button class="btn btn--sm" data-action="recruit-copy-emails">${I.copy} Copy emails</button>
-    ${recruitCan('admin') && cycle?.status !== 'archived' ? `<button class="btn btn--sm btn--danger" data-action="recruit-remove-selected">${I.trash} Delete</button>` : ''}
+    <button class="btn" data-action="recruit-copy-emails">${I.copy} Copy emails</button>
+    ${recruitCan('admin') && cycle?.status !== 'archived' ? `<button class="btn btn--danger" data-action="recruit-remove-selected">${I.trash} Delete</button>` : ''}
     <button class="icon-btn" data-action="recruit-clear-selection" aria-label="Clear selection" title="Clear selection">${I.x}</button>`;
 }
 
@@ -263,7 +263,7 @@ function recruitRowsHtml(rows, cycle) {
   const span = cols.length + 3;
   if (!st.apps || (st.apps.loading && !st.apps.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (st.apps?.error && !st.apps.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(st.apps.error)}. <button class="linklike" data-action="recruit-apps-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No people match these filters.' : 'Nothing here yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No one matches.' : 'No one yet.'}</td></tr>`;
   const selected = recruitSelection();
   return rows.map((r) => recruitRowHtml(r, cycle, cols, selected)).join('');
 }
@@ -339,7 +339,7 @@ function recruitSheetHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-q" type="search" placeholder="Search people…" value="${MD.esc(f.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions" data-recruit-tools ${selected.size ? 'hidden' : ''}>
         ${dd('recruit-filter', [{ value: 'combined', label: recruitFilterLabel(cycle) }], 'combined')}
-        ${lead ? `<a class="btn btn--sm" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
+        ${lead ? `<a class="btn" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
     </div>
@@ -384,14 +384,14 @@ function recruitPendingHtml() {
   const pending = q.pending || [];
   if (!pending.length) return unavailable;
   return `<section aria-labelledby="recruit-pending-heading">
-    <h2 class="sheet__heading" id="recruit-pending-heading">Saved submissions awaiting review <span class="count" style="font-variant-numeric:tabular-nums">${pending.length}</span></h2>
+    <h2 class="sheet__heading" id="recruit-pending-heading">Saved submissions awaiting review <span class="count">${pending.length}</span></h2>
     <p class="sheet__note">These responses are saved separately and are not in any cycle or its CSV.</p>
     ${unavailable}
-    <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive" style="height:auto;min-height:60px;flex-wrap:wrap;padding-top:4px;padding-bottom:4px">
-      <button class="interest-person" style="flex:1 1 180px" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review saved submission from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
-      <span class="sheet__archivemeta" style="flex:1 1 180px">${MD.esc(recruitPendingReason(r.reason))}</span>
+    <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive rc-pending">
+      <button class="interest-person" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review saved submission from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
+      <span class="sheet__archivemeta">${MD.esc(recruitPendingReason(r.reason))}</span>
       <span class="interest-when" title="${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}">${recruitDate(Number(r.receivedAt))}</span>
-      <button class="btn btn--sm" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button>
+      <button class="btn" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button>
     </div>`).join('')}</div>
   </section>`;
 }
@@ -406,13 +406,13 @@ function recruitQueueModalHtml(m) {
       <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it copies the answers into a cycle; the saved record stays.</p>
       <dl class="interest-detail">
         <dt>Email</dt><dd>${MD.esc(r.email)}</dd>
-        <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Not sure yet')}</dd>
+        <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Undecided')}</dd>
         <dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
-      <h4 class="interest-subhead">Coolest project they've done</h4>
+      <h4 class="interest-subhead">Coolest project</h4>
       <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
     </div>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Close</button><button class="btn btn--primary" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button></div>

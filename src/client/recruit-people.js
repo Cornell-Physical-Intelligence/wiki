@@ -97,7 +97,7 @@ function recruitPeopleRowsHtml(rows) {
   const span = 5 + keys.length;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No people match.' : 'Nobody yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No one matches.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
     <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
     ${keys.map((key) => `<td data-col="${MD.esc(key)}" class="rc-people__form">${recruitSentCell(x.sections?.[key], x)}</td>`).join('')}
@@ -118,7 +118,7 @@ function recruitPeopleHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions">
         ${dd('recruit-people-filter', RECRUIT_PEOPLE_FILTERS, p?.filter || '')}
-        ${lead ? `<a class="btn btn--sm" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
+        ${lead ? `<a class="btn" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
@@ -285,7 +285,7 @@ function recruitPersonNavHtml(email) {
   const steps = recruitPersonSteps();
   const index = steps.findIndex((s) => s.email === email);
   if (index < 0 || steps.length < 2) return '';
-  return `<button class="btn" data-action="recruit-person-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${steps.length}</span><button class="btn" data-action="recruit-person-next" ${index < steps.length - 1 ? '' : 'disabled'}>Next →</button>`;
+  return `<button class="btn" data-action="recruit-person-prev" ${index > 0 ? '' : 'disabled'}>${I.arrowL} Previous</button><span class="faint rc-app__index">${index + 1} of ${steps.length}</span><button class="btn" data-action="recruit-person-next" ${index < steps.length - 1 ? '' : 'disabled'}>Next ${RC_ICONS.arrowR}</button>`;
 }
 
 function recruitPersonModalHtml(m) {
@@ -301,7 +301,7 @@ function recruitPersonModalHtml(m) {
       <button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button>
     </div>
     <div class="modal__body interest-review__body">
-      <section class="interest-application" aria-label="Forms sent">
+      <section class="interest-application" aria-label="Responses">
         <div data-rc="person-main">${recruitPersonMainHtml(email, m.form)}</div>
       </section>
       <section class="interest-discussion" aria-labelledby="recruit-comments-heading">
@@ -309,7 +309,7 @@ function recruitPersonModalHtml(m) {
         <div data-rc="person-comments">${recruitPersonDiscussionHtml(email)}</div>
       </section>
     </div>
-    <div class="modal__foot modal__foot--split"><span class="rc-app__nav" data-rc="person-nav">${recruitPersonNavHtml(email)}</span><span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split"><span class="rc-app__nav" data-rc="person-nav">${recruitPersonNavHtml(email)}</span><button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
 }
 

@@ -19,12 +19,13 @@ const RECRUIT_FILE_ACCEPT = ['application/pdf', 'image/png', 'image/jpeg', 'imag
 const RECRUIT_FIXED_KEYS = { interest: ['name', 'email', 'subteam', 'year', 'project', 'file'], coffee: ['name', 'email'], application: ['name', 'email'] };
 // What the note under a question does on the website, by type.
 const RECRUIT_HELP_HINT = {
-  short: 'Placeholder text (optional)', long: 'Placeholder text (optional)', email: 'Placeholder text (optional)', link: 'Placeholder text (optional)',
+  short: 'Short answer', long: 'Long answer', email: 'netid@cornell.edu', link: 'https://',
   checkbox: 'Text next to the box', single: 'Note under the question (optional)', multi: 'Note under the question (optional)', file: 'Note under the question (optional)',
 };
 const recruitQuestionKey = (label) => { const k = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40); return /^[a-z]/.test(k) ? k : 'q_' + k; };
 const recruitTypeLabel = (type) => (RECRUIT_QUESTION_TYPES.find((t) => t.value === type) || RECRUIT_QUESTION_TYPES[0]).label;
 const recruitIsChoice = (type) => type === 'single' || type === 'multi';
+const recruitIsText = (type) => type === 'short' || type === 'long' || type === 'email' || type === 'link';
 
 const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
 const RECRUIT_GRIP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
@@ -46,9 +47,9 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   const busy = st.busy.has('mode-open:' + key);
   // Leads flip the form open or closed right here; everyone else reads it.
   const status = !sec ? '' : lead
-    ? `<label class="fe-switch rc-mode__switch"><input type="checkbox" data-action="recruit-mode-open" data-form="${MD.esc(key)}" ${open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>${open && receiving === false ? '<span class="rc-mode__also">but another cycle receives the website</span>' : ''}`
+    ? `<label class="fe-switch rc-mode__switch"><input type="checkbox" data-action="recruit-mode-open" data-form="${MD.esc(key)}" ${open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>${open && receiving === false ? '<span class="rc-mode__also">but another cycle receives the website\'s forms</span>' : ''}`
     : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
-    : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website'
+    : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website\'s forms'
     : '<span class="rc-mode__dot rc-mode__dot--on"></span>Open on the website';
   // Every form has a page of its own on the club site; the address is always
   // shown so it can be opened or copied. /apply (the QR code) shows the form
@@ -178,8 +179,8 @@ function recruitFormOptionsHtml(fe) {
   const m = fe.model;
   const to = (recruitState().cycle?.notify || []).filter(Boolean);
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
-  return `<h3 class="fe-options__title">This form</h3>
-    ${sw('recruit-fe-open', m.open, 'Open on the website', `cornellphysicalintelligence.com/apply/${MD.esc(fe.key)}`)}
+  return `<h3 class="fe-options__title">Form settings</h3>
+    ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
@@ -269,7 +270,7 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
   const n = i + 1;
   const name = q.label || `question ${n}`;
   const typeControl = q.fixed
-    ? `<span class="fe-q__type fe-q__type--fixed" title="The website needs this question as it is">${MD.esc(recruitTypeLabel(q.type))}</span>`
+    ? `<span class="fe-q__type fe-q__type--fixed">${MD.esc(recruitTypeLabel(q.type))}</span>`
     : dd('recruit-fe-type', RECRUIT_QUESTION_TYPES, q.type, { small: true }).replace('data-m="recruit-fe-type"', `data-m="recruit-fe-type" data-i="${i}" aria-label="Answer type for ${MD.esc(name)}"`).replace('class="dd dd--sm"', 'class="dd dd--sm fe-q__type"');
   return `<li class="fe-q" data-i="${i}" data-qid="${MD.esc(q._id || '')}">
     <div class="fe-q__head">
@@ -277,7 +278,7 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
       <input class="fe-q__label" data-m="recruit-fe-label" data-i="${i}" value="${MD.esc(q.label)}" placeholder="Question" maxlength="120" aria-label="Question ${n}" autocomplete="off">
       ${typeControl}
     </div>
-    <input class="fe-q__help" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">
+    ${recruitIsText(q.type) ? '' : `<input class="fe-q__help" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">`}
     <div class="fe-q__answer" data-rc="fe-answer">${recruitAnswerPreviewHtml(q, i)}</div>
     <div class="fe-q__foot">
       <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
@@ -288,16 +289,18 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
   </li>`;
 }
 
-// The answer as the applicant will see it.
+// The answer as the applicant will see it. For a typed answer the box is
+// the placeholder's own input: what is written here is what they will read.
 function recruitAnswerPreviewHtml(q, i) {
+  const edit = (cls, hint) => `<input class="fe-ans ${cls} fe-ans--edit" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(hint)}" maxlength="300" aria-label="Placeholder for question ${i + 1}" autocomplete="off">`;
   switch (q.type) {
-    case 'long': return `<div class="fe-ans fe-ans--para">${MD.esc(q.help || 'Long answer')}</div>`;
-    case 'email': return `<div class="fe-ans fe-ans--line">${MD.esc(q.help || 'netid@cornell.edu')}</div>`;
-    case 'link': return `<div class="fe-ans fe-ans--line">${MD.esc(q.help || 'https://')}</div>`;
+    case 'long': return `<textarea class="fe-ans fe-ans--para fe-ans--edit" data-m="recruit-fe-help" data-i="${i}" placeholder="${MD.esc(RECRUIT_HELP_HINT.long)}" maxlength="300" rows="3" aria-label="Placeholder for question ${i + 1}">${MD.esc(q.help)}</textarea>`;
+    case 'email': return edit('fe-ans--line', RECRUIT_HELP_HINT.email);
+    case 'link': return edit('fe-ans--line', RECRUIT_HELP_HINT.link);
     case 'file': return `<div class="fe-ans fe-ans--file">${I.paperclip}<span>Photo or PDF, up to 2.5 MB</span></div>`;
     case 'checkbox': return `<div class="fe-ans fe-ans--check"><span class="fe-mark"></span><span>${MD.esc(q.help || 'Yes')}</span></div>`;
     case 'single': case 'multi': return recruitOptionsHtml(q, i);
-    default: return `<div class="fe-ans fe-ans--line">${MD.esc(q.help || 'Short answer')}</div>`;
+    default: return edit('fe-ans--line', RECRUIT_HELP_HINT.short);
   }
 }
 
@@ -305,8 +308,8 @@ function recruitOptionsHtml(q, i) {
   const mark = q.type === 'single' ? 'fe-mark fe-mark--radio' : 'fe-mark';
   const options = q.options || [];
   if (q.fixed) {
-    const note = q.key === 'subteam' ? "Options follow this cycle's subteams, under Settings." : 'A fixed list.';
-    return `<ul class="fe-opts">${options.map((o) => `<li class="fe-opt fe-opt--fixed"><span class="${mark}"></span><span class="fe-opt__text">${MD.esc(o)}</span></li>`).join('')}</ul><p class="fe-q__note">${note}</p>`;
+    const note = q.key === 'subteam' ? "Options follow this cycle's subteams, under Settings." : '';
+    return `<ul class="fe-opts">${options.map((o) => `<li class="fe-opt fe-opt--fixed"><span class="${mark}"></span><span class="fe-opt__text">${MD.esc(o)}</span></li>`).join('')}</ul>${note ? `<p class="fe-q__note">${note}</p>` : ''}`;
   }
   return `<ul class="fe-opts">${options.map((o, j) => `<li class="fe-opt"><span class="${mark}"></span><input class="fe-opt__text" data-m="recruit-fe-option" data-i="${i}" data-j="${j}" value="${MD.esc(o)}" placeholder="Option ${j + 1}" maxlength="80" aria-label="Option ${j + 1}" autocomplete="off"><button type="button" class="icon-btn" data-action="recruit-fe-option-remove" data-i="${i}" data-j="${j}" aria-label="Remove option ${j + 1}">${I.x}</button></li>`).join('')}
     <li class="fe-opt fe-opt--add"><span class="${mark} fe-mark--ghost"></span><button type="button" class="linklike" data-action="recruit-fe-option-add" data-i="${i}">Add option</button></li></ul>`;
@@ -433,7 +436,8 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
 
 function recruitPaintAnswer(c) {
   const card = $(`.fe-q[data-i="${c.i}"] [data-rc="fe-answer"]`, c.host);
-  if (card && !recruitIsChoice(c.q.type)) card.innerHTML = recruitAnswerPreviewHtml(c.q, c.i);
+  // A typed answer's box is the input itself; repainting it would take the caret.
+  if (card && !recruitIsChoice(c.q.type) && !recruitIsText(c.q.type)) card.innerHTML = recruitAnswerPreviewHtml(c.q, c.i);
 }
 
 // Arrow keys on a grip move the card one slot; the list animates the same

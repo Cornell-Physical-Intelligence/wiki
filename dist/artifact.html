@@ -1622,6 +1622,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .integration__sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .integration__actions { display: flex; gap: 8px; flex: none; }
 .integration__editor { margin-top: 12px; }
+.faint { color: var(--faint); }
 .linklike { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; padding: 0; }
 .linklike:hover { color: var(--fg); }
 .email-adv { margin-top: 12px; }
@@ -1987,7 +1988,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
    ------------------------------------------------------------------------- */
 
 /* Cycle tabs: a hairline rail, the current tab underlined in ink. */
-.rc-tabs { display: flex; gap: 2px; margin: -6px 0 22px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: none; }
+.rc-tabs { display: flex; gap: 2px; margin: 0 0 16px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: none; }
 .rc-tabs::-webkit-scrollbar { display: none; }
 .rc-tabs [role="tab"] {
   flex: none; padding: 8px 12px 10px; margin-bottom: -1px;
@@ -1998,17 +1999,15 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
 /* The + after the tabs adds a form to the cycle. */
-.rc-tabs__add { flex: none; align-self: center; width: 30px; height: 30px; margin: 0 0 2px 4px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--faint); }
+.rc-tabs__add { flex: none; align-self: center; width: 30px; height: 30px; margin: 0 0 2px 4px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius); color: var(--faint); }
 .rc-tabs__add svg { width: 15px; height: 15px; }
 .rc-tabs__add:hover, .rc-tabs__add:focus-visible { color: var(--fg); background: var(--hover); outline: none; }
 .rc-tabs__add:focus-visible { box-shadow: inset 0 0 0 2px var(--fg); }
-.rc-form-new .modal__body { gap: 12px; }
 .rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .rc-panel--enter { animation: none; } }
 /* Sheet columns by name, so a module column never shifts the fixed ones. */
-.sheet.sheet--recruit table { min-width: 860px; }
 .sheet.sheet--recruit table { min-width: 960px; }
+.sheet.sheet--recruit th[data-col] { width: 110px; }
 .sheet.sheet--recruit th[data-col="check"] { width: 52px; }
 .sheet.sheet--recruit th[data-col="person"] { width: auto; }
 .sheet.sheet--recruit th[data-col="year"] { width: 84px; }
@@ -2018,7 +2017,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .sheet.sheet--recruit th[data-col="interview"] { width: 104px; }
 .sheet.sheet--recruit th[data-col="received"] { width: 88px; }
 .sheet.sheet--recruit th[data-col="review"] { width: 104px; }
-.sheet.sheet--recruit th[data-col]:not([data-col="check"]):not([data-col="person"]):not([data-col="received"]):not([data-col="review"]):not([data-col="year"]):not([data-col="subteam"]):not([data-col="stage"]):not([data-col="score"]):not([data-col="interview"]) { width: 110px; }
 .sheet.sheet--recruit .sheet__foot .linklike { margin-left: 4px; }
 @container (max-width: 36em) {
   .sheet.sheet--recruit th[data-col], .sheet.sheet--recruit td[data-col] { display: none; }
@@ -2032,6 +2030,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
    and Latest; it opens that form. Nothing sent is the same dash as an empty
    year. */
 .sheet.sheet--people th[data-col="last"] { width: 88px; }
+.sheet.sheet--people th.rc-people__form { width: 100px; }
 .rc-sent {
   display: inline-block; max-width: 100%; padding: 2px 0; background: none; border: 0; border-radius: 4px; cursor: pointer;
   font: inherit; font-size: 12.5px; text-align: left;
@@ -2046,52 +2045,43 @@ body { transition: background-color 160ms ease, color 160ms ease; }
   .sheet.sheet--people th[data-col="review"], .sheet.sheet--people td[data-col="review"] { display: table-cell; }
 }
 /* Settings forms: one column of labelled fields, actions on a footer rail. */
-.rc-settings .admin-block { max-width: 640px; }
-.rc-form { display: flex; flex-direction: column; gap: 14px; }
+.rc-form { display: flex; flex-direction: column; gap: 12px; }
 .rc-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
-.rc-field .sub, .rc-checks .sub { font-weight: 400; color: var(--muted); font-size: 12.5px; }
 .rc-field .text-input { width: 100%; }
 .rc-form__foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
-.rc-checks { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
-.rc-check { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
-.rc-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--fg); flex: none; position: relative; top: 2px; }
+.rc-form__foot > .btn--primary { margin-left: auto; }
+/* A split foot: whatever comes last sits at the far end. */
+.modal__foot--split > :last-child { margin-left: auto; }
+.rc-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.rc-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--fg); flex: none; }
 .rc-rows { display: flex; flex-direction: column; gap: 8px; }
 .rc-row { display: flex; align-items: center; gap: 8px; }
 .rc-row .text-input { flex: 1; min-width: 0; }
-.rc-row .rc-row__num { flex: 0 0 84px; font-variant-numeric: tabular-nums; }
-.rc-row .icon-btn { flex: none; }
-.rc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rc-row .icon-btn { flex: none; width: 34px; height: 34px; }
 .rc-index__tools { display: flex; justify-content: flex-end; margin: -8px 0 10px; }
 /* Application dialog additions on top of the interest-review layout. */
 .rc-history { margin: -8px 0 20px; font-size: 13px; color: var(--muted); }
-.rc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; font-size: 13px; }
-.rc-tag-form { display: flex; gap: 8px; margin: 0 0 22px; }
-.rc-tag-form .text-input { flex: 1; min-width: 0; height: 34px; }
-.rc-tag-form .btn { min-height: 34px; }
-.rc-section { margin-bottom: 26px; }
-@media (max-width: 640px) { .rc-import-cols { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 860px) { .rc-scorecard__body { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------------------------------------------------------------------------
    Cycle title: the name is the switch. */
 /* The name, its chevron and the gear sit on one axis: the h1 is a flex row,
    so both icons centre on the same line as the text, at one size and one
    shade, with even spacing between them. */
-.plain-head--cycle { margin-bottom: 18px; }
+.plain-head--cycle { margin-bottom: 12px; }
 .plain-head--cycle h1 { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .rc-cycle-title {
   display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%;
-  margin: 0 0 0 -8px; padding: 2px 8px; border-radius: 10px;
+  margin: 0 0 0 -8px; padding: 2px 8px; border-radius: 8px;
   font: inherit; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer;
 }
 .rc-cycle-title:hover, .rc-cycle-title[aria-expanded="true"] { background: var(--hover); }
 .rc-cycle-title:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .rc-cycle-title .dd__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rc-cycle-title .dd__chev, .rc-cycle-gear svg { width: 18px; height: 18px; color: var(--faint); flex: none; }
+.rc-cycle-title .dd__chev, .rc-cycle-gear svg { width: 18px; height: 18px; flex: none; }
+.rc-cycle-title .dd__chev { color: var(--faint); }
 .rc-cycle-title:hover .dd__chev { color: var(--fg); }
-.rc-cycle-gear { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 8px; color: var(--faint); flex: none; }
+.rc-cycle-gear { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 6px; color: var(--faint); flex: none; }
 .rc-cycle-gear:hover { color: var(--fg); }
-.rc-cycle-gear:hover svg { color: var(--fg); }
 
 /* ---------------------------------------------------------------------------
    Settings dialog: a few short groups under hairlines, actions in the foot. */
@@ -2099,29 +2089,29 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-set { padding: 16px 0 20px; border-top: 1px solid var(--hairline); }
 .rc-set:first-child { border-top: 0; }
 .rc-set__title { margin: 0 0 12px; font-size: 10.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
-.rc-set .rc-form { gap: 12px; }
 .rc-set__note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--faint); }
 .rc-set__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; }
-.rc-settings .rc-check, .rc-settings .modal__body label.rc-check { flex-direction: row; align-items: baseline; font-size: 13.5px; font-weight: 400; }
+.rc-settings .modal__body label.rc-check { flex-direction: row; align-items: center; font-size: 13.5px; font-weight: 400; }
 .rc-set__website { margin-top: 16px; }
 .rc-seg--status button[disabled] { opacity: 0.35; cursor: default; }
 .rc-seg--status button[disabled]:hover { color: var(--muted); background: transparent; }
 .rc-settings__delete { color: var(--bad); }
 .rc-settings__delete:hover { color: var(--bad); background: var(--bad-bg); }
-.rc-set .rc-form--rows .rc-set__note { margin: 0 0 4px; }
 /* Who can review */
 .rc-roles__list { display: flex; flex-direction: column; margin-top: 12px; }
 .rc-role { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
 .rc-role:first-child { border-top: 0; }
 .rc-role > div { flex: 1; min-width: 0; }
-.rc-role .mail { display: block; font-size: 12px; color: var(--muted); }
-.rc-role__roles { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.rc-role .mail { display: block; font-size: 12.5px; color: var(--muted); }
+.rc-role__roles { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .rc-roles__add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
-.rc-roles .modal__body label { display: contents; }
+/* One line where it fits: the member takes the room, the role and Add keep theirs. */
+.rc-roles__add > .dd:first-child { flex: 1 1 180px; min-width: 0; }
+.rc-roles__add > .dd + .dd { flex: none; min-width: 0; }
 
 /* ---------------------------------------------------------------------------
    Section tab bar: Responses | Form, and the website status. */
-.rc-mode { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: -6px 0 16px; }
+.rc-mode { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 0 0 16px; }
 .rc-seg { position: relative; display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
 /* The thumb: placed by script on the current item, sliding between items. */
 .rc-seg__thumb { position: absolute; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--fg); transition: transform 240ms cubic-bezier(0.2, 0, 0, 1), width 240ms cubic-bezier(0.2, 0, 0, 1); pointer-events: none; }
@@ -2129,7 +2119,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-seg.is-live a[aria-current="page"], .rc-seg.is-live button[aria-current="page"] { background: transparent; }
 .rc-seg.is-live a[aria-current="page"]:hover, .rc-seg.is-live button[aria-current="page"]:hover { background: transparent; }
 .rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { transition: color 180ms ease; }
-@media (prefers-reduced-motion: reduce) { .rc-seg__thumb { transition: none; } }
 .rc-seg a, .rc-seg button { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; font: inherit; font-size: 13px; color: var(--muted); background: transparent; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .rc-seg a:hover, .rc-seg button:hover { color: var(--fg); background: var(--hover); }
 .rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { color: var(--page); background: var(--fg); }
@@ -2142,12 +2131,12 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-mode__addr { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .rc-mode__switch { font-size: 13px; }
 .rc-mode__switch input:checked ~ .fe-switch__text { color: var(--fg); }
-.rc-mode__status a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); margin-left: 4px; }
+.rc-mode__status a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); }
 .rc-mode__status a:hover { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-mode__sep { color: var(--faint); margin: 0 2px; }
 .rc-mode__link { min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.rc-mode__copy { width: 24px; height: 24px; margin-left: -2px; }
-.rc-mode__copy svg { width: 13px; height: 13px; }
+.rc-mode__copy { width: 28px; height: 28px; }
+.rc-mode__copy svg { width: 14px; height: 14px; }
 .rc-mode__also { color: var(--faint); }
 .rc-mode__also .rc-mode__link { margin-left: 4px; }
 .rc-mode__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
@@ -2173,6 +2162,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
   --card-radius: 14px; --card-inset: 8px; --card-border: 1px;
   --card-pad: calc(var(--card-inset) - var(--card-border));
   --card-inner: calc(max(0px, calc(var(--card-radius) - var(--card-inset))) * var(--popup-corner-scale, 1));
+  --card-text: 38px; /* grip and gap: where the question's text column starts */
   border: var(--card-border) solid var(--hairline); border-radius: calc(var(--card-radius) * var(--popup-corner-scale, 1));
   background: var(--page); padding: var(--card-pad);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -2190,17 +2180,23 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe-q.is-dragging .fe-q__grip { cursor: grabbing; }
 .fe__list.is-sorting .fe-q { transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 0.15s ease; }
 .fe__list.is-sorting .fe-q.is-dragging { transition: box-shadow 0.15s ease; }
-@media (prefers-reduced-motion: reduce) { .fe__list.is-sorting .fe-q { transition: none; } }
 .fe-q__label { flex: 1; min-width: 0; height: 28px; padding: 0; font: inherit; font-size: 15.5px; font-weight: 500; }
 .fe-q__type { flex: none; }
-.fe-q .dd.fe-q__type { height: 28px; border-radius: var(--card-inner); }
+.fe-q .dd.fe-q__type { height: 28px; }
 .fe-q__type--fixed { height: 28px; display: inline-flex; align-items: center; padding: 0 8px; font-size: 12px; color: var(--faint); white-space: nowrap; }
-.fe-q__help { display: block; width: calc(100% - 24px); margin: 2px 12px 0; padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
-.fe-q__answer { margin: 12px 12px 10px; }
+.fe-q__help { display: block; width: calc(100% - var(--card-text) - 12px); margin: 2px 12px 0 var(--card-text); padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
+.fe-q__answer { margin: 12px 12px 10px var(--card-text); }
 .fe-ans { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--faint); }
-.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: var(--radius); width: min(100%, 380px); }
-.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); border-radius: var(--radius); align-items: flex-start; }
-.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: var(--radius); width: min(100%, 380px); }
+.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); width: min(100%, 380px); }
+.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); align-items: flex-start; }
+.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); width: min(100%, 380px); }
+/* Typing in the answer box sets the placeholder applicants will see. */
+.fe-ans--edit { display: block; font: inherit; font-size: 13.5px; color: var(--fg); background: transparent; outline: 0; resize: none; }
+.fe-ans--edit::placeholder { color: var(--faint); }
+.fe-ans--edit:focus { border-style: solid; border-color: var(--rule); }
+textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
+/* Every rounded thing inside a card shares the card's inner curve. */
+.fe-q .icon-btn, .fe-q .dd, .fe-ans--line, .fe-ans--para, .fe-ans--file { border-radius: var(--card-inner); }
 .fe-ans svg { width: 15px; height: 15px; flex: none; }
 .fe-ans--check { color: var(--muted); }
 .fe-mark { width: 16px; height: 16px; flex: none; border: 1.5px solid var(--rule); border-radius: 4px; }
@@ -2210,18 +2206,18 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe-opt { display: flex; align-items: center; gap: 10px; min-height: 32px; }
 .fe-opt__text { flex: 1; min-width: 0; max-width: 380px; padding: 4px 0; font: inherit; font-size: 14px; }
 .fe-opt--fixed .fe-opt__text { color: var(--muted); }
-.fe-opt .icon-btn { width: 26px; height: 26px; opacity: 0; transition: opacity 0.12s ease; }
+.fe-opt .icon-btn { width: 28px; height: 28px; opacity: 0; transition: opacity 0.12s ease; }
 .fe-opt .icon-btn svg { width: 14px; height: 14px; }
 .fe-opt:hover .icon-btn, .fe-opt:focus-within .icon-btn { opacity: 1; }
 .fe-opt--add .linklike { font-size: 13.5px; color: var(--muted); }
 .fe-opt--add .linklike:hover { color: var(--fg); }
 .fe-q__note { margin: 8px 0 0; font-size: 12.5px; color: var(--faint); }
-.fe-q__foot { display: flex; align-items: center; gap: 10px; margin: 0 0 0 12px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.fe-q__foot { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 0 0 var(--card-text); border-top: 1px solid var(--hairline); }
 .fe-q__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
-.fe-q__tools .icon-btn { width: 28px; height: 28px; border-radius: var(--card-inner); }
+.fe-q__tools .icon-btn { width: 28px; height: 28px; }
 .fe-q__tools .icon-btn svg { width: 15px; height: 15px; }
 .fe-q__fixed { font-size: 12px; color: var(--faint); padding: 0 6px; }
-.fe-switch { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.fe-switch { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); cursor: pointer; user-select: none; }
 .fe-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
 .fe-switch__track { width: 30px; height: 18px; border-radius: 999px; background: var(--rule); position: relative; flex: none; transition: background 0.15s ease; }
 .fe-switch__track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--page); transition: transform 0.15s ease; }
@@ -2229,42 +2225,37 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe-switch input:checked + .fe-switch__track::after { transform: translateX(12px); }
 .fe-switch input:checked ~ .fe-switch__text { color: var(--fg); }
 .fe-switch input:focus-visible + .fe-switch__track { outline: 2px solid var(--fg); outline-offset: 2px; }
-.fe-switch--lg { font-size: 13.5px; }
 .fe__add { margin-top: 14px; }
 /* The form's own settings, one card under the questions. */
 .fe-options { margin-top: 22px; padding: 4px 20px 6px; border: 1px solid var(--hairline); border-radius: calc(14px * var(--popup-corner-scale, 1)); background: var(--page); }
-.fe-options__title { margin: 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.fe-options__title { margin: 14px 0 4px; font-size: 10.5px; font-weight: 500; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
 .fe-switch--row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
 .fe-switch--row .fe-switch__track { margin-top: 1px; }
 .fe-switch--row .fe-switch__text { display: flex; flex-direction: column; gap: 2px; }
 .fe-switch--row small { font-size: 12.5px; color: var(--faint); }
 .fe-options__cap { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
-.fe-options__n { width: 96px; font-variant-numeric: tabular-nums; }
+.fe-options__n { width: 96px; height: 28px; font-variant-numeric: tabular-nums; }
+.fe-options__remove .btn { height: 28px; min-height: 0; }
 .fe-options__remove { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
 .fe-options__remove .fe-switch__text { display: flex; flex-direction: column; gap: 2px; }
 .fe-options__remove small { font-size: 12.5px; color: var(--faint); }
-.sheet.sheet--people th.rc-people__form { width: 100px; }
 .fe-options__n::placeholder { color: var(--faint); }
 .fe__foot { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 12px 0; border-top: 1px solid var(--hairline); background: var(--page); }
 .fe__status, .fe__error { margin-left: auto; font-size: 12.5px; color: var(--faint); }
 .fe__status--dirty { color: var(--muted); }
 .fe__error { color: var(--bad); }
 @media (max-width: 640px) {
-  .fe-q__foot { padding-left: 6px; margin-left: 6px; }
-  .fe-q__help { width: calc(100% - 12px); margin: 2px 6px 0; }
-  .fe-q__answer { margin: 12px 6px 10px; }
   .fe__title { font-size: 24px; }
-  .rc-mode { margin-top: 0; gap: 12px; }
+  .rc-mode { gap: 12px; }
   /* The address takes a row of its own under the switch; no dot between. */
   .rc-mode__addr { flex-basis: 100%; }
   .rc-mode__sep { display: none; }
   /* Stepping through people on a phone: the head's × closes, so the foot is
      Previous and Next at the two ends, where thumbs are. */
-  .rc-app .modal__foot > [data-action="modal-close"], .rc-app .modal__foot > span[style] { display: none; }
+  .rc-app .modal__foot > [data-action="modal-close"] { display: none; }
   .rc-app__nav { flex: 1; justify-content: space-between; }
   .rc-app__index { flex: 1; }
 }
-@media (prefers-reduced-motion: reduce) { .fe-q, .fe-switch__track, .fe-switch__track::after, .fe-opt .icon-btn { transition: none; } }
 
 /* ---------------------------------------------------------------------------
    The application dialog keeps one size while stepping: the body scrolls,
@@ -2272,8 +2263,17 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .modal.rc-app { height: min(860px, 92dvh); }
 .modal.rc-app .modal__body { flex: 1 1 auto; min-height: 0; }
 .rc-app__nav { display: inline-flex; align-items: center; gap: 8px; }
-.rc-app .modal__foot .rc-app__nav > .btn, .rc-app .modal__head [data-rc="app-flag"] > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
+.rc-app .modal__foot .rc-app__nav > .btn, .rc-app .modal__head [data-rc="person-flag"] > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
+/* Flag and × centre on the two-line identity; the comment row centres its bin. */
+.rc-app .modal__head > [data-rc="person-flag"], .rc-app .modal__head > .icon-btn { align-self: center; }
+.rc-person .interest-comment__meta { align-items: center; }
+.rc-person .interest-comment__delete { width: 28px; height: 28px; min-height: 0; padding: 0; }
 .rc-app__index { display: inline-block; min-width: 72px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* Held submissions (admins): the count is a count, the rows wrap. */
+.sheet__heading .count { font-size: 12px; font-weight: 400; color: var(--faint); font-variant-numeric: tabular-nums; }
+.rc-pending { height: auto; min-height: 60px; flex-wrap: wrap; padding-top: 4px; padding-bottom: 4px; }
+.rc-pending > .interest-person, .rc-pending > .sheet__archivemeta { flex: 1 1 180px; }
 
 </style>
 <div id="boot" class="boot" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 358 82" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -8609,7 +8609,7 @@ const RECRUIT = {
 // The forms every cycle starts with; a cycle can add its own and drop any
 // but the interest form. The cycle's own list (in order) is the truth.
 const RECRUIT_SECTION_KEYS = ['interest', 'coffee', 'application'];
-const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Applications' };
+const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Application form' };
 // The open cycle carries its merged, ordered forms from the server; any
 // other row (the index) is read from its saved settings over the defaults.
 function recruitSectionKeys(cycle = recruitCycleRow()) {
@@ -8872,6 +8872,7 @@ function recruitPaintCounts() {
 /* ------------------------------- shell ----------------------------------- */
 
 const RC_ICONS = {
+  arrowR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
   flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V3m0 1c5-4 11 4 16 0v12c-5 4-11-4-16 0"/></svg>',
   comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5A8.5 8.5 0 0 1 9.5 3h3a8.5 8.5 0 0 1 8.5 8.5Z"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M21 21H3"/></svg>',
@@ -8894,8 +8895,8 @@ function viewRecruit() {
   if (!me || me.loading) return recruitShellHtml(RECRUIT_CRUMBS_INDEX, head + '<p class="sheet__note">Loading…</p>');
   if (me.error) return recruitShellHtml(RECRUIT_CRUMBS_INDEX, head + `<p class="sheet__note">Could not load: ${MD.esc(me.error)}. <button class="linklike" data-action="recruit-refresh">Retry</button></p>`);
   if (!me.admin && !me.cycles?.length) {
-    return recruitShellHtml(RECRUIT_CRUMBS_INDEX, `<div class="empty">${I.mail}<b>Only admins and cycle reviewers can read applications</b>
-      <p>Applications carry personal info, so they stay with team leads and the people they assign.</p>
+    return recruitShellHtml(RECRUIT_CRUMBS_INDEX, `<div class="empty">${I.mail}<b>No access</b>
+      <p>Applications carry personal info, so they stay with admins, team leads and the reviewers they assign.</p>
       <a class="btn" href="#/home" style="text-decoration:none">Back to the wiki</a></div>`);
   }
   const id = UI.route?.params?.id;
@@ -8957,7 +8958,7 @@ function recruitCycleShellHtml(id) {
     const enter = st.paintedPanel !== cycle.id + ':' + active.id;
     st.paintedPanel = cycle.id + ':' + active.id;
     body = `<div class="rc-panel ${enter ? 'rc-panel--enter' : ''}" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
-  } else body = `<div class="empty">${I.info}<b>Nothing to show for your role in this cycle</b></div>`;
+  } else body = `<div class="empty">${I.info}<b>Nothing to show</b><p>Your role in this cycle has no view here.</p></div>`;
   const head = `<div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>`;
   return recruitShellHtml(crumbs(MD.esc(cycle.name)), head + tabs + body, right);
 }
@@ -8995,7 +8996,7 @@ function recruitIndexHtml() {
   const list = cy.list || [];
   const live = list.filter((c) => c.status !== 'archived');
   const archived = list.filter((c) => c.status === 'archived');
-  const tools = admin ? `<div class="rc-index__tools"><button class="btn btn--sm" data-action="recruit-cycle-new">${I.plus} New cycle</button></div>` : '';
+  const tools = admin ? `<div class="rc-index__tools"><button class="btn" data-action="recruit-cycle-new">${I.plus} New cycle</button></div>` : '';
   const liveBlock = live.length
     ? `<div class="sheet sheet--list">${live.map((c) => recruitCycleRowHtml(c, cy.intakeCycleId)).join('')}</div>`
     : `<div class="sheet sheet--list"><div class="sheet__archive"><span class="sheet__archivemeta">${admin ? 'No cycle yet. Create one to start receiving applications.' : 'No open cycle.'}</span></div></div>`;
@@ -9016,16 +9017,16 @@ function recruitAttentionHtml() {
     const parts = [recruitPlural(mig.legacyLive || 0, 'submission'), recruitPlural((mig.legacyArchives || []).length, 'archive')].join(' and ');
     const busy = st.busy.has('migrate');
     items.push(`<div class="sheet__archive"><span class="sheet__archivemeta" data-rc="migrate">${busy ? 'Importing…' : MD.esc(parts) + ' on the old list'}</span>
-      <button class="btn btn--sm" data-action="recruit-migrate" ${busy ? 'disabled' : ''}>Import the current list and archives</button></div>`);
+      <button class="btn" data-action="recruit-migrate" ${busy ? 'disabled' : ''}>Import the current list and archives</button></div>`);
   }
   if (mig?.done && mig.orphans > 0) {
     items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">${MD.esc(recruitPlural(mig.orphans, 'submission'))} arrived while no cycle was receiving the form</span>
-      <button class="btn btn--sm" data-action="recruit-adopt" aria-haspopup="menu" ${st.busy.has('adopt') ? 'disabled' : ''}>Adopt into…</button></div>`);
+      <button class="btn" data-action="recruit-adopt" aria-haspopup="menu" ${st.busy.has('adopt') ? 'disabled' : ''}>Adopt into…</button></div>`);
   }
   const pending = st.queue?.pending?.length || 0;
   if (pending) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">${MD.esc(recruitPlural(pending, 'saved submission'))} waiting to join a list</span>
-    <button class="btn btn--sm" data-action="recruit-queue-sync">Sync queue</button></div>`);
-  if (st.queue?.queueUnavailable) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">Could not check the saved-submission queue.</span><button class="btn btn--sm" data-action="recruit-queue-sync">Retry</button></div>`);
+    <button class="btn" data-action="recruit-queue-sync">Sync queue</button></div>`);
+  if (st.queue?.queueUnavailable) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">Could not check the saved-submission queue.</span><button class="btn" data-action="recruit-queue-sync">Retry</button></div>`);
   if (!items.length) return '';
   return `<h2 class="sheet__heading">Needs attention</h2><div class="sheet sheet--list">${items.join('')}</div>`;
 }
@@ -9056,10 +9057,10 @@ function recruitCycleModalHtml(m) {
   const copy = [{ value: '', label: 'Start from the defaults' }, ...list.map((c) => ({ value: c.id, label: c.name }))];
   return `<div class="modal" role="dialog" aria-label="New cycle">
     <div class="modal__head"><h3>New cycle</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
-    <div class="modal__body">
+    <div class="modal__body rc-form">
       <label>Name<input class="text-input" data-m="recruit-cycle-name" value="${MD.esc(m.name || '')}" placeholder="e.g. Fall 2026" maxlength="80" autocomplete="off" spellcheck="false"></label>
       <label>Term${dd('recruit-cycle-term', recruitTermOptions(m.term), m.term || recruitDefaultTerm())}</label>
-      <label>Settings${dd('recruit-cycle-copy', copy, m.copyFrom || '')}</label>
+      <label>Start from${dd('recruit-cycle-copy', copy, m.copyFrom || '')}</label>
       <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
     </div>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-cycle-create" ${m.busy ? 'disabled' : ''}>${m.busy ? 'Creating…' : 'Create cycle'}</button></div>
@@ -9170,7 +9171,7 @@ function recruitOpenCycleTools(anchor) {
   const items = [{ label: 'Refresh', run: () => { const id = cycle.id; st.cycles = undefined; RECRUIT.reset(id); render(); } }];
   if (admin) items.push({ label: 'Sync queue', run: () => { st.queue = undefined; recruitLoadQueue(true); toast('Checking saved submissions…'); } });
   if (admin) items.push({ label: 'Check storage', run: recruitCheckStorage });
-  if (lead) items.push('-', { label: 'Settings', icon: I.settings, run: recruitOpenSettings });
+  // Settings live behind the gear beside the cycle's name.
   openMenu(items, anchor);
 }
 
@@ -9269,7 +9270,7 @@ function recruitSettingsModalHtml() {
   return `<div class="modal modal--wide rc-settings" role="dialog" aria-label="Settings for ${MD.esc(cycle.name)}">
     <div class="modal__head"><h3>${MD.esc(cycle.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body" data-rc="settings-body">${recruitSettingsBodyHtml(cycle, role)}</div>
-    <div class="modal__foot modal__foot--split">${foot}<span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split">${foot}<button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
 }
 
@@ -9280,7 +9281,12 @@ function recruitPaintSettings() {
   if (!dialog) return false;
   const fresh = document.createElement('div');
   fresh.innerHTML = recruitSettingsModalHtml();
+  // The status pill's thumb slides from where it was before the repaint.
+  const was = [...$$('.rc-seg--status button', dialog)].findIndex((b) => b.getAttribute('aria-current') === 'page');
   recruitRepaint(dialog, fresh.firstElementChild ? fresh.firstElementChild.innerHTML : fresh.innerHTML);
+  const seg = $('.rc-seg--status', dialog);
+  if (seg && was >= 0) seg.dataset.segFrom = String(was);
+  recruitSegSlide(seg);
   return true;
 }
 
@@ -9296,6 +9302,7 @@ function recruitOpenSettings() {
   if (!cycle || !recruitCan('lead')) return;
   UI.modal = { kind: 'recruit-settings' };
   render();
+  recruitSegSlide($('.rc-seg--status'));
   for (const s of RECRUIT.settingsSections(cycle, role)) { try { s.mount?.(cycle, role); } catch (e) { console.error(e); } }
 }
 
@@ -9331,7 +9338,7 @@ function recruitRolesBodyHtml() {
     .map((m) => ({ value: m.email, label: m.name ? `${m.name} · ${m.email}` : m.email }));
   const roleChoices = [{ value: 'reviewer', label: 'Reviewer' }, ...(admin ? [{ value: 'lead', label: 'Lead' }] : [])];
   const add = cycle?.status === 'archived' ? '' : members.length
-    ? `<form class="rc-roles__add" data-action="recruit-role-form" aria-label="Add a reviewer">${dd('recruit-role-member', members, members[0].value)}${dd('recruit-role-role', roleChoices, 'reviewer', { small: true })}<button type="submit" class="btn btn--primary">Add</button></form>`
+    ? `<form class="rc-roles__add" data-action="recruit-role-form" aria-label="Add a reviewer">${dd('recruit-role-member', members, members[0].value)}${dd('recruit-role-role', roleChoices, 'reviewer')}<button type="submit" class="btn btn--primary">Add</button></form>`
     : '<p class="rc-set__note">Everyone on the wiki roster already has a role here.</p>';
   return `<p class="rc-set__note">Admins can do everything in every cycle. Leads edit forms and see everyone here; reviewers read and comment.</p>
     <div class="rc-roles__list">${rows || '<p class="rc-set__note">Nobody yet besides admins.</p>'}</div>${add}`;
@@ -9342,7 +9349,7 @@ function recruitRolesModalHtml() {
   return `<div class="modal rc-roles" role="dialog" aria-label="Who can review ${MD.esc(cycle?.name || '')}">
     <div class="modal__head"><h3>Who can review</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body" data-rc="roles-body">${recruitRolesBodyHtml()}</div>
-    <div class="modal__foot modal__foot--split"><button class="btn btn--ghost" data-action="recruit-settings-open">Back to settings</button><span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split"><button class="btn btn--ghost" data-action="recruit-settings-open">Back to settings</button><button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
 }
 
@@ -9449,8 +9456,8 @@ const RECRUIT_SETTINGS = [
       const note = receiving ? ''
         : holder ? `${holder.name} receives them now. Only one cycle can.`
         : cycle.status !== 'open' ? 'Open the cycle first.'
-        : st.cycles === undefined ? '' : 'No cycle receives them right now.';
-      return `<nav class="rc-seg rc-seg--status" aria-label="Status">${seg}</nav>
+        : '';
+      return `<nav class="rc-seg rc-seg--status" aria-label="Status"><span class="rc-seg__thumb" aria-hidden="true"></span>${seg}</nav>
         ${cycle.status === 'archived' ? `<p class="rc-set__note">Archived and read only${cycle.closedAt ? `, closed ${MD.esc(recruitDate(Number(cycle.closedAt)))}` : ''}. Unarchive it below to change anything.</p>` : ''}
         <label class="rc-check rc-set__website"><input type="checkbox" data-action="recruit-website-toggle" ${receiving ? 'checked' : ''} ${canToggle ? '' : 'disabled'}> This cycle receives the forms on the website</label>
         ${note ? `<p class="rc-set__note">${MD.esc(note)}</p>` : ''}`;
@@ -9462,7 +9469,7 @@ const RECRUIT_SETTINGS = [
       const teams = recruitSubteams(cycle);
       return `<form class="rc-form rc-form--rows" data-action="recruit-settings-subteams">
         <div class="rc-rows" data-rc="subteam-rows">${teams.map((t) => recruitSubteamRowHtml(t)).join('')}</div>
-        <div class="rc-form__foot"><button type="button" class="btn btn--sm" data-action="recruit-subteam-add">${I.plus} Add subteam</button><span style="flex:1"></span><button type="submit" class="btn btn--primary">Save</button></div>
+        <div class="rc-form__foot"><button type="button" class="btn" data-action="recruit-subteam-add">${I.plus} Add subteam</button><button type="submit" class="btn btn--primary">Save</button></div>
       </form>`;
     },
     submit: async (form, cycle) => {
@@ -9488,7 +9495,7 @@ const RECRUIT_SETTINGS = [
     view: () => {
       const grants = recruitState().cycle?.grants || [];
       const n = grants.length;
-      return `<div class="rc-set__row"><span>${n ? `${MD.esc(recruitPlural(n, 'person', 'people'))} besides admins` : 'Admins only so far'}</span><button type="button" class="btn btn--sm" data-action="recruit-roles-open">Manage</button></div>`;
+      return `<div class="rc-set__row"><span>${n ? `${MD.esc(recruitPlural(n, 'person', 'people'))} besides admins` : 'Admins only so far'}</span><button type="button" class="btn" data-action="recruit-roles-open">Manage</button></div>`;
     },
   },
 ];
@@ -9608,12 +9615,13 @@ const RECRUIT_FILE_ACCEPT = ['application/pdf', 'image/png', 'image/jpeg', 'imag
 const RECRUIT_FIXED_KEYS = { interest: ['name', 'email', 'subteam', 'year', 'project', 'file'], coffee: ['name', 'email'], application: ['name', 'email'] };
 // What the note under a question does on the website, by type.
 const RECRUIT_HELP_HINT = {
-  short: 'Placeholder text (optional)', long: 'Placeholder text (optional)', email: 'Placeholder text (optional)', link: 'Placeholder text (optional)',
+  short: 'Short answer', long: 'Long answer', email: 'netid@cornell.edu', link: 'https://',
   checkbox: 'Text next to the box', single: 'Note under the question (optional)', multi: 'Note under the question (optional)', file: 'Note under the question (optional)',
 };
 const recruitQuestionKey = (label) => { const k = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40); return /^[a-z]/.test(k) ? k : 'q_' + k; };
 const recruitTypeLabel = (type) => (RECRUIT_QUESTION_TYPES.find((t) => t.value === type) || RECRUIT_QUESTION_TYPES[0]).label;
 const recruitIsChoice = (type) => type === 'single' || type === 'multi';
+const recruitIsText = (type) => type === 'short' || type === 'long' || type === 'email' || type === 'link';
 
 const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
 const RECRUIT_GRIP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
@@ -9635,9 +9643,9 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   const busy = st.busy.has('mode-open:' + key);
   // Leads flip the form open or closed right here; everyone else reads it.
   const status = !sec ? '' : lead
-    ? `<label class="fe-switch rc-mode__switch"><input type="checkbox" data-action="recruit-mode-open" data-form="${MD.esc(key)}" ${open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>${open && receiving === false ? '<span class="rc-mode__also">but another cycle receives the website</span>' : ''}`
+    ? `<label class="fe-switch rc-mode__switch"><input type="checkbox" data-action="recruit-mode-open" data-form="${MD.esc(key)}" ${open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>${open && receiving === false ? '<span class="rc-mode__also">but another cycle receives the website\'s forms</span>' : ''}`
     : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
-    : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website'
+    : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website\'s forms'
     : '<span class="rc-mode__dot rc-mode__dot--on"></span>Open on the website';
   // Every form has a page of its own on the club site; the address is always
   // shown so it can be opened or copied. /apply (the QR code) shows the form
@@ -9767,8 +9775,8 @@ function recruitFormOptionsHtml(fe) {
   const m = fe.model;
   const to = (recruitState().cycle?.notify || []).filter(Boolean);
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
-  return `<h3 class="fe-options__title">This form</h3>
-    ${sw('recruit-fe-open', m.open, 'Open on the website', `cornellphysicalintelligence.com/apply/${MD.esc(fe.key)}`)}
+  return `<h3 class="fe-options__title">Form settings</h3>
+    ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
@@ -9858,7 +9866,7 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
   const n = i + 1;
   const name = q.label || `question ${n}`;
   const typeControl = q.fixed
-    ? `<span class="fe-q__type fe-q__type--fixed" title="The website needs this question as it is">${MD.esc(recruitTypeLabel(q.type))}</span>`
+    ? `<span class="fe-q__type fe-q__type--fixed">${MD.esc(recruitTypeLabel(q.type))}</span>`
     : dd('recruit-fe-type', RECRUIT_QUESTION_TYPES, q.type, { small: true }).replace('data-m="recruit-fe-type"', `data-m="recruit-fe-type" data-i="${i}" aria-label="Answer type for ${MD.esc(name)}"`).replace('class="dd dd--sm"', 'class="dd dd--sm fe-q__type"');
   return `<li class="fe-q" data-i="${i}" data-qid="${MD.esc(q._id || '')}">
     <div class="fe-q__head">
@@ -9866,7 +9874,7 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
       <input class="fe-q__label" data-m="recruit-fe-label" data-i="${i}" value="${MD.esc(q.label)}" placeholder="Question" maxlength="120" aria-label="Question ${n}" autocomplete="off">
       ${typeControl}
     </div>
-    <input class="fe-q__help" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">
+    ${recruitIsText(q.type) ? '' : `<input class="fe-q__help" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">`}
     <div class="fe-q__answer" data-rc="fe-answer">${recruitAnswerPreviewHtml(q, i)}</div>
     <div class="fe-q__foot">
       <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
@@ -9877,16 +9885,18 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
   </li>`;
 }
 
-// The answer as the applicant will see it.
+// The answer as the applicant will see it. For a typed answer the box is
+// the placeholder's own input: what is written here is what they will read.
 function recruitAnswerPreviewHtml(q, i) {
+  const edit = (cls, hint) => `<input class="fe-ans ${cls} fe-ans--edit" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(hint)}" maxlength="300" aria-label="Placeholder for question ${i + 1}" autocomplete="off">`;
   switch (q.type) {
-    case 'long': return `<div class="fe-ans fe-ans--para">${MD.esc(q.help || 'Long answer')}</div>`;
-    case 'email': return `<div class="fe-ans fe-ans--line">${MD.esc(q.help || 'netid@cornell.edu')}</div>`;
-    case 'link': return `<div class="fe-ans fe-ans--line">${MD.esc(q.help || 'https://')}</div>`;
+    case 'long': return `<textarea class="fe-ans fe-ans--para fe-ans--edit" data-m="recruit-fe-help" data-i="${i}" placeholder="${MD.esc(RECRUIT_HELP_HINT.long)}" maxlength="300" rows="3" aria-label="Placeholder for question ${i + 1}">${MD.esc(q.help)}</textarea>`;
+    case 'email': return edit('fe-ans--line', RECRUIT_HELP_HINT.email);
+    case 'link': return edit('fe-ans--line', RECRUIT_HELP_HINT.link);
     case 'file': return `<div class="fe-ans fe-ans--file">${I.paperclip}<span>Photo or PDF, up to 2.5 MB</span></div>`;
     case 'checkbox': return `<div class="fe-ans fe-ans--check"><span class="fe-mark"></span><span>${MD.esc(q.help || 'Yes')}</span></div>`;
     case 'single': case 'multi': return recruitOptionsHtml(q, i);
-    default: return `<div class="fe-ans fe-ans--line">${MD.esc(q.help || 'Short answer')}</div>`;
+    default: return edit('fe-ans--line', RECRUIT_HELP_HINT.short);
   }
 }
 
@@ -9894,8 +9904,8 @@ function recruitOptionsHtml(q, i) {
   const mark = q.type === 'single' ? 'fe-mark fe-mark--radio' : 'fe-mark';
   const options = q.options || [];
   if (q.fixed) {
-    const note = q.key === 'subteam' ? "Options follow this cycle's subteams, under Settings." : 'A fixed list.';
-    return `<ul class="fe-opts">${options.map((o) => `<li class="fe-opt fe-opt--fixed"><span class="${mark}"></span><span class="fe-opt__text">${MD.esc(o)}</span></li>`).join('')}</ul><p class="fe-q__note">${note}</p>`;
+    const note = q.key === 'subteam' ? "Options follow this cycle's subteams, under Settings." : '';
+    return `<ul class="fe-opts">${options.map((o) => `<li class="fe-opt fe-opt--fixed"><span class="${mark}"></span><span class="fe-opt__text">${MD.esc(o)}</span></li>`).join('')}</ul>${note ? `<p class="fe-q__note">${note}</p>` : ''}`;
   }
   return `<ul class="fe-opts">${options.map((o, j) => `<li class="fe-opt"><span class="${mark}"></span><input class="fe-opt__text" data-m="recruit-fe-option" data-i="${i}" data-j="${j}" value="${MD.esc(o)}" placeholder="Option ${j + 1}" maxlength="80" aria-label="Option ${j + 1}" autocomplete="off"><button type="button" class="icon-btn" data-action="recruit-fe-option-remove" data-i="${i}" data-j="${j}" aria-label="Remove option ${j + 1}">${I.x}</button></li>`).join('')}
     <li class="fe-opt fe-opt--add"><span class="${mark} fe-mark--ghost"></span><button type="button" class="linklike" data-action="recruit-fe-option-add" data-i="${i}">Add option</button></li></ul>`;
@@ -10022,7 +10032,8 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
 
 function recruitPaintAnswer(c) {
   const card = $(`.fe-q[data-i="${c.i}"] [data-rc="fe-answer"]`, c.host);
-  if (card && !recruitIsChoice(c.q.type)) card.innerHTML = recruitAnswerPreviewHtml(c.q, c.i);
+  // A typed answer's box is the input itself; repainting it would take the caret.
+  if (card && !recruitIsChoice(c.q.type) && !recruitIsText(c.q.type)) card.innerHTML = recruitAnswerPreviewHtml(c.q, c.i);
 }
 
 // Arrow keys on a grip move the card one slot; the list animates the same
@@ -10296,7 +10307,7 @@ function recruitPeopleRowsHtml(rows) {
   const span = 5 + keys.length;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No people match.' : 'Nobody yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No one matches.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
     <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
     ${keys.map((key) => `<td data-col="${MD.esc(key)}" class="rc-people__form">${recruitSentCell(x.sections?.[key], x)}</td>`).join('')}
@@ -10317,7 +10328,7 @@ function recruitPeopleHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions">
         ${dd('recruit-people-filter', RECRUIT_PEOPLE_FILTERS, p?.filter || '')}
-        ${lead ? `<a class="btn btn--sm" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
+        ${lead ? `<a class="btn" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
@@ -10484,7 +10495,7 @@ function recruitPersonNavHtml(email) {
   const steps = recruitPersonSteps();
   const index = steps.findIndex((s) => s.email === email);
   if (index < 0 || steps.length < 2) return '';
-  return `<button class="btn" data-action="recruit-person-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${steps.length}</span><button class="btn" data-action="recruit-person-next" ${index < steps.length - 1 ? '' : 'disabled'}>Next →</button>`;
+  return `<button class="btn" data-action="recruit-person-prev" ${index > 0 ? '' : 'disabled'}>${I.arrowL} Previous</button><span class="faint rc-app__index">${index + 1} of ${steps.length}</span><button class="btn" data-action="recruit-person-next" ${index < steps.length - 1 ? '' : 'disabled'}>Next ${RC_ICONS.arrowR}</button>`;
 }
 
 function recruitPersonModalHtml(m) {
@@ -10500,7 +10511,7 @@ function recruitPersonModalHtml(m) {
       <button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button>
     </div>
     <div class="modal__body interest-review__body">
-      <section class="interest-application" aria-label="Forms sent">
+      <section class="interest-application" aria-label="Responses">
         <div data-rc="person-main">${recruitPersonMainHtml(email, m.form)}</div>
       </section>
       <section class="interest-discussion" aria-labelledby="recruit-comments-heading">
@@ -10508,7 +10519,7 @@ function recruitPersonModalHtml(m) {
         <div data-rc="person-comments">${recruitPersonDiscussionHtml(email)}</div>
       </section>
     </div>
-    <div class="modal__foot modal__foot--split"><span class="rc-app__nav" data-rc="person-nav">${recruitPersonNavHtml(email)}</span><span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split"><span class="rc-app__nav" data-rc="person-nav">${recruitPersonNavHtml(email)}</span><button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
 }
 
@@ -11048,8 +11059,8 @@ function recruitSelectionBarHtml() {
   const visible = recruitVisibleRows(cycle);
   const hidden = ids.filter((id) => !visible.some((r) => r.id === id)).length;
   return `<span data-rc-selection-count role="status">${ids.length} selected${hidden ? ` · ${hidden} hidden by filter` : ''}</span>
-    <button class="btn btn--sm" data-action="recruit-copy-emails">${I.copy} Copy emails</button>
-    ${recruitCan('admin') && cycle?.status !== 'archived' ? `<button class="btn btn--sm btn--danger" data-action="recruit-remove-selected">${I.trash} Delete</button>` : ''}
+    <button class="btn" data-action="recruit-copy-emails">${I.copy} Copy emails</button>
+    ${recruitCan('admin') && cycle?.status !== 'archived' ? `<button class="btn btn--danger" data-action="recruit-remove-selected">${I.trash} Delete</button>` : ''}
     <button class="icon-btn" data-action="recruit-clear-selection" aria-label="Clear selection" title="Clear selection">${I.x}</button>`;
 }
 
@@ -11103,7 +11114,7 @@ function recruitRowsHtml(rows, cycle) {
   const span = cols.length + 3;
   if (!st.apps || (st.apps.loading && !st.apps.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (st.apps?.error && !st.apps.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(st.apps.error)}. <button class="linklike" data-action="recruit-apps-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No people match these filters.' : 'Nothing here yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No one matches.' : 'No one yet.'}</td></tr>`;
   const selected = recruitSelection();
   return rows.map((r) => recruitRowHtml(r, cycle, cols, selected)).join('');
 }
@@ -11179,7 +11190,7 @@ function recruitSheetHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-q" type="search" placeholder="Search people…" value="${MD.esc(f.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions" data-recruit-tools ${selected.size ? 'hidden' : ''}>
         ${dd('recruit-filter', [{ value: 'combined', label: recruitFilterLabel(cycle) }], 'combined')}
-        ${lead ? `<a class="btn btn--sm" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
+        ${lead ? `<a class="btn" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
     </div>
@@ -11224,14 +11235,14 @@ function recruitPendingHtml() {
   const pending = q.pending || [];
   if (!pending.length) return unavailable;
   return `<section aria-labelledby="recruit-pending-heading">
-    <h2 class="sheet__heading" id="recruit-pending-heading">Saved submissions awaiting review <span class="count" style="font-variant-numeric:tabular-nums">${pending.length}</span></h2>
+    <h2 class="sheet__heading" id="recruit-pending-heading">Saved submissions awaiting review <span class="count">${pending.length}</span></h2>
     <p class="sheet__note">These responses are saved separately and are not in any cycle or its CSV.</p>
     ${unavailable}
-    <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive" style="height:auto;min-height:60px;flex-wrap:wrap;padding-top:4px;padding-bottom:4px">
-      <button class="interest-person" style="flex:1 1 180px" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review saved submission from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
-      <span class="sheet__archivemeta" style="flex:1 1 180px">${MD.esc(recruitPendingReason(r.reason))}</span>
+    <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive rc-pending">
+      <button class="interest-person" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review saved submission from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
+      <span class="sheet__archivemeta">${MD.esc(recruitPendingReason(r.reason))}</span>
       <span class="interest-when" title="${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}">${recruitDate(Number(r.receivedAt))}</span>
-      <button class="btn btn--sm" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button>
+      <button class="btn" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button>
     </div>`).join('')}</div>
   </section>`;
 }
@@ -11246,13 +11257,13 @@ function recruitQueueModalHtml(m) {
       <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it copies the answers into a cycle; the saved record stays.</p>
       <dl class="interest-detail">
         <dt>Email</dt><dd>${MD.esc(r.email)}</dd>
-        <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Not sure yet')}</dd>
+        <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Undecided')}</dd>
         <dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
-      <h4 class="interest-subhead">Coolest project they've done</h4>
+      <h4 class="interest-subhead">Coolest project</h4>
       <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
     </div>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Close</button><button class="btn btn--primary" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button></div>

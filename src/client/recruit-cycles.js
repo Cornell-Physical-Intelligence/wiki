@@ -29,7 +29,7 @@ function recruitIndexHtml() {
   const list = cy.list || [];
   const live = list.filter((c) => c.status !== 'archived');
   const archived = list.filter((c) => c.status === 'archived');
-  const tools = admin ? `<div class="rc-index__tools"><button class="btn btn--sm" data-action="recruit-cycle-new">${I.plus} New cycle</button></div>` : '';
+  const tools = admin ? `<div class="rc-index__tools"><button class="btn" data-action="recruit-cycle-new">${I.plus} New cycle</button></div>` : '';
   const liveBlock = live.length
     ? `<div class="sheet sheet--list">${live.map((c) => recruitCycleRowHtml(c, cy.intakeCycleId)).join('')}</div>`
     : `<div class="sheet sheet--list"><div class="sheet__archive"><span class="sheet__archivemeta">${admin ? 'No cycle yet. Create one to start receiving applications.' : 'No open cycle.'}</span></div></div>`;
@@ -50,16 +50,16 @@ function recruitAttentionHtml() {
     const parts = [recruitPlural(mig.legacyLive || 0, 'submission'), recruitPlural((mig.legacyArchives || []).length, 'archive')].join(' and ');
     const busy = st.busy.has('migrate');
     items.push(`<div class="sheet__archive"><span class="sheet__archivemeta" data-rc="migrate">${busy ? 'Importing…' : MD.esc(parts) + ' on the old list'}</span>
-      <button class="btn btn--sm" data-action="recruit-migrate" ${busy ? 'disabled' : ''}>Import the current list and archives</button></div>`);
+      <button class="btn" data-action="recruit-migrate" ${busy ? 'disabled' : ''}>Import the current list and archives</button></div>`);
   }
   if (mig?.done && mig.orphans > 0) {
     items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">${MD.esc(recruitPlural(mig.orphans, 'submission'))} arrived while no cycle was receiving the form</span>
-      <button class="btn btn--sm" data-action="recruit-adopt" aria-haspopup="menu" ${st.busy.has('adopt') ? 'disabled' : ''}>Adopt into…</button></div>`);
+      <button class="btn" data-action="recruit-adopt" aria-haspopup="menu" ${st.busy.has('adopt') ? 'disabled' : ''}>Adopt into…</button></div>`);
   }
   const pending = st.queue?.pending?.length || 0;
   if (pending) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">${MD.esc(recruitPlural(pending, 'saved submission'))} waiting to join a list</span>
-    <button class="btn btn--sm" data-action="recruit-queue-sync">Sync queue</button></div>`);
-  if (st.queue?.queueUnavailable) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">Could not check the saved-submission queue.</span><button class="btn btn--sm" data-action="recruit-queue-sync">Retry</button></div>`);
+    <button class="btn" data-action="recruit-queue-sync">Sync queue</button></div>`);
+  if (st.queue?.queueUnavailable) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">Could not check the saved-submission queue.</span><button class="btn" data-action="recruit-queue-sync">Retry</button></div>`);
   if (!items.length) return '';
   return `<h2 class="sheet__heading">Needs attention</h2><div class="sheet sheet--list">${items.join('')}</div>`;
 }
@@ -90,10 +90,10 @@ function recruitCycleModalHtml(m) {
   const copy = [{ value: '', label: 'Start from the defaults' }, ...list.map((c) => ({ value: c.id, label: c.name }))];
   return `<div class="modal" role="dialog" aria-label="New cycle">
     <div class="modal__head"><h3>New cycle</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
-    <div class="modal__body">
+    <div class="modal__body rc-form">
       <label>Name<input class="text-input" data-m="recruit-cycle-name" value="${MD.esc(m.name || '')}" placeholder="e.g. Fall 2026" maxlength="80" autocomplete="off" spellcheck="false"></label>
       <label>Term${dd('recruit-cycle-term', recruitTermOptions(m.term), m.term || recruitDefaultTerm())}</label>
-      <label>Settings${dd('recruit-cycle-copy', copy, m.copyFrom || '')}</label>
+      <label>Start from${dd('recruit-cycle-copy', copy, m.copyFrom || '')}</label>
       <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
     </div>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-cycle-create" ${m.busy ? 'disabled' : ''}>${m.busy ? 'Creating…' : 'Create cycle'}</button></div>
@@ -204,7 +204,7 @@ function recruitOpenCycleTools(anchor) {
   const items = [{ label: 'Refresh', run: () => { const id = cycle.id; st.cycles = undefined; RECRUIT.reset(id); render(); } }];
   if (admin) items.push({ label: 'Sync queue', run: () => { st.queue = undefined; recruitLoadQueue(true); toast('Checking saved submissions…'); } });
   if (admin) items.push({ label: 'Check storage', run: recruitCheckStorage });
-  if (lead) items.push('-', { label: 'Settings', icon: I.settings, run: recruitOpenSettings });
+  // Settings live behind the gear beside the cycle's name.
   openMenu(items, anchor);
 }
 
@@ -303,7 +303,7 @@ function recruitSettingsModalHtml() {
   return `<div class="modal modal--wide rc-settings" role="dialog" aria-label="Settings for ${MD.esc(cycle.name)}">
     <div class="modal__head"><h3>${MD.esc(cycle.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body" data-rc="settings-body">${recruitSettingsBodyHtml(cycle, role)}</div>
-    <div class="modal__foot modal__foot--split">${foot}<span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split">${foot}<button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
 }
 
@@ -314,7 +314,12 @@ function recruitPaintSettings() {
   if (!dialog) return false;
   const fresh = document.createElement('div');
   fresh.innerHTML = recruitSettingsModalHtml();
+  // The status pill's thumb slides from where it was before the repaint.
+  const was = [...$$('.rc-seg--status button', dialog)].findIndex((b) => b.getAttribute('aria-current') === 'page');
   recruitRepaint(dialog, fresh.firstElementChild ? fresh.firstElementChild.innerHTML : fresh.innerHTML);
+  const seg = $('.rc-seg--status', dialog);
+  if (seg && was >= 0) seg.dataset.segFrom = String(was);
+  recruitSegSlide(seg);
   return true;
 }
 
@@ -330,6 +335,7 @@ function recruitOpenSettings() {
   if (!cycle || !recruitCan('lead')) return;
   UI.modal = { kind: 'recruit-settings' };
   render();
+  recruitSegSlide($('.rc-seg--status'));
   for (const s of RECRUIT.settingsSections(cycle, role)) { try { s.mount?.(cycle, role); } catch (e) { console.error(e); } }
 }
 
@@ -365,7 +371,7 @@ function recruitRolesBodyHtml() {
     .map((m) => ({ value: m.email, label: m.name ? `${m.name} · ${m.email}` : m.email }));
   const roleChoices = [{ value: 'reviewer', label: 'Reviewer' }, ...(admin ? [{ value: 'lead', label: 'Lead' }] : [])];
   const add = cycle?.status === 'archived' ? '' : members.length
-    ? `<form class="rc-roles__add" data-action="recruit-role-form" aria-label="Add a reviewer">${dd('recruit-role-member', members, members[0].value)}${dd('recruit-role-role', roleChoices, 'reviewer', { small: true })}<button type="submit" class="btn btn--primary">Add</button></form>`
+    ? `<form class="rc-roles__add" data-action="recruit-role-form" aria-label="Add a reviewer">${dd('recruit-role-member', members, members[0].value)}${dd('recruit-role-role', roleChoices, 'reviewer')}<button type="submit" class="btn btn--primary">Add</button></form>`
     : '<p class="rc-set__note">Everyone on the wiki roster already has a role here.</p>';
   return `<p class="rc-set__note">Admins can do everything in every cycle. Leads edit forms and see everyone here; reviewers read and comment.</p>
     <div class="rc-roles__list">${rows || '<p class="rc-set__note">Nobody yet besides admins.</p>'}</div>${add}`;
@@ -376,7 +382,7 @@ function recruitRolesModalHtml() {
   return `<div class="modal rc-roles" role="dialog" aria-label="Who can review ${MD.esc(cycle?.name || '')}">
     <div class="modal__head"><h3>Who can review</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body" data-rc="roles-body">${recruitRolesBodyHtml()}</div>
-    <div class="modal__foot modal__foot--split"><button class="btn btn--ghost" data-action="recruit-settings-open">Back to settings</button><span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+    <div class="modal__foot modal__foot--split"><button class="btn btn--ghost" data-action="recruit-settings-open">Back to settings</button><button class="btn" data-action="modal-close">Close</button></div>
   </div>`;
 }
 
@@ -483,8 +489,8 @@ const RECRUIT_SETTINGS = [
       const note = receiving ? ''
         : holder ? `${holder.name} receives them now. Only one cycle can.`
         : cycle.status !== 'open' ? 'Open the cycle first.'
-        : st.cycles === undefined ? '' : 'No cycle receives them right now.';
-      return `<nav class="rc-seg rc-seg--status" aria-label="Status">${seg}</nav>
+        : '';
+      return `<nav class="rc-seg rc-seg--status" aria-label="Status"><span class="rc-seg__thumb" aria-hidden="true"></span>${seg}</nav>
         ${cycle.status === 'archived' ? `<p class="rc-set__note">Archived and read only${cycle.closedAt ? `, closed ${MD.esc(recruitDate(Number(cycle.closedAt)))}` : ''}. Unarchive it below to change anything.</p>` : ''}
         <label class="rc-check rc-set__website"><input type="checkbox" data-action="recruit-website-toggle" ${receiving ? 'checked' : ''} ${canToggle ? '' : 'disabled'}> This cycle receives the forms on the website</label>
         ${note ? `<p class="rc-set__note">${MD.esc(note)}</p>` : ''}`;
@@ -496,7 +502,7 @@ const RECRUIT_SETTINGS = [
       const teams = recruitSubteams(cycle);
       return `<form class="rc-form rc-form--rows" data-action="recruit-settings-subteams">
         <div class="rc-rows" data-rc="subteam-rows">${teams.map((t) => recruitSubteamRowHtml(t)).join('')}</div>
-        <div class="rc-form__foot"><button type="button" class="btn btn--sm" data-action="recruit-subteam-add">${I.plus} Add subteam</button><span style="flex:1"></span><button type="submit" class="btn btn--primary">Save</button></div>
+        <div class="rc-form__foot"><button type="button" class="btn" data-action="recruit-subteam-add">${I.plus} Add subteam</button><button type="submit" class="btn btn--primary">Save</button></div>
       </form>`;
     },
     submit: async (form, cycle) => {
@@ -522,7 +528,7 @@ const RECRUIT_SETTINGS = [
     view: () => {
       const grants = recruitState().cycle?.grants || [];
       const n = grants.length;
-      return `<div class="rc-set__row"><span>${n ? `${MD.esc(recruitPlural(n, 'person', 'people'))} besides admins` : 'Admins only so far'}</span><button type="button" class="btn btn--sm" data-action="recruit-roles-open">Manage</button></div>`;
+      return `<div class="rc-set__row"><span>${n ? `${MD.esc(recruitPlural(n, 'person', 'people'))} besides admins` : 'Admins only so far'}</span><button type="button" class="btn" data-action="recruit-roles-open">Manage</button></div>`;
     },
   },
 ];

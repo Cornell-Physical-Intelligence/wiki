@@ -224,7 +224,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   loadCycle(f);
   f.mount();
   const tabs = f.app.querySelectorAll('.rc-tabs [role="tab"]');
-  same(tabs.map((t) => t.textContent), ['People', 'Zeta', 'Interest form', 'Coffee chats', 'Applications']);
+  same(tabs.map((t) => t.textContent), ['People', 'Zeta', 'Interest form', 'Coffee chats', 'Application form']);
   assert.ok(f.app.querySelector('.rc-tabs .rc-tabs__add[data-action="recruit-form-new"]'), 'a + after the tabs adds a form');
   assert.equal(tabs[2].getAttribute('aria-current'), 'page');
   tabs[2].focus(); f.ctx.evt.target = tabs[2];
@@ -254,7 +254,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   st.me = { error: 'Not <signed> in' };
   const err = f.run('viewRecruit()');
   assert.match(err, /Not &lt;signed&gt; in/); assert.match(err, /data-action="recruit-refresh"/, 'errors offer a retry');
-  st.me = { admin: false, cycles: [] }; assert.match(f.run('viewRecruit()'), /Only admins and cycle reviewers/);
+  st.me = { admin: false, cycles: [] }; assert.match(f.run('viewRecruit()'), /No access/);
   st.me = { admin: true, cycles: [] }; f.ctx.UI.recruitMe = st.me;
   st.cycles = { loading: true }; assert.match(f.run('viewRecruit()'), /Loading…/);
   st.cycles = { error: 'boom' }; assert.match(f.run('viewRecruit()'), /Could not load: boom/);
@@ -264,7 +264,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   ], intakeCycleId: 'cy-a', migration: { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 } };
   const html = f.run('viewRecruit()');
   assert.match(html, /&lt;b&gt;Fall&lt;\/b&gt; 2026/, 'cycle names are escaped'); assert.doesNotMatch(html, /<b>Fall<\/b>/);
-  assert.match(html, /Open · receives the website form · Interest form 10 · Coffee chats 2 · Applications 0/);
+  assert.match(html, /Open · receives the website form · Interest form 10 · Coffee chats 2 · Application form 0/);
   assert.match(html, /Archived<\/h2>/, 'archived cycles sit under a second heading');
   assert.match(html, /Import the current list and archives/); assert.match(html, /40 submissions and 1 archive/);
   assert.match(html, /data-action="recruit-cycle-new"/);
@@ -596,7 +596,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const bo = body.querySelector('tr[data-email="b@cornell.edu"]');
   assert.ok(!bo.querySelector('.interest-flag.is-flagged') && !bo.querySelector('.interest-comments.has-comments'), 'an unflagged person without comments shows quiet controls');
   assert.match(f.app.querySelector('.sheet--people thead').innerHTML, /data-col="review"/, 'People has the review column');
-  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 flagged · Interest form 1 · Coffee chats 1 · Applications 1');
+  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 flagged · Interest form 1 · Coffee chats 1 · Application form 1');
   const q = f.app.querySelector('[data-m="recruit-people-q"]');
   q.value = 'bo'; assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' }), true);
   assert.equal(f.app.querySelector('[data-rc="people-rows"]').querySelectorAll('tr').length, 1, 'search narrows the list in place');
