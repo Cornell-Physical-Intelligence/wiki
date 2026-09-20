@@ -48,7 +48,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const { handleInterest } = await lib('interest.js');
   const { createRecruit } = await lib('recruit/registry.js');
   const { SECTION_KEYS, defaultSections, validateSite } = await lib('recruit/sections.js');
-  const mods = await Promise.all(['cycles', 'applications', 'roles', 'site'].map(async (m) => (await lib(`recruit/modules/${m}.js`)).default));
+  const mods = await Promise.all(['cycles', 'applications', 'people', 'roles', 'site'].map(async (m) => (await lib(`recruit/modules/${m}.js`)).default));
   const R = createRecruit(mods);
   const journal = fakeJournal();
   const admin = users[0], plain = users[1];
@@ -171,7 +171,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const csv = await recruit('GET', '/recruit/cycles/cy-interest/applications.csv?section=coffee');
   assert.equal(csv.status, 200); assert.match(csv.headers['content-type'], /text\/csv/);
   const lines = csv.text.replace(/^﻿/, '').split('\r\n');
-  assert.equal(lines[0], '"Name","Email","Cornell","Year","Subteam","Received","Updated","When are you free?","Snack","Files","Flagged","Comments"');
+  assert.equal(lines[0], '"Name","Email","Cornell","Year","Subteam","Received","Updated","When are you free?","Snack","Files"', 'a section CSV is answers only; flags and comments belong to people');
   assert.match(lines[1], /^"Cam Chat","cam@cornell.edu","yes","","Software",/);
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/applications.csv?section=coffee', {}, plain)).status, 403);
   const v2 = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
@@ -195,6 +195,29 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.deepEqual(people.data.rows.map((p) => p.last), [...people.data.rows.map((p) => p.last)].sort((a, b) => b - a), 'newest activity first');
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?q=cam')).data.rows.length, 1, 'search by name or email');
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people', {}, plain)).status, 403, 'members without a role cannot list people');
-  console.log('PASS: per-section CSV with formula-safe cells, a closed interest form refuses the website, capacity applies per section, people group across forms');
+  /* ---- flags and comments belong to the person ---- */
+  const camPath = `/recruit/cycles/cy-interest/people/${encodeURIComponent('cam@cornell.edu')}`;
+  const camDetail = await recruit('GET', camPath);
+  assert.equal(camDetail.status, 200, camDetail.text);
+  assert.deepEqual(camDetail.data.submissions.map((x) => x.application.section).sort(), ['coffee', 'interest'], 'the person carries every form they sent');
+  assert.ok(camDetail.data.submissions.every((x) => x.application.review === undefined), 'submissions have no review of their own');
+  assert.equal(camDetail.data.person.flagged, false);
+  const flagged = await recruit('PATCH', `${camPath}/review`, { flagged: true });
+  assert.equal(flagged.status, 200, flagged.text); assert.equal(flagged.data.person.flagged, true);
+  const posted = await recruit('POST', `${camPath}/comments`, { id: 'ic-cam00001', text: 'Great chat' });
+  assert.equal(posted.status, 200, posted.text); assert.equal(posted.data.person.review.comments.length, 1);
+  assert.equal((await recruit('POST', `${camPath}/comments`, { id: 'ic-cam00001', text: 'Great chat' })).data.person.review.comments.length, 1, 'a retry never posts twice');
+  const listed = (await recruit('GET', '/recruit/cycles/cy-interest/people')).data.rows.find((p) => p.email === 'cam@cornell.edu');
+  assert.equal(listed.flagged, true); assert.equal(listed.comments, 1, "the list carries the person's flag and thread size");
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?flagged=1')).data.rows.length, 1);
+  assert.equal((await recruit('DELETE', `${camPath}/comments/ic-cam00001`)).data.person.review.comments.length, 0);
+  assert.equal((await recruit('PATCH', `${camPath}/review`, { flagged: true }, plain)).status, 403, 'members without a role cannot flag');
+  assert.equal((await recruit('GET', `/recruit/cycles/cy-interest/people/${encodeURIComponent('nobody@cornell.edu')}`)).status, 404);
+  const peopleCsv = await recruit('GET', '/recruit/cycles/cy-interest/people.csv');
+  assert.equal(peopleCsv.status, 200);
+  assert.equal(String(peopleCsv.text).replace(/^\uFEFF/, '').split('\n')[0].trim(), '"Name","Email","Cornell","Subteam","Year","Interest form","Coffee chat","Application","Flagged","Comments","Last activity"');
+  const auditKinds = (await recruit('GET', '/recruit/cycles/cy-interest/audit')).data.rows.map((a) => a.kind);
+  for (const kind of ['person.flag', 'comment.post', 'comment.delete']) assert.ok(auditKinds.includes(kind), `people routes write ${kind} audit`);
+  console.log('PASS: per-section CSV with formula-safe cells, a closed interest form refuses the website, capacity applies per section, people group across forms, and the flag and the thread belong to the person');
   console.log('PASS: site module — public read, per-section submit, settings, csv');
 }

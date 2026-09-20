@@ -50,8 +50,11 @@
 }
 .rc-sent:hover { background: var(--hover); border-color: var(--rule); }
 .rc-sent > svg { width: 12px; height: 12px; color: var(--good); flex: none; }
-.rc-sent__flag svg { width: 12px; height: 12px; color: var(--accent); display: block; }
-.rc-sent__n { font-size: 11px; color: var(--faint); }
+/* The flag and the thread size belong to the person, so they sit with the name. */
+.rc-person__marks { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-weight: 400; font-size: 12px; color: var(--faint); vertical-align: 1px; }
+.rc-person__flag svg { width: 13px; height: 13px; color: var(--accent); display: block; }
+.rc-person__n { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
+.rc-person__n svg { width: 12px; height: 12px; }
 @container (max-width: 36em) {
   .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people td[data-col="interest"],
   .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people td[data-col="coffee"],
@@ -102,10 +105,12 @@
    Section tab bar: Responses | Form, and the website status. */
 .rc-mode { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: -6px 0 16px; }
 .rc-seg { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--page); }
-.rc-seg a { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border-radius: 999px; font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; }
-.rc-seg a:hover { color: var(--fg); background: var(--hover); }
-.rc-seg a[aria-current="page"] { color: var(--page); background: var(--fg); }
-.rc-seg a:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.rc-seg a, .rc-seg button { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; font: inherit; font-size: 13px; color: var(--muted); background: transparent; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.rc-seg a:hover, .rc-seg button:hover { color: var(--fg); background: var(--hover); }
+.rc-seg a[aria-current="page"], .rc-seg button[aria-current="page"] { color: var(--page); background: var(--fg); }
+.rc-seg a:focus-visible, .rc-seg button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+/* Inside the person dialog: which of their forms is shown. */
+.rc-seg--forms { margin: 0 0 18px; }
 .rc-seg .count, .rc-mode__plain .count { font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7; }
 .rc-mode__plain { font-size: 13px; color: var(--muted); }
 .rc-mode__status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }

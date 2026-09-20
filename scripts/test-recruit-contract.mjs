@@ -18,7 +18,7 @@ const { ACCESS_LEVELS } = await import(pathToFileURL(join(root, 'lib/recruit/per
 const serverFiles = existsSync(modulesDir) ? readdirSync(modulesDir).filter((f) => f.endsWith('.js')).sort() : [];
 const clientFiles = existsSync(clientDir) ? readdirSync(clientDir).filter((f) => /^recruit-[a-z]+\.js$/.test(f) && f !== 'recruit-core.js').sort() : [];
 const ALLOWED_IMPORTS = /^(node:[a-z_/]+|\.\.\/fixed-form\.js|\.\.\/sections\.js|\.\.\/mailer\.js|\.\.\/migrate\.js|\.\.\/permissions\.js)$/;
-const KERNEL = new Set(['cycles', 'applications', 'roles', 'site']);
+const KERNEL = new Set(['cycles', 'applications', 'people', 'roles', 'site']);
 
 test('every server module file exports the module object shape', async () => {
   assert.ok(serverFiles.length >= 3, 'the kernel modules exist');
@@ -38,7 +38,7 @@ test('every server module file exports the module object shape', async () => {
     assert.ok(!names.has(mod.name), `${file}: duplicate module name`);
     names.add(mod.name);
     assert.equal(typeof mod.kernel, 'boolean', `${file}: kernel flag`);
-    assert.equal(mod.kernel, KERNEL.has(mod.name), `${file}: only cycles/applications/roles are kernel`);
+    assert.equal(mod.kernel, KERNEL.has(mod.name), `${file}: only cycles/applications/people/roles/site are kernel`);
     assert.equal(typeof mod.order, 'number', `${file}: order`);
     if (mod.kernel) assert.ok(mod.order >= 0 && mod.order <= 20, `${file}: kernel order 0-20`);
     const schema = typeof mod.schema === 'function' ? mod.schema([]) : mod.schema;
@@ -92,7 +92,7 @@ test('the kernel modules provide the kit facades', async () => {
   const c = cycles.provide(fakeKit).cycles;
   for (const fn of ['get', 'intakeTarget', 'enabled', 'list', 'settings', 'migrated', 'defaultDoc']) assert.equal(typeof c[fn], 'function', `kit.cycles.${fn}`);
   const a = applications.provide({ ...fakeKit, cycles: c }).apps;
-  for (const fn of ['get', 'list', 'commitIntake', 'move', 'setDecision', 'patch', 'remove', 'toLegacyRow', 'updateReview', 'ids', 'findByEmail', 'count']) assert.equal(typeof a[fn], 'function', `kit.apps.${fn}`);
+  for (const fn of ['get', 'list', 'commitIntake', 'move', 'setDecision', 'patch', 'remove', 'toLegacyRow', 'people', 'allByEmail', 'ids', 'findByEmail', 'count']) assert.equal(typeof a[fn], 'function', `kit.apps.${fn}`);
 });
 
 // A permissive sandbox: any global the client file touches at load time

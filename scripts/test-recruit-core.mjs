@@ -131,8 +131,9 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   const { createRecruit } = await lib('recruit/registry.js');
   const cycles = (await lib('recruit/modules/cycles.js')).default;
   const applications = (await lib('recruit/modules/applications.js')).default;
+  const people = (await lib('recruit/modules/people.js')).default;
   const roles = (await lib('recruit/modules/roles.js')).default;
-  const R = createRecruit([cycles, applications, roles]);
+  const R = createRecruit([cycles, applications, people, roles]);
   const bridge = R.intakeBridge;
   const journal = fakeJournal();
   const members = Object.fromEntries(users.map((u) => [u.email, u]));
@@ -411,14 +412,15 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.deepEqual(await interest('PATCH', '/interest/in-missing/review', { flagged: true }).then((r) => [r.status, r.data.error]), [404, 'This submission is no longer on the live list']);
   const unflag = await interest('PATCH', reviewPath, { flagged: false }, admin2);
   assert.equal(unflag.status, 200);
-  assert.deepEqual([unflag.data.row.review.flagged, unflag.data.row.review.flaggedBy, unflag.data.row.reviewVersion, unflag.data.row.review.comments.length], [false, 'admin2@example.com', 4, 2]);
+  // The person's review starts from the merged legacy thread (version 1), so the unflag is version 2.
+  assert.deepEqual([unflag.data.row.review.flagged, unflag.data.row.review.flaggedBy, unflag.data.row.reviewVersion, unflag.data.row.review.comments.length], [false, 'admin2@example.com', 2, 2]);
   const firstComment = { id: 'ic-test0001', text: '<script>alert("test")</script>\nStrong project', by: 'forged@example.com' };
   const posted = await interest('POST', commentPath, firstComment, admin2);
   assert.equal(posted.status, 200);
   assert.equal(posted.data.row.review.comments.length, 3);
   assert.equal(posted.data.row.review.comments[2].by, 'admin2@example.com', 'the server supplies authorship');
   assert.equal((await interest('POST', commentPath, firstComment, admin2)).data.row.review.comments.length, 3, 'retries do not duplicate');
-  assert.deepEqual(await interest('POST', commentPath, { ...firstComment, text: 'Different' }, admin2).then((r) => [r.status, r.data.error]), [409, 'This comment was already sent with different text. Reopen the submission and try again.']);
+  assert.deepEqual(await interest('POST', commentPath, { ...firstComment, text: 'Different' }, admin2).then((r) => [r.status, r.data.error]), [409, 'This comment was already sent with different text. Reopen the person and try again.']);
   assert.deepEqual(await interest('POST', commentPath, { id: 'ic-legacy0000', text: 'Late retry' }, admin2).then((r) => [r.status, r.data.error]), [409, 'This comment was deleted and cannot be posted again']);
   assert.deepEqual(await interest('DELETE', commentPath + '/ic-notfound1', {}, admin2).then((r) => [r.status, r.data.error]), [404, 'This comment is no longer available']);
   const del = await interest('DELETE', commentPath + '/ic-test0001', {}, admin2);
@@ -426,7 +428,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.deepEqual(del.data.row.review.deletedCommentIds, ['ic-legacy0000', 'ic-test0001']);
   assert.equal((await interest('DELETE', commentPath + '/ic-test0001', {}, admin2)).data.row.reviewVersion, del.data.row.reviewVersion, 'delete retries are no-ops');
   const auditLegacy = (await recruit('GET', '/recruit/cycles/cy-interest/audit?application=in-legacy')).data.rows.map((a) => a.kind);
-  for (const kind of ['app.flag', 'comment.post', 'comment.delete']) assert.ok(auditLegacy.includes(kind), `legacy route writes ${kind} audit`);
+  for (const kind of ['person.flag', 'comment.post', 'comment.delete']) assert.ok(auditLegacy.includes(kind), `legacy route writes ${kind} audit`);
   assert.equal((await interest('DELETE', '/interest/in-plain')).status, 200);
   assert.ok(!(await appsIn('cy-interest')).some((r) => r.id === 'in-plain'), 'legacy delete removes the recruit row');
   assert.equal(await legacyBytes(), (await legacyBytes()));
@@ -443,8 +445,8 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   for (const r of list.data.rows) {
     assert.equal(r.answers, undefined, 'list rows carry no answers');
     assert.equal(r.review, undefined, 'list rows carry no review');
-    assert.equal(typeof r.comments, 'number');
-    assert.equal(typeof r.flagged, 'boolean');
+    assert.equal(r.comments, undefined, 'flags and comments belong to the person, not the row');
+    assert.equal(r.flagged, undefined);
     assert.equal(typeof r.preview, 'string');
     assert.equal(typeof r.editVersion, 'number');
     assert.ok(r.extras && typeof r.extras === 'object');
@@ -460,11 +462,15 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.deepEqual((await recruit('GET', '/recruit/cycles/cy-interest/applications?subteam=software')).data.rows.map((r) => r.id), ['in-legacy'], 'subteam filters accept keys');
   assert.deepEqual((await recruit('GET', '/recruit/cycles/cy-interest/applications?subteam=Software')).data.rows.map((r) => r.id), ['in-legacy'], 'and names');
   assert.ok((await recruit('GET', '/recruit/cycles/cy-interest/applications?subteam=none')).data.rows.length >= 1, 'Undecided filter');
-  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/applications?flagged=1')).data.rows.length, 0);
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?flagged=1')).data.rows.length, 0, 'the people list filters by the person flag');
   const detail = await recruit('GET', `/recruit/cycles/cy-interest/applications/in-legacy`);
   assert.equal(detail.status, 200);
   assert.deepEqual(detail.data.application.answers, { project: 'Revised answer' });
-  assert.equal(detail.data.application.review.comments.length, 2);
+  const personPath = `/recruit/cycles/cy-interest/people/${encodeURIComponent('legacy@example.com')}`;
+  const person = await recruit('GET', personPath);
+  assert.equal(person.status, 200, person.text);
+  assert.equal(person.data.person.review.comments.length, 2, 'the person carries the merged legacy thread');
+  assert.equal(person.data.submissions.length, 1); assert.equal(person.data.submissions[0].application.review, undefined, 'submissions come without a review of their own');
   assert.equal(detail.data.form.questions.length, 6);
   assert.ok(Array.isArray(detail.data.audit));
   assert.deepEqual((await recruit('GET', `/recruit/cycles/cy-interest/applications/${(await appsIn('cy-interest')).find((r) => r.email === 'fresh@example.com').id}`)).data.history.map((h) => h.cycleId), [fall.id], 'history lists the other cycle');
@@ -476,7 +482,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.deepEqual([stalePatch.status, stalePatch.data.error, stalePatch.data.editVersion], [409, 'This application changed. Reload.', patch1.data.application.editVersion]);
   const patch2 = await recruit('PATCH', '/recruit/cycles/cy-interest/applications/in-legacy', { requestId: requestId(), editVersion: patch1.data.application.editVersion, tags: { remove: ['Strong'], add: ['Hardware'] } });
   assert.deepEqual(patch2.data.application.tags, ['Hardware']);
-  assert.equal(patch2.data.application.review.comments.length, 2, 'edits never touch the review');
+  assert.equal((await recruit('GET', personPath)).data.person.review.comments.length, 2, 'edits never touch the review');
   const tagged = await recruit('GET', '/recruit/cycles/cy-interest/applications?tag=Hardware');
   assert.deepEqual(tagged.data.rows.map((r) => r.id), ['in-legacy']);
   const upload = await recruit('POST', '/recruit/cycles/cy-interest/applications/in-legacy/files', { name: 'extra.png', type: 'image/png', data: png.toString('base64') });
@@ -490,10 +496,11 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.equal((await recruit('GET', `/recruit/files/${extraFileId}`, {}, plain)).status, 403);
   assert.equal((await recruit('GET', `/recruit/files/${extraFileId}`, {}, lead)).status, 404, 'a role in another cycle does not open this file');
   assert.equal((await recruit('GET', '/recruit/files/int-nothere')).status, 404);
-  const commentViaRecruit = await recruit('POST', '/recruit/cycles/cy-interest/applications/in-legacy/comments', { id: 'ic-recruit001', text: 'Via recruit' });
-  assert.equal(commentViaRecruit.status, 200);
-  assert.equal(commentViaRecruit.data.application.review.comments.length, 3);
-  assert.equal((await interest('GET', '/interest')).data.rows.find((r) => r.id === 'in-legacy').review.comments.length, 3, 'one review column, two doors');
+  const commentViaRecruit = await recruit('POST', `${personPath}/comments`, { id: 'ic-recruit001', text: 'Via recruit' });
+  assert.equal(commentViaRecruit.status, 200, commentViaRecruit.text);
+  assert.equal(commentViaRecruit.data.person.review.comments.length, 3);
+  assert.equal((await interest('GET', '/interest')).data.rows.find((r) => r.id === 'in-legacy').review.comments.length, 3, 'one thread per person, two doors');
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people')).data.rows.find((p) => p.email === 'legacy@example.com').comments, 3, 'the people list counts the thread');
   const move = await kit.apps.move({ id: 'cy-interest', doc: {} }, { id: 'in-legacy', to: 'screening', by: 'admin@example.com', requestId: 'rq-move-0001' });
   assert.deepEqual([move.from, move.to], ['applied', 'screening']);
   assert.equal(await kit.apps.move({ id: 'cy-interest', doc: {} }, { id: 'in-legacy', to: 'screening', by: 'admin@example.com' }), null, 'same stage moves nothing');

@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
-const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', forms: 'recruit-forms.js', applications: 'recruit-applications.js' };
+const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', forms: 'recruit-forms.js', people: 'recruit-people.js', applications: 'recruit-applications.js' };
 const src = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([k, f]) => [k, await read(`../src/client/${f}`)])));
 const ui2 = await read('../src/client/ui2.js');
 const main = await read('../src/client/main.js');
@@ -166,7 +166,7 @@ function fixture({ remote = true, admin = true } = {}) {
   if (remote) base.REMOTE = { pending: 0 };
   const ctx = vm.createContext(base);
   const run = (code) => vm.runInContext(code, ctx);
-  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.forms + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
+  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.forms + '\n' + src.people + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   return { ctx, document, app, requests, renders, backgrounds, toasts, menus, navs, closes, run, settle,
     mount() { app.innerHTML = run('viewRecruit()'); return app; },
@@ -193,7 +193,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
 /* ------------------------------- registry -------------------------------- */
 {
   const f = fixture();
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'applications', 'forms'], 'kernel modules register in order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'people', 'applications', 'forms'], 'kernel modules register in order');
   f.ctx.zetaCalls = [];
   f.run(`RECRUIT.register({ name: 'zeta', order: 5, panel: { id: 'zeta', label: 'Zeta', when: (cycle, role) => role === 'admin' || role === 'lead' }, view: () => '<p>zeta</p>',
     actions: { 'recruit-zeta': (el, ev, stop) => zetaCalls.push(el.dataset.id) }, modals: { 'recruit-zeta': (m) => '<div class="modal" data-zeta></div>' },
@@ -201,7 +201,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
     filters: [{ group: 'review', value: 'unscored', label: 'Unscored', query: { unscored: 1 } }],
     selectionActions: (ids) => [{ id: 'zeta-move', label: 'Zeta ' + ids.length, run: () => {} }],
     detailSections: (app) => ({ id: 'zeta', title: 'Zeta', html: '<p data-zeta-section>' + app.id + '</p>' }) })`);
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'applications', 'forms'], 'registry sorts by order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'people', 'applications', 'forms'], 'registry sorts by order');
   assert.throws(() => f.run("RECRUIT.register({ name: 'zeta', order: 9 })"), /already registered/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, actions: { 'nope': () => {} } })"), /must start with recruit-/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'noorder' })"), /needs an order/);
@@ -235,7 +235,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   f.ctx.st = f.run('recruitState()'); f.ctx.st.selected = new Set(['in-1', 'in-2']);
   f.run('recruitPaintSelection()');
   assert.match(f.app.querySelector('[data-recruit-selection]').innerHTML, /2 selected/, 'the selection toolbar counts');
-  f.run("UI.modal = { kind: 'recruit-app', id: 'in-1' }"); f.ctx.st.detail['in-1'] = { application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', answers: {}, files: [], review: { comments: [] }, tags: [] }, form: null, history: [], audit: [] };
+  f.run("UI.modal = { kind: 'recruit-person', email: 'one@cornell.edu' }"); f.ctx.st.persons = { 'one@cornell.edu': { person: { email: 'one@cornell.edu', name: 'One', flagged: false, review: { comments: [] }, reviewVersion: 0, latest: 'in-1' }, submissions: [{ application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', section: 'interest', answers: {}, files: [], tags: [] }, form: { questions: [] } }], history: [] } };
   assert.match(f.run('RECRUIT.modal(UI.modal)'), /data-zeta-section/, 'module detail sections join the dialog');
   console.log('PASS: registry dispatches by view key, sorts by order, gates tabs by role and module switch, and merges columns, filters and detail sections');
 }
@@ -295,29 +295,32 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.match(html, /2 of 200 shown · <\/span><button class="linklike" data-action="recruit-load-more">Load more/);
   assert.match(html, /applications\.csv\?section=interest/, 'the export link names the section');
   f.mount();
-  const person = f.app.querySelector('[data-action="recruit-app-open"][data-id="in-1"]');
+  assert.doesNotMatch(f.app.innerHTML, /data-action="recruit-flag"|interest-comments/, 'a section row carries no flag or comment control: those are the person\'s');
+  const person = f.app.querySelector('[data-action="recruit-person-open"][data-email="two@cornell.edu"]');
+  assert.equal(person.dataset.form, 'interest', 'a row opens its person at this form');
   person.focus();
-  f.run("recruitState().apps.rows[0].comments = 3"); f.run("recruitState().apps.byId['in-1'].comments = 3");
+  f.run("recruitState().apps.rows[1].name = 'Two Renamed'"); f.run("recruitState().apps.byId['in-2'].name = 'Two Renamed'");
   assert.equal(f.run('recruitPaintRows()'), true);
-  const again = f.app.querySelector('[data-action="recruit-app-open"][data-id="in-1"]');
+  const again = f.app.querySelector('[data-action="recruit-person-open"][data-email="two@cornell.edu"]');
   assert.ok(again !== person); assert.ok(f.document.activeElement === again, 'focus is restored after the tbody repaint');
-  assert.match(f.app.querySelector('tbody').innerHTML, /<span>3<\/span>/);
+  assert.match(f.app.querySelector('tbody').innerHTML, /Two Renamed/);
   // Filters: the combined menu, its label, and the server query.
   const host = f.app.querySelector('[data-m="recruit-filter"]');
   f.run('RECRUIT.dd.bind(RECRUIT)')(host);
   const labels = f.menus[0].items.filter((i) => i !== '-').map((i) => i.label);
-  for (const want of ['All people', 'Flagged', 'Has comments', 'All subteams', 'Electrical', 'Undecided', 'All years', 'Junior']) assert.ok(labels.includes(want), `filter menu offers ${want}`);
-  f.menus[0].items.find((i) => i.label === 'Flagged').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'Flagged');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[1].items.find((i) => i.label === 'Electrical').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'Flagged · Electrical', 'filter labels compose');
+  for (const want of ['All subteams', 'Electrical', 'Undecided', 'All years', 'Junior']) assert.ok(labels.includes(want), `filter menu offers ${want}`);
+  assert.ok(!labels.includes('Flagged') && !labels.includes('Has comments'), 'flags and comments are not section filters');
+  f.menus[0].items.find((i) => i.label === 'Electrical').run();
+  assert.equal(host.querySelector('.dd__label').textContent, 'Electrical');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[1].items.find((i) => i.label === 'Junior').run();
+  assert.equal(host.querySelector('.dd__label').textContent, 'Electrical · Junior', 'filter labels compose');
   f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[2].items.find((i) => i.label === 'Undecided').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'Flagged · Undecided');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[3].items.find((i) => i.label === 'All people').run();
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[4].items.find((i) => i.label === 'All subteams').run();
+  assert.equal(host.querySelector('.dd__label').textContent, 'Undecided · Junior');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[3].items.find((i) => i.label === 'All subteams').run();
+  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[4].items.find((i) => i.label === 'All years').run();
   assert.equal(host.querySelector('.dd__label').textContent, 'All people');
   const listCalls = f.requests.filter((r) => r.url.includes('/applications?'));
-  assert.match(listCalls[1].url, /flagged=1&subteam=Electrical/, 'server filters ride the query');
+  assert.match(listCalls[1].url, /subteam=Electrical/, 'server filters ride the query');
   assert.ok(listCalls.every((r) => r.signal instanceof AbortSignal), 'every list fetch is bounded');
   // A dd without a handler gets the default menu from data-opts and marks its form dirty.
   f.ctx.UI.route.params.sub = 'settings'; f.mount();
@@ -454,30 +457,31 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const st = loadCycle(f);
   f.mount();
   f.ctx.st = st;
-  st.detail['in-1'] = { application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', section: 'interest', answers: {}, files: [], review: { comments: [] } }, form: null, history: [], audit: [] };
-  f.run("recruitOpenApp('in-1')");
+  f.run("recruitOpenPerson('two@cornell.edu', { form: 'interest' })");
   assert.equal(f.renders.length, 0, 'opening appends the dialog in place; the page behind it is not rebuilt');
   assert.ok(f.ctx.UI.modal.inPlace, 'the dialog is marked for an in-place close');
-  const dialog = f.document.querySelector('.rc-app');
+  const dialog = f.document.querySelector('.rc-person');
   assert.ok(dialog, 'the veil is in the document');
-  assert.equal(dialog.dataset.app, 'in-1');
-  assert.match(dialog.querySelector('[data-rc="app-nav"]').innerHTML, /1 of 2/);
-  assert.ok(f.requests.some((r) => r.url.endsWith('/applications/in-2')), 'the neighbour loads ahead of time');
-  const next = dialog.querySelector('[data-action="recruit-app-next"]');
-  next.focus();
-  f.run('recruitStepApp(1)');
+  assert.equal(dialog.dataset.person, 'two@cornell.edu');
+  assert.match(dialog.querySelector('[data-rc="person-identity"]').innerHTML, /Two<\/h3>/, 'the sheet row names the person before their detail arrives');
+  assert.match(dialog.querySelector('[data-rc="person-nav"]').innerHTML, /2 of 2/, 'Previous and Next walk the sheet, one entry per person');
+  const detailReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-a/people/two%40cornell.edu');
+  assert.ok(detailReq, 'the person loads by email');
+  assert.ok(f.requests.some((r) => r.url === '/recruit/cycles/cy-a/people/%22x%22%40cornell.edu'), 'the neighbour loads ahead of time');
+  const prev = dialog.querySelector('[data-action="recruit-person-prev"]');
+  prev.focus();
+  f.run('recruitStepPerson(-1)');
   assert.equal(f.renders.length, 0, 'stepping never re-renders: the window stays');
-  assert.equal(f.ctx.UI.modal.id, 'in-2');
-  assert.equal(dialog.dataset.app, 'in-2');
-  assert.match(dialog.querySelector('[data-rc="app-identity"]').innerHTML, /two@cornell\.edu/, 'the head repaints in place');
-  assert.match(dialog.querySelector('[data-rc="app-nav"]').innerHTML, /2 of 2/);
-  assert.ok(dialog.querySelector('[data-action="recruit-app-next"]').disabled, 'Next stays drawn, disabled at the end');
+  assert.equal(f.ctx.UI.modal.email, '"x"@cornell.edu');
+  assert.equal(dialog.dataset.person, '"x"@cornell.edu');
+  assert.match(dialog.querySelector('[data-rc="person-nav"]').innerHTML, /1 of 2/);
+  assert.ok(dialog.querySelector('[data-action="recruit-person-prev"]').disabled, 'Previous stays drawn, disabled at the start');
   assert.ok(dialog.contains(f.document.activeElement), 'focus stays in the dialog');
-  f.run('recruitStepApp(1)');
-  assert.equal(f.ctx.UI.modal.id, 'in-2', 'a spare click at the end is harmless');
-  f.run('recruitStepApp(-1)');
-  assert.equal(f.ctx.UI.modal.id, 'in-1'); assert.equal(f.renders.length, 0);
-  console.log('PASS: Previous and Next swap the application inside the open dialog without a render, prefetch neighbours, and keep focus');
+  f.run('recruitStepPerson(-1)');
+  assert.equal(f.ctx.UI.modal.email, '"x"@cornell.edu', 'a spare click at the start is harmless');
+  f.run('recruitStepPerson(1)');
+  assert.equal(f.ctx.UI.modal.email, 'two@cornell.edu'); assert.equal(f.renders.length, 0);
+  console.log('PASS: Previous and Next swap the person inside the open dialog without a render, prefetch neighbours, and keep focus');
 }
 
 /* ------------------------------- people ---------------------------------- */
@@ -490,39 +494,46 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const req = f.requests.find((r) => r.url === '/recruit/cycles/cy-a/people');
   assert.ok(req, 'the People tab loads everyone once');
   assert.match(f.app.innerHTML, /Loading…/);
+  assert.match(f.app.innerHTML, /data-m="recruit-people-filter"/, 'People filters by flag and comments');
+  assert.match(f.app.innerHTML, /people\.csv/, 'a lead can export the people');
   req.resolve({ rows: [
-    { email: 'a@cornell.edu', name: 'Ada', cornell: true, subteam: 'Software', year: 'Junior', first: 1, last: 3, latest: 'p-a2', sections: {
-      interest: { id: 'p-a1', section: 'interest', name: 'Ada', email: 'a@cornell.edu', ts: 1, flagged: false, comments: 0 },
-      coffee: { id: 'p-a2', section: 'coffee', name: 'Ada', email: 'a@cornell.edu', ts: 3, flagged: true, comments: 2 } } },
-    { email: 'b@cornell.edu', name: '<b>Bo</b>', cornell: true, subteam: '', year: null, first: 2, last: 2, latest: 'p-b1', sections: {
-      application: { id: 'p-b1', section: 'application', name: '<b>Bo</b>', email: 'b@cornell.edu', ts: 2, flagged: false, comments: 0 } } },
-  ], total: 2, counts: { people: 2, bySection: { interest: 1, coffee: 1, application: 1 } } });
+    { email: 'a@cornell.edu', name: 'Ada', cornell: true, subteam: 'Software', year: 'Junior', first: 1, last: 3, latest: 'p-a2', flagged: true, comments: 2, reviewVersion: 3, sections: {
+      interest: { id: 'p-a1', section: 'interest', name: 'Ada', email: 'a@cornell.edu', ts: 1 },
+      coffee: { id: 'p-a2', section: 'coffee', name: 'Ada', email: 'a@cornell.edu', ts: 3 } } },
+    { email: 'b@cornell.edu', name: '<b>Bo</b>', cornell: true, subteam: '', year: null, first: 2, last: 2, latest: 'p-b1', flagged: false, comments: 0, reviewVersion: 0, sections: {
+      application: { id: 'p-b1', section: 'application', name: '<b>Bo</b>', email: 'b@cornell.edu', ts: 2 } } },
+  ], total: 2, counts: { people: 2, flagged: 1, bySection: { interest: 1, coffee: 1, application: 1 } } });
   await f.settle();
   assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'people paint in place');
   const body = f.app.querySelector('[data-rc="people-rows"]');
   assert.equal(body.querySelectorAll('tr').length, 2, 'one row per person');
   assert.match(body.innerHTML, /&lt;b&gt;Bo&lt;\/b&gt;/); assert.doesNotMatch(body.innerHTML, /<b>Bo/);
-  assert.equal(body.querySelectorAll('[data-action="recruit-app-open"][data-id="p-a2"]').length, 2, 'the person opens their latest submission; the coffee cell opens the same one');
-  assert.ok(body.querySelector('[data-action="recruit-app-open"][data-id="p-a1"]'), 'each form they sent opens on its own');
-  assert.match(body.innerHTML, /rc-sent__flag/); assert.match(body.innerHTML, /rc-sent__n[^>]*>2</, 'flags and comment counts show on the cell');
-  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 interest · 1 coffee chat · 1 application');
+  assert.equal(body.querySelectorAll('[data-action="recruit-person-open"][data-email="a@cornell.edu"]').length, 3, 'the name and each form they sent open the person');
+  assert.equal(body.querySelector('[data-action="recruit-person-open"][data-email="a@cornell.edu"][data-form="interest"]').dataset.form, 'interest', 'a form cell opens the person at that form');
+  const ada = body.querySelector('tr[data-email="a@cornell.edu"]');
+  assert.match(ada.innerHTML, /rc-person__flag/); assert.match(ada.innerHTML, /rc-person__n[^>]*>(?:<svg[\s\S]*?<\/svg>)?2</, 'the flag and the thread size sit with the name');
+  assert.doesNotMatch(body.querySelector('tr[data-email="b@cornell.edu"]').innerHTML, /rc-person__marks/);
+  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 interest · 1 coffee chat · 1 application · 1 flagged');
   const q = f.app.querySelector('[data-m="recruit-people-q"]');
   q.value = 'bo'; assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' }), true);
   assert.equal(f.app.querySelector('[data-rc="people-rows"]').querySelectorAll('tr').length, 1, 'search narrows the list in place');
   assert.equal(f.app.querySelector('[data-rc="people-foot"]').textContent, '1 of 2 people');
   q.value = ''; f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' });
-  f.run("recruitOpenApp('p-a1')");
-  assert.equal(f.ctx.UI.modal.id, 'p-a1');
-  assert.ok(f.document.querySelector('.rc-app'), 'a submission opens from the People tab without the section sheet');
-  assert.match(f.document.querySelector('.rc-app [data-rc="app-nav"]').innerHTML, /1 of 2/, 'Previous and Next count people');
-  f.run('recruitStepApp(1)');
-  assert.equal(f.ctx.UI.modal.id, 'p-b1', 'Next moves to the next person');
-  f.run('recruitStepApp(-1)');
-  assert.equal(f.ctx.UI.modal.id, 'p-a2', 'Previous lands on the earlier person\'s latest submission');
-  f.ctx.st = st;
-  f.run("recruitAcceptRow({ id: 'p-a2', flagged: false, comments: 3 })");
-  assert.doesNotMatch(f.app.querySelector('[data-rc="people-rows"]').innerHTML, /rc-sent__flag/, 'review changes repaint the person\'s cell');
-  console.log('PASS: People lists everyone across the three forms, escapes, searches in place, opens any submission, and steps by person');
+  const filter = f.app.querySelector('[data-m="recruit-people-filter"]');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(filter); f.menus.at(-1).items.find((i) => i.label === 'Flagged').run();
+  assert.equal(f.app.querySelector('[data-rc="people-rows"]').querySelectorAll('tr').length, 1, 'the flag filter keeps the flagged');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(filter); f.menus.at(-1).items.find((i) => i.label === 'All people').run();
+  assert.equal(f.app.querySelector('[data-rc="people-rows"]').querySelectorAll('tr').length, 2);
+  f.run("recruitOpenPerson('a@cornell.edu', { form: 'interest' })");
+  assert.equal(f.ctx.UI.modal.email, 'a@cornell.edu');
+  assert.ok(f.document.querySelector('.rc-person'), 'a person opens from the People tab without the section sheet');
+  assert.match(f.document.querySelector('.rc-person [data-rc="person-nav"]').innerHTML, /1 of 2/, 'Previous and Next count people');
+  assert.match(f.document.querySelector('.rc-person [data-rc="person-flag"]').innerHTML, /aria-pressed="true"/, 'the flag shows before the detail arrives');
+  f.run('recruitStepPerson(1)');
+  assert.equal(f.ctx.UI.modal.email, 'b@cornell.edu', 'Next moves to the next person');
+  f.run("recruitAcceptPersonReview('a@cornell.edu', { person: { email: 'a@cornell.edu', name: 'Ada', flagged: false, review: { comments: [] }, reviewVersion: 4 } })");
+  assert.doesNotMatch(f.app.querySelector('tr[data-email="a@cornell.edu"]').innerHTML, /rc-person__marks/, 'review changes repaint the person\'s row');
+  console.log('PASS: People lists everyone across the three forms with their flag and thread, escapes, searches and filters in place, opens any person at any form, and steps by person');
 }
 
 /* ------------------------------- loaders --------------------------------- */
@@ -600,13 +611,18 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   console.log('PASS: the sync loop repaints counts in place and stays quiet behind dialogs');
 }
 
-/* ------------------------------- detail dialog --------------------------- */
+/* ------------------------------- person dialog --------------------------- */
 {
   const f = fixture();
   const st = loadCycle(f);
+  const email = '"x"@cornell.edu';
+  const path = '/recruit/cycles/cy-a/people/%22x%22%40cornell.edu';
   const first = { id: 'ic-first', text: 'Existing <comment>', name: 'Reviewer', by: 'r@cornell.edu', ts: 1 };
-  st.detail['in-1'] = { application: { id: 'in-1', name: '<img src=x onerror=alert(1)>', email: '"x"@cornell.edu', ts: 1, stage: 'applied', answers: { project: 'A <robot>' }, files: [{ id: 'int-1', name: 'cv.pdf', size: 2048 }], review: { comments: [first] }, reviewVersion: 1, editVersion: 2, tags: ['<b>'] }, form: { questions: [{ key: 'project', type: 'long', label: 'Coolest project' }] }, scores: [], history: [{ cycleId: 'cy-old', cycleName: 'Spring 2025', outcome: 'rejected' }], audit: [{ id: 'au-1', ts: 1, actor: 'r@cornell.edu', kind: 'stage', detail: { to: 'applied' } }] };
-  f.ctx.UI.modal = { kind: 'recruit-app', id: 'in-1' };
+  st.persons = { [email]: { person: { email, name: '<img src=x onerror=alert(1)>', flagged: false, review: { comments: [first] }, reviewVersion: 1, latest: 'in-1' }, submissions: [
+    { application: { id: 'in-1', name: '<img src=x onerror=alert(1)>', email, ts: 1, section: 'interest', subteam: 'Electrical', year: 'Junior', answers: { project: 'A <robot>' }, files: [{ id: 'int-1', name: 'cv.pdf', size: 2048 }] }, form: { questions: [{ key: 'project', type: 'long', label: 'Coolest project' }] } },
+    { application: { id: 'in-1c', name: '<img src=x onerror=alert(1)>', email, ts: 5, section: 'coffee', subteam: '', year: null, answers: { availability: 'Tuesdays' }, files: [] }, form: { questions: [{ key: 'availability', type: 'long', label: 'When are you free?' }] } },
+  ], history: [{ cycleId: 'cy-old', cycleName: 'Spring 2025', section: 'interest', ts: 1 }] } };
+  f.ctx.UI.modal = { kind: 'recruit-person', email, form: 'interest' };
   f.mount();
   const veil = f.mountModal();
   const html = veil.innerHTML;
@@ -615,18 +631,27 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.match(html, /href="\/api\/recruit\/files\/int-1" download="cv\.pdf"/, 'files link only the authenticated route');
   assert.match(html, /Also sent Spring 2025/); assert.doesNotMatch(html, /<select/);
   assert.match(html, /1 of 2<\/span>/); assert.match(html, /data-action="modal-close"/);
+  assert.equal(veil.querySelectorAll('[data-action="recruit-person-form"]').length, 2, 'both forms they sent are offered');
+  assert.equal(veil.querySelector('[data-action="recruit-person-form"][data-form="interest"]').getAttribute('aria-current'), 'page');
+  // Switching forms repaints the answers, not the thread.
+  const thread = veil.querySelector('.interest-thread');
+  await f.run('RECRUIT.click.bind(RECRUIT)')('recruit-person-form', veil.querySelector('[data-action="recruit-person-form"][data-form="coffee"]'), { stopPropagation() {} }, () => {});
+  assert.match(veil.querySelector('[data-rc="person-main"]').innerHTML, /Tuesdays/, 'the coffee chat answers show');
+  assert.doesNotMatch(veil.querySelector('[data-rc="person-main"]').innerHTML, /A &lt;robot&gt;/);
+  assert.ok(veil.querySelector('.interest-thread') === thread, 'the thread is the person\'s, untouched by the form switch');
   const field = veil.querySelector('.interest-compose textarea');
   field.value = 'New <comment>';
   assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(field, { type: 'input' }), true);
-  const draft = st.drafts['in-1'];
+  const draft = st.drafts['person:' + email];
   assert.equal(draft.text, 'New <comment>');
   const existingNode = veil.querySelector('[data-comment-id="ic-first"]');
   // A background refresh brings a second comment and a changed answer.
   const second = { id: 'ic-second', text: 'Later', name: 'Lead', ts: 2 };
-  f.run('recruitLoadDetail')('in-1', { quiet: true });
-  const req = f.requests.find((r) => r.url === '/recruit/cycles/cy-a/applications/in-1');
+  f.run('recruitLoadPerson')(email, { quiet: true });
+  const req = f.requests.find((r) => r.url === path);
   assert.ok(req.signal instanceof AbortSignal);
-  req.resolve({ application: { ...st.detail['in-1'].application, review: { comments: [first, second] }, reviewVersion: 2, answers: { project: 'Changed' } }, form: st.detail['in-1'].form, history: [], audit: [] });
+  const before = st.persons[email];
+  req.resolve({ person: { ...before.person, review: { comments: [first, second] }, reviewVersion: 2 }, submissions: before.submissions.map((x) => (x.application.section === 'coffee' ? { ...x, application: { ...x.application, answers: { availability: 'Changed' } } } : x)), history: before.history });
   await f.settle();
   assert.equal(field.value, 'New <comment>', 'the composer keeps its unsent text across a background refresh');
   assert.equal(field.isConnected, true, 'the composer node is never replaced');
@@ -634,41 +659,42 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.ok(veil.querySelector('[data-comment-id="ic-first"]') === existingNode, 'existing comments keep their DOM identity');
   assert.ok(veil.querySelector('[data-comment-id="ic-second"]'), 'new comments are appended');
   assert.equal(veil.querySelector('.interest-subhead .count').textContent, '2');
-  assert.match(veil.querySelector('[data-rc="app-main"]').innerHTML, /Changed/, 'answers repaint in place');
+  assert.match(veil.querySelector('[data-rc="person-main"]').innerHTML, /Changed/, 'answers repaint in place');
   assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'the open dialog is never remounted');
   // Posting keeps its id across a timeout, then succeeds.
-  const posting = f.run("recruitPostComment('in-1')");
+  const posting = f.run('recruitPostPersonComment')(email);
   assert.equal(field.readOnly, true);
-  const post = f.requests.find((r) => r.method === 'POST' && r.url.endsWith('/in-1/comments'));
+  const post = f.requests.find((r) => r.method === 'POST' && r.url === path + '/comments');
   assert.match(post.body.id, /^ic-/); assert.equal(post.body.text, 'New <comment>'); assert.ok(post.signal instanceof AbortSignal);
   post.reject(Object.assign(new Error('Timed out'), { name: 'TimeoutError' })); await posting;
   assert.match(veil.querySelector('[data-comment-error]').textContent, /retrying will not post it twice/);
   assert.equal(field.value, 'New <comment>'); assert.equal(field.readOnly, false);
-  const retry = f.run("recruitPostComment('in-1')");
-  const post2 = f.requests.filter((r) => r.method === 'POST' && r.url.endsWith('/in-1/comments'))[1];
+  const retry = f.run('recruitPostPersonComment')(email);
+  const post2 = f.requests.filter((r) => r.method === 'POST' && r.url === path + '/comments')[1];
   assert.equal(post2.body.id, post.body.id, 'a lost response is retried with the same ic- id');
   const saved = { id: post2.body.id, text: 'New <comment>', name: 'Lead', ts: 3 };
-  post2.resolve({ application: { id: 'in-1', reviewVersion: 3, review: { comments: [first, second, saved] } } }); await retry;
+  post2.resolve({ person: { email, name: 'X', flagged: false, reviewVersion: 3, review: { comments: [first, second, saved] } } }); await retry;
   assert.equal(f.toasts.at(-1), 'Comment posted'); assert.equal(field.value, '');
   assert.match(veil.querySelector('.interest-thread').innerHTML, /New &lt;comment&gt;/);
-  assert.equal(st.apps.byId['in-1'].comments, 3, 'the row mirrors the thread size'); assert.equal(f.renders.length, 0);
+  assert.equal(f.renders.length, 0);
   // Deleting confirms inline and toasts.
-  f.run("recruitConfirmCommentRemoval('in-1', 'ic-first')");
+  f.run('recruitConfirmPersonCommentRemoval')(email, 'ic-first');
   assert.match(existingNode.innerHTML, /Delete this comment\?/);
-  const deleting = f.run("recruitDeleteComment('in-1', 'ic-first')");
+  const deleting = f.run('recruitDeletePersonComment')(email, 'ic-first');
   const del = f.requests.find((r) => r.method === 'DELETE');
-  assert.equal(del.url, '/recruit/cycles/cy-a/applications/in-1/comments/ic-first');
-  del.resolve({ application: { id: 'in-1', reviewVersion: 4, review: { comments: [second, saved] } } }); await deleting;
+  assert.equal(del.url, path + '/comments/ic-first');
+  del.resolve({ person: { email, name: 'X', flagged: false, reviewVersion: 4, review: { comments: [second, saved] } } }); await deleting;
   assert.equal(f.toasts.at(-1), 'Comment deleted'); assert.equal(veil.querySelector('[data-comment-id="ic-first"]'), null);
-  // Flag round trip.
-  const flagging = f.run("recruitToggleFlag('in-1')");
+  // Flag round trip, on the person.
+  const flagging = f.run('recruitTogglePersonFlag')(email);
   const patch = f.requests.find((r) => r.method === 'PATCH');
-  same(patch.body, { flagged: true });
-  patch.resolve({ application: { id: 'in-1', reviewVersion: 5, review: { flagged: true, comments: [second, saved] } } }); await flagging;
-  assert.equal(st.apps.byId['in-1'].flagged, true); assert.equal(f.toasts.at(-1), 'Flagged for follow-up');
-  // Previous / Next walk the visible list.
-  f.run('recruitStepApp(1)'); assert.equal(f.ctx.UI.modal.id, 'in-2'); assert.equal(f.renders.length, 0, 'stepping swaps the application in place; the dialog never remounts');
-  console.log('PASS: the application dialog escapes everything, keeps a dirty comment draft across background refreshes, retries with the same ic- id, and never remounts while open');
+  assert.equal(patch.url, path + '/review'); same(patch.body, { flagged: true });
+  patch.resolve({ person: { email, name: 'X', flagged: true, reviewVersion: 5, review: { flagged: true, comments: [second, saved] } } }); await flagging;
+  assert.equal(st.persons[email].person.flagged, true); assert.equal(f.toasts.at(-1), 'Flagged for follow-up');
+  assert.match(veil.querySelector('[data-rc="person-flag"]').innerHTML, /aria-pressed="true"/);
+  // Previous / Next walk the sheet by person.
+  f.run('recruitStepPerson(1)'); assert.equal(f.ctx.UI.modal.email, 'two@cornell.edu'); assert.equal(f.renders.length, 0, 'stepping swaps the person in place; the dialog never remounts');
+  console.log('PASS: the person dialog escapes everything, switches between the forms they sent, keeps a dirty comment draft across background refreshes, retries with the same ic- id, flags the person, and never remounts while open');
 }
 
 /* ------------------------------- merges + toasts ------------------------- */
@@ -688,11 +714,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   // Bulk delete: a typed confirm, one DELETE per id, rows drop, dialog on a removed row closes.
   f.run("recruitConfirmRemoval(['in-1', 'in-2'])");
   assert.equal(f.ctx.UI.modal.kind, 'confirm'); assert.equal(f.ctx.UI.modal.typed, 'delete applications'); assert.equal(f.ctx.UI.modal.danger, true);
-  const go = f.ctx.UI.modal.onGo; f.ctx.UI.modal = { kind: 'recruit-app', id: 'in-1' };
+  const go = f.ctx.UI.modal.onGo; f.ctx.UI.modal = { kind: 'recruit-person', email: '"x"@cornell.edu' };
   const removing = go();
   const dels = f.requests.filter((r) => r.method === 'DELETE');
   assert.equal(dels.length, 2); dels.forEach((r) => r.resolve({ ok: true })); await removing;
-  assert.equal(st.apps.rows.length, 0); assert.equal(f.closes.length, 1, 'the dialog of a deleted application closes');
+  assert.equal(st.apps.rows.length, 0); assert.equal(f.closes.length, 1, 'an open person dialog closes when submissions are deleted');
   assert.equal(f.toasts.at(-1), 'Deleted 2 applications');
   console.log('PASS: rows merge only when editVersion is not older, copy and delete toast their counts, and removal closes the open dialog');
 }
