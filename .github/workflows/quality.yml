@@ -40,5 +40,6 @@ jobs:
           node scripts/test-overlay-keyboard.mjs
           node scripts/test-interest-archive-load.mjs
           node scripts/test-session.mjs
+          node scripts/test-hardening.mjs
       - name: Verify the committed preview build is current
         run: git diff --exit-code -- docs

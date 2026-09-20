@@ -13,6 +13,7 @@ import { meaningSearch, validateMeaningSearch } from '../lib/meaning-search.js';
 import { getAiSettings } from '../lib/db.js';
 import { aiUsageLedger } from '../lib/ai-usage.js';
 import { AI_MODELS, aiPublicSettings, validateAiSettings, sealAiKey, resolveAiConnection } from '../lib/ai-settings.js';
+import { attachmentHeaders } from '../lib/attachment-headers.js';
 
 // Best-effort per-instance spacing so one member cannot firehose PRs.
 const bugLast = new Map();
@@ -428,7 +429,7 @@ export default async function handler(req, res) {
         const actor = s.users.find((u) => u.email === email && u.status === 'active');
         if (!actor) { opStatus = 401; opError = 'Not signed in'; return false; }
         const r = applyOp(s, op, args, actor.email, actor.role);
-        if (r.error) { opError = r.error; return false; }
+        if (r.error) { opError = typeof r.error === 'string' ? r.error : 'Unknown op'; return false; }
         opResult = r.result;
         return s;
       });
@@ -511,9 +512,7 @@ export default async function handler(req, res) {
       const f = await getFile(attMatch[1]);
       if (!f) return json(res, 404, { error: 'No such file' });
       res.statusCode = 200;
-      res.setHeader('content-type', f.type || 'application/octet-stream');
-      res.setHeader('content-disposition', `inline; filename="${encodeURIComponent(f.name)}"`);
-      res.setHeader('cache-control', 'private, max-age=31536000, immutable');
+      for (const [k, v] of Object.entries(attachmentHeaders(f))) res.setHeader(k, v);
       return res.end(Buffer.from(f.data));
     }
 
