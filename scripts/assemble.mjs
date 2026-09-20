@@ -78,7 +78,8 @@ export function styles() {
 @font-face{font-family:'Questrial';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,${b64('questrial.woff2')}) format('woff2');}
 ${read('styles.css')}
 ${read('search.css')}
-${read('glass.css')}`;
+${read('glass.css')}
+${read('recruit.css')}`;
 }
 
 // Binary assets are injected ahead of the app code as constants.
@@ -99,6 +100,17 @@ const CRAB_URI = 'data:image/webp;base64,${b64('crab-380.webp')}';`;
     read('ui3.js'),
     read('search.js'),
     read('ai.js'),
+    read('recruit-core.js'),
+    read('recruit-cycles.js'),
+    read('recruit-applications.js'),
+    read('recruit-roles.js'),
+    read('recruit-pipeline.js'),
+    read('recruit-review.js'),
+    read('recruit-forms.js'),
+    read('recruit-interviews.js'),
+    read('recruit-comms.js'),
+    read('recruit-analytics.js'),
+    read('recruit-onboarding.js'),
     ...(remote ? [readFileSync(new URL('../src/remote.js', import.meta.url), 'utf8')] : []),
     read('main.js'),
     read('glass.js'),

@@ -1,0 +1,124 @@
+/* ---------------------------------------------------------------------------
+   Applications (recruit): the cycle tabs, the stage strip, sheet column
+   widths by data-col, settings forms, tags, and the scorecard. Tokens only;
+   every surface reuses .sheet / .admin-block / .modal / .menu.
+   ------------------------------------------------------------------------- */
+
+/* Cycle tabs: a hairline rail, the current tab underlined in ink. */
+.rc-tabs { display: flex; gap: 2px; margin: -6px 0 22px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: none; }
+.rc-tabs::-webkit-scrollbar { display: none; }
+.rc-tabs [role="tab"] {
+  flex: none; padding: 8px 12px 10px; margin-bottom: -1px;
+  font-size: 13.5px; color: var(--muted); text-decoration: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0;
+}
+.rc-tabs [role="tab"]:hover { color: var(--fg); background: var(--hover); }
+.rc-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+.rc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+.rc-panel { animation: rc-fade 160ms ease-out; }
+@keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rc-panel { animation: none; } }
+
+/* Stage strip: one button per stage with its count; the pressed one is ink. */
+.rc-strip { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.rc-strip__stage {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--page);
+  font: inherit; font-size: 13px; color: var(--muted); cursor: pointer;
+}
+.rc-strip__stage:hover { background: var(--hover); color: var(--fg); }
+.rc-strip__stage[aria-pressed="true"] { color: var(--fg); border-color: var(--fg); }
+.rc-strip__stage:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.rc-strip__n { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--faint); }
+.rc-strip__stage[aria-pressed="true"] .rc-strip__n { color: var(--fg); }
+
+/* Sheet columns by name, so a module column never shifts the fixed ones. */
+.sheet.sheet--recruit table { min-width: 860px; }
+.sheet.sheet--recruit table { min-width: 960px; }
+.sheet.sheet--recruit th[data-col="check"] { width: 52px; }
+.sheet.sheet--recruit th[data-col="person"] { width: auto; }
+.sheet.sheet--recruit th[data-col="year"] { width: 84px; }
+.sheet.sheet--recruit th[data-col="subteam"] { width: 118px; }
+.sheet.sheet--recruit th[data-col="stage"] { width: 104px; }
+.sheet.sheet--recruit th[data-col="score"] { width: 76px; }
+.sheet.sheet--recruit th[data-col="interview"] { width: 104px; }
+.sheet.sheet--recruit th[data-col="received"] { width: 88px; }
+.sheet.sheet--recruit th[data-col="review"] { width: 104px; }
+.sheet.sheet--recruit th[data-col]:not([data-col="check"]):not([data-col="person"]):not([data-col="received"]):not([data-col="review"]):not([data-col="year"]):not([data-col="subteam"]):not([data-col="stage"]):not([data-col="score"]):not([data-col="interview"]) { width: 110px; }
+.sheet.sheet--recruit .sheet__foot .linklike { margin-left: 4px; }
+@container (max-width: 36em) {
+  .sheet.sheet--recruit th[data-col], .sheet.sheet--recruit td[data-col] { display: none; }
+  .sheet.sheet--recruit th[data-col="check"], .sheet.sheet--recruit td[data-col="check"],
+  .sheet.sheet--recruit th[data-col="person"], .sheet.sheet--recruit td[data-col="person"],
+  .sheet.sheet--recruit th[data-col="stage"], .sheet.sheet--recruit td[data-col="stage"],
+  .sheet.sheet--recruit th[data-col="review"], .sheet.sheet--recruit td[data-col="review"] { display: table-cell; }
+  .sheet.sheet--recruit th[data-col="stage"] { width: 96px; }
+}
+
+/* Settings forms: one column of labelled fields, actions on a footer rail. */
+.rc-settings .admin-block { max-width: 640px; }
+.rc-form { display: flex; flex-direction: column; gap: 14px; }
+.rc-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
+.rc-field .sub, .rc-checks .sub { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.rc-field .text-input { width: 100%; }
+.rc-form__foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.rc-checks { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.rc-check { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
+.rc-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--fg); flex: none; position: relative; top: 2px; }
+.rc-rows { display: flex; flex-direction: column; gap: 8px; }
+.rc-row { display: flex; align-items: center; gap: 8px; }
+.rc-row .text-input { flex: 1; min-width: 0; }
+.rc-row .rc-row__num { flex: 0 0 84px; font-variant-numeric: tabular-nums; }
+.rc-row .icon-btn { flex: none; }
+.rc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rc-index__tools { display: flex; justify-content: flex-end; margin: -8px 0 10px; }
+
+/* Application dialog additions on top of the interest-review layout. */
+.rc-history { margin: -8px 0 20px; font-size: 13px; color: var(--muted); }
+.rc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; font-size: 13px; }
+.rc-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 9px; border: 1px solid var(--hairline); border-radius: 999px; font-size: 12.5px; }
+.rc-tag__x { display: inline-grid; place-items: center; width: 20px; height: 20px; border: 0; padding: 0; background: none; color: var(--faint); cursor: pointer; border-radius: 999px; }
+.rc-tag__x:hover { color: var(--fg); background: var(--hover); }
+.rc-tag__x svg { width: 11px; height: 11px; }
+.rc-tag-form { display: flex; gap: 8px; margin: 0 0 22px; }
+.rc-tag-form .text-input { flex: 1; min-width: 0; height: 34px; }
+.rc-tag-form .btn { min-height: 34px; }
+.rc-section { margin-bottom: 26px; }
+.rc-audit--compact .audit__row { min-height: 34px; padding: 6px 0; font-size: 12.5px; }
+.rc-audit--compact .audit__when { width: 88px; }
+.rc-import-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .rc-import-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* Scorecard (review module): criteria rows with 1…n toggles as buttons. */
+.rc-scorecard { display: flex; flex-direction: column; gap: 14px; }
+.rc-scorecard__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.rc-scorecard__name { font-size: 13.5px; font-weight: 500; }
+.rc-scorecard__help { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.rc-scorecard__scale { display: inline-flex; gap: 4px; }
+.rc-scorecard__scale .btn { min-width: 36px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.rc-scorecard__scale .btn[aria-pressed="true"] { background: var(--fg); color: var(--page); border-color: var(--fg); }
+.rc-scorecard__total { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+
+/* Scorecard: answers beside the form; criteria as rows of press buttons. */
+.rc-scorecard__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 860px) { .rc-scorecard__body { grid-template-columns: minmax(0, 1fr); } }
+.rc-scorecard__answers, .rc-scorecard__form { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.rc-scorecard__help { display: block; color: var(--muted); font-size: 12.5px; }
+.rc-scorecard__scale .btn[aria-pressed="true"] { background: var(--selected); color: var(--fg); border-color: var(--rule); }
+
+/* Plain lists inside panels and dialogs. */
+.rc-others, .rc-files, .rc-views { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rc-others li, .rc-files li, .rc-views li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* Settings rows: key · input · choice · icon buttons. */
+.rc-stage, .rc-criterion, .rc-form-section { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--hairline); }
+.rc-stage:first-child, .rc-criterion:first-child, .rc-form-section:first-child { border-top: 0; }
+.rc-stage--new, .rc-criterion--new, .rc-form-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; }
+.rc-stage--new .text-input, .rc-criterion--new .text-input, .rc-form-add .text-input { flex: 1; min-width: 160px; }
+
+/* Form builder: one block per question. */
+.rc-form-q { padding: 12px 0; border-top: 1px solid var(--hairline); }
+.rc-form-q__head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rc-form-q__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.rc-form-actions { display: flex; gap: 8px; flex-wrap: nowrap; }
+

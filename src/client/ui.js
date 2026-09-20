@@ -160,12 +160,12 @@ function route() {
   // "Applications" is the UI name for the intake list; the route stays
   // "interest" internally (API, store, tests) and the old hash keeps working.
   const raw = seg[0] || (me ? 'home' : 'login');
-  const name = raw === 'applications' ? 'interest' : raw;
+  const name = raw === 'applications' ? 'recruit' : raw;
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
-  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'integrations', 'trash', 'health', 'interest', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'integrations', 'trash', 'health', 'interest', 'recruit', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'home', params: {} }; nav('#/home'); return; }
-  UI.route = { name, params: { id: seg[1], ...params } };
+  UI.route = { name, params: { id: seg[1], sub: seg[2], ...params } };
 }
 
 /* ------------------------------- login ----------------------------------- */
@@ -287,7 +287,7 @@ function viewSidebar() {
     </button>
     <nav class="sidebar__nav">
       <a class="navlink ${r.name === 'home' ? 'active' : ''}" href="#/home">${I.home} Home</a>
-      ${Store.isAdmin() ? `<a class="navlink ${r.name === 'interest' ? 'active' : ''}" href="#/applications" title="Club applications, admins only">${I.mail} Applications</a>` : ''}
+      ${(Store.isAdmin() || UI.recruitMe?.cycles?.length) ? `<a class="navlink ${r.name === 'recruit' || r.name === 'interest' ? 'active' : ''}" href="#/applications" title="Club applications">${I.mail} Applications</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>
@@ -311,8 +311,10 @@ function viewSidebar() {
 // everything about the wiki itself rather than its pages. 'admin' is the
 // Members page; 'integrations' holds the AI and email connections.
 const SETTINGS_ROUTES = ['activity', 'health', 'admin', 'integrations', 'trash'];
+// Applications is a sidebar destination, not a settings one; the recruit
+// route keeps the sidebar link active instead of the gear.
 // Routes whose forms keep unsaved input across background re-renders.
-const ADMIN_FORM_ROUTES = ['admin', 'integrations'];
+const ADMIN_FORM_ROUTES = ['admin', 'integrations', 'recruit'];
 
 function topbar(crumbHtml, right) {
   return `<header class="topbar">

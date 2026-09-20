@@ -41,5 +41,7 @@ jobs:
           node scripts/test-interest-archive-load.mjs
           node scripts/test-session.mjs
           node scripts/test-hardening.mjs
+          npm run test:recruit
+          node --test scripts/test-recruit-contract.mjs scripts/test-recruit-mail.mjs
       - name: Verify the committed preview build is current
         run: git diff --exit-code -- docs

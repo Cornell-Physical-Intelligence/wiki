@@ -651,6 +651,7 @@ document.addEventListener('click', async (ev) => {
   const stop = () => { ev.preventDefault(); ev.stopPropagation(); };
   if (UI.editor?.saving) { stop(); return; }
 
+  if (act.startsWith('recruit-') && typeof RECRUIT !== 'undefined') { await RECRUIT.click(act, el, ev, stop); return; }
   switch (act) {
     /* ---- login ---- */
     case 'login-google': stop(); UI.chooser = true; UI.loginError = null; render(); break;
@@ -738,6 +739,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const host = el;
       if (host.dataset.m === 'interest-filter') { openInterestFilter(host); break; }
+      if (host.dataset.m.startsWith('recruit-') && typeof RECRUIT !== 'undefined') { RECRUIT.dd(host); break; }
       const options = JSON.parse(host.dataset.opts);
       openMenu(options.map((o) => ({
         selected: o.value === host.dataset.value,
@@ -1359,6 +1361,7 @@ document.addEventListener('submit', (ev) => {
   if (!form) return;
   ev.preventDefault();
   const act = form.dataset.action;
+  if (act && act.startsWith('recruit-') && typeof RECRUIT !== 'undefined') { RECRUIT.submit(form, ev); return; }
 
   if (act === 'interest-comment-form') { postInterestComment(form.dataset.id); return; }
 
@@ -1390,6 +1393,7 @@ document.addEventListener('compositionend', (ev) => {
   }
 });
 document.addEventListener('visibilitychange', () => {
+  if (typeof RECRUIT !== 'undefined') RECRUIT.sync();
   if (!document.hidden) { syncChangeSummary(); syncAiUsage(); }
 });
 
@@ -1397,6 +1401,7 @@ let previewTimer = null;
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (ADMIN_FORM_ROUTES.includes(UI.route.name) && t.closest('form[data-action]')) t.closest('form[data-action]').dataset.adminDirty = 'true';
+  if (t.dataset?.m?.startsWith('recruit-') && typeof RECRUIT !== 'undefined' && RECRUIT.input(t, ev)) return;
 
   if (t.matches('[data-m="member-q"]')) {
     UI.memberQuery = t.value;
@@ -1668,6 +1673,7 @@ document.addEventListener('click', (ev) => {
 }, true);
 
 document.addEventListener('change', (ev) => {
+  if (ev.target?.dataset?.m?.startsWith('recruit-') && typeof RECRUIT !== 'undefined' && RECRUIT.change(ev.target, ev)) return;
   const t = ev.target;
   if (t.matches('input[data-task]')) {
     const pageId = t.closest('[data-page]')?.dataset.page;
@@ -1862,6 +1868,7 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
+  if (UI.route?.name === 'recruit' && typeof RECRUIT !== 'undefined' && RECRUIT.keydown(ev)) return;
   if (UI.modal || typing || mod || ev.altKey) return;
 
   if (ev.key === '?') { ev.preventDefault(); UI.modal = { kind: 'shortcuts' }; render(); return; }

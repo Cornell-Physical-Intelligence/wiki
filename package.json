@@ -13,7 +13,8 @@
     "verify:live-seo": "node scripts/verify-live-seo.mjs",
     "check": "npm run build && npm run build:preview && npm run verify:seo",
     "dev": "npm run build && DEV_FAKE_AUTH=ab3233@cornell.edu node dev.mjs",
-    "start": "npm run build && node dev.mjs"
+    "start": "npm run build && node dev.mjs",
+    "test:recruit": "node scripts/test-recruit-kernel.mjs && node scripts/test-recruit-core.mjs && node scripts/test-recruit-pg.mjs && node scripts/test-recruit-pipeline.mjs && node scripts/test-recruit-review.mjs && node scripts/test-recruit-interviews.mjs && node scripts/test-recruit-analytics.mjs && node scripts/test-recruit-forms.mjs && node scripts/test-recruit-ui.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

@@ -34,13 +34,33 @@ No framework. The client is one self-contained HTML file (`scripts/build.mjs` as
 
 - `wiki_state` holds shared content and revision history. A version-matched compressed snapshot reduces database transfer; canonical JSONB remains available for cache repair.
 - `wiki_user_prefs` holds each member's stars, recent pages, watches, and display settings with a separate version. Saving preferences neither rewrites shared content nor forces other members to download it. Reads and writes return only the signed-in member's preferences; writes check active membership in the same database statement.
-- Existing preferences remain in the legacy state as a fallback until that member first saves. The first save copies and merges them into the new table. Include **both tables** in backups. A backend rollback must retain the new table and its read overlay, or newer personal settings will temporarily be hidden.
+- Existing preferences remain in the legacy state as a fallback until that member first saves. The first save copies and merges them into the new table. Include **both tables** in backups, plus every `recruit_*` table listed under Applications. A backend rollback must retain the new table and its read overlay, or newer personal settings will temporarily be hidden.
 - `/api/state?since=<content version>&prefsSince=<personal version>` checks both versions in one small query. A preferences-only change returns preferences without pages or attachment listings. Older open tabs can still save; reload them to receive cross-device preference changes without waiting for a content change.
 - Hidden tabs and tabs idle for five minutes pause polling. Preference saves are debounced and duplicate values are skipped. Server acknowledgments include the canonical saved values so validation limits cannot leave the client displaying unsaved settings.
 - Multipart page uploads retain their parts until the completed file is verified. A stable file ID makes finish retries reuse the same file after a lost response; cleanup failures do not invalidate a successful upload.
 - `wiki_ai_usage` holds shared OpenAI spending reservations, measured token costs, and request counters separately from content. Include it in backups and retain it across redeployments and rollbacks; deleting or restoring an older ledger can reset spending protection. Production uses atomic versioned updates across workers; local development uses `.devaiusage.json`.
 
-The public apply form feeds **Applications** (`#/applications`; the older `#/interest` hash still resolves), the admin-only list that will grow into the club's full application process: applications, interviews, and decisions. The API routes, storage, and tests keep the `interest` name. Submissions pass through a separate private Blob receipt journal before database processing. Its recovery path and browser draft protections are independent of wiki preference synchronization.
+### Applications (recruitment)
+
+The public apply form on the club site still posts to `POST /api/interest` with the same body and responses as before. Behind it, **Applications** (`#/applications`) is now a modular recruitment system under `lib/recruit/` and `src/client/recruit-*.js`:
+
+- **Cycles** (`recruit_cycles`, `recruit_settings`): many recruitment cycles, each with a status lifecycle (draft, open, closed, archived), term, dates, subteams, capacity, and per-module settings. Exactly one open cycle receives the website form; submissions land in it through the intake bridge (`lib/recruit/bridge.js`). With no receiving cycle, submissions fall back to the legacy inbox and can be adopted into a cycle later.
+- **Applications** (`recruit_applications`, `recruit_applicants`, `interest_receipts`): applicant identity across cycles, answers, files, tags, notes, comments, flags, and the update-by-email semantics of the fixed form.
+- **Pipeline**: configurable stages per cycle (default Applied, Screening, Interview, Decision, Offer, Waitlisted, Accepted, Declined, Rejected), single and bulk moves with an audit trail, decisions, saved views, filters and search.
+- **Review** (`recruit_assignments`, `recruit_scores`): manual and round-robin assignment, rubric scorecards, blind scoring until submitted, aggregates, conflict-of-interest marking, calibration.
+- **Interviews** (`recruit_slots`, `recruit_bookings`): rounds, slots with capacity, interviewer assignment from the roster, invitations with RSVP links, reschedule and no-show handling, interview scorecards.
+- **Emails** (`recruit_mail`): per-cycle templates with merge fields, preview, guarded batch send (one send per application and purpose), send log, automatic "received" mail.
+- **Analytics and export**: funnel, breakdowns by subteam and year, reviewer throughput, time in stage, formula-safe CSV per cycle or filtered view, retention purge and per-applicant erase.
+- **Onboarding** (`recruit_onboarding`): accepted applicants become wiki member invites through the same op the Members page uses.
+- **Roles and audit** (`recruit_roles`, `recruit_audit`, `recruit_requests`): admins manage everything; per-cycle leads, reviewers, and interviewers see what the cycle grants them; every mutation is audited and idempotent by request id.
+
+Server modules are plain objects (`lib/recruit/modules/*.js`) mounted by `lib/recruit/index.js` through one registry; `api/index.js` forwards `/api/recruit/*` with a single line. Client modules call `RECRUIT.register` and are concatenated after `ai.js`. Tables are created lazily per module with additive statements only, writes that must be atomic are single SQL statements, and every storage function has a memory branch (`.devrecruit.json`, gitignored) so `npm run dev` runs the whole feature. To add a module: create `lib/recruit/modules/<name>.js`, import it in `lib/recruit/index.js`, add `src/client/recruit-<name>.js` and one `read(...)` line in `scripts/assemble.mjs`, add `scripts/test-recruit-<name>.mjs` to `test:recruit`, and list its tables here.
+
+**Migration.** The current list and its archives are imported from the cycle index (admin, "Import the current list and archives"); the import is copy-only, idempotent, and resumable, and `interest_submissions` / `interest_archives` are left in place. `scripts/recruit-rollback.mjs --cycle cy-… [--dry-run]` reverses a cycle. Until the import runs, everything behaves as before. The legacy `#/interest` panel keeps rendering over a projection of the intake cycle until it is retired.
+
+**Backups** must include every `recruit_*` table above. Optional environment: `RECRUIT_RSVP_BASE` (RSVP link base, default the wiki URL) and `RECRUIT_TZ` (interview date wording, default `America/New_York`).
+
+Submissions pass through a separate private Blob receipt journal before database processing. Its recovery path and browser draft protections are independent of wiki preference synchronization.
 
 ## Deploy (≈10 minutes, one time)
 

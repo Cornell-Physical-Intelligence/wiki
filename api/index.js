@@ -6,6 +6,7 @@ import { applyOp, cleanPreferences, healWelcomeCrab } from '../lib/ops.js';
 import { makeSession, readSession, readSessionInfo, renewSession, sessionCookie, clearSessionCookie, oauthStart, oauthCallback } from '../lib/auth.js';
 import { sendWelcome, freshOauthToken } from '../lib/email.js';
 import { handleInterest } from '../lib/interest.js';
+import { handleRecruit, intakeBridge } from '../lib/recruit/index.js';
 import { fileBugPR } from '../lib/github.js';
 import { generateChangeSummary, validateChangeSummary } from '../lib/change-summary.js';
 import { reviewPage, validatePageReview } from '../lib/page-review.js';
@@ -126,25 +127,50 @@ export default async function handler(req, res) {
 
     if (path === '/auth/logout') return redirect(res, '/', [clearSessionCookie()]);
 
-    /* ---------------- interest-list component (self-contained) ------------- */
+    /* ---------------- self-contained modules: intake and recruitment ------ */
 
-    // Everything under /api/interest* belongs to lib/interest.js. The core
-    // hands it a small capability context and stays ignorant of the feature.
-    if (path === '/interest' || path === '/interest.csv' || path.startsWith('/interest/')) {
-      return await handleInterest(req, res, path, {
-        readJson,
-        host: req.headers.host,
-        clientId: OAUTH_CLIENT_ID,
-        me: async () => {
-          const who = process.env.DEV_FAKE_AUTH || readSession(req.headers.cookie);
-          if (!who) return null;
-          const { member } = await getMember(who);
-          return member?.status === 'active' ? member : null;
+    // Everything under /api/interest* belongs to lib/interest.js and everything
+    // under /api/recruit* to lib/recruit/. The core hands them one capability
+    // context and stays ignorant of the features. Both mount before the
+    // session gate: the website's form and RSVP links arrive without a cookie.
+    const modCtx = {
+      readJson,
+      host: req.headers.host,
+      clientId: OAUTH_CLIENT_ID,
+      me: async () => {
+        const who = process.env.DEV_FAKE_AUTH || readSession(req.headers.cookie);
+        if (!who) return null;
+        const { member } = await getMember(who);
+        return member?.status === 'active' ? member : null;
+      },
+      emailSettings: getEmailSettings,
+      saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }),
+      session: () => {
+        if (process.env.DEV_FAKE_AUTH) return {};
+        const info = readSessionInfo(req.headers.cookie);
+        const cookie = info && renewSession(info);
+        return cookie ? { 'set-cookie': cookie } : {};
+      },
+      wiki: {
+        // Onboarding invites accepted applicants through the same op admins
+        // use, re-checked against the current roster inside the write.
+        addMembers: async (emails, actorEmail) => {
+          let results = null, settings = null;
+          const out = await updateState((s) => {
+            const actor = s.users.find((u) => u.email === actorEmail && u.status === 'active' && u.role === 'admin');
+            if (!actor) return false;
+            const r = applyOp(s, 'addMembers', { emails, role: 'member' }, actor.email, actor.role);
+            if (r.error) return false;
+            results = r.result; settings = s.settings?.email || null;
+            return s;
+          });
+          return { results: results || [], settings: settings || out?.state?.settings?.email || null };
         },
-        emailSettings: getEmailSettings,
-        saveOauth: (next) => updateState((s) => { if (s.settings?.email?.oauth) s.settings.email.oauth = next; return s; }),
-      });
-    }
+        sendWelcome,
+      },
+    };
+    if (path === '/interest' || path === '/interest.csv' || path.startsWith('/interest/')) return await handleInterest(req, res, path, { ...modCtx, intake: intakeBridge });
+    if (path === '/recruit' || path.startsWith('/recruit/')) return await handleRecruit(req, res, path, modCtx);
 
     /* ------------------------------ session -------------------------------- */
 

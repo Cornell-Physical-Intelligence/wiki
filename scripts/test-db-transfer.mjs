@@ -59,6 +59,9 @@ if (!process.env.TRANSFER_TEST_ROOT) {
         return reply();
       }
       if (text.startsWith('ALTER TABLE')) return reply();
+      if (text.startsWith('CREATE INDEX') || text.startsWith('CREATE UNIQUE INDEX')) return reply();
+      if (text.startsWith('INSERT INTO recruit_settings')) return reply();
+      if (text.startsWith("SELECT s.doc->'migration'") || text.startsWith('SELECT version, doc FROM recruit_settings')) return reply([]);
       if (text === 'SELECT 1 FROM wiki_state WHERE id = 1') { this.ready = true; return reply([{ '?column?': 1 }]); }
       assert.ok(this.ready, 'queries must wait until initialization finishes');
       if (text.startsWith('INSERT INTO wiki_ai_usage')) {

@@ -211,6 +211,7 @@ document.addEventListener('keydown', (ev) => {
 /* --------------------------- shortcuts + move modal ------------------------ */
 
 function viewExtraModal(m) {
+  if (m.kind.startsWith('recruit-') && typeof RECRUIT !== 'undefined') return RECRUIT.modal(m);
   if (m.kind === 'shortcuts') {
     const rows = [
       ['⌘K', 'Search everything <span style="color:var(--faint)">· inserts a link while editing</span>'], ['N', 'New page'],

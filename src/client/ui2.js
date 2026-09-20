@@ -1788,6 +1788,7 @@ function render() {
   else if (r.name === 'admin') view = viewAdmin();
   else if (r.name === 'integrations') view = viewIntegrations();
   else if (r.name === 'interest') view = viewInterest();
+  else if (r.name === 'recruit') view = viewRecruit();
   else if (r.name === 'trash') view = viewTrash();
   else if (r.name === 'health') view = viewHealth();
   else if (r.name === 'new') {
@@ -1810,7 +1811,7 @@ function render() {
   }
   else view = topbar('<span class="crumbs__here">Home</span>') + `<div class="content search-home-content">${viewSearchHome()}</div>`;
 
-  const adminForms = ADMIN_FORM_ROUTES.includes(r.name) && UI._mountedRoute === r.name && !UI.editor && Store.isAdmin()
+  const adminForms = ADMIN_FORM_ROUTES.includes(r.name) && UI._mountedRoute === r.name && !UI.editor && (Store.isAdmin() || r.name === 'recruit')
     ? [...document.querySelectorAll('form[data-action]')].filter((form) => form.dataset.adminDirty === 'true' || form.dataset.adminPending === 'true') : [];
   const adminFocus = adminForms.some((form) => form.contains(document.activeElement)) ? document.activeElement : null;
   const palette = UI.palette && UI._mountedPalette === UI.palette ? $('.palette-veil') : null;
@@ -1893,6 +1894,7 @@ function render() {
       });
     UI.interestArchiveView.loading = 'pending';
   }
+  if (typeof RECRUIT !== 'undefined') RECRUIT.mount(r);
   $$('.video-embed__face').forEach(mountVideoMeta);
   if (UI.editor) {
     edUpdatePreview();
