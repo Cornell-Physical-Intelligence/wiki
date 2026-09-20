@@ -41,7 +41,8 @@ function recruitModeBarHtml(cycle, key, editing) {
   const status = !sec ? '' : !open ? '<span class="rc-mode__dot"></span>Closed on the website'
     : receiving === false ? '<span class="rc-mode__dot"></span>Open, but another cycle receives the website'
     : '<span class="rc-mode__dot rc-mode__dot--on"></span>Open on the website';
-  const link = open && receiving !== false ? `<a href="https://cornellphysicalintelligence.com/apply/?form=${encodeURIComponent(key)}" target="_blank" rel="noopener">See it</a>` : '';
+  // Every form has a page of its own on the club site; the link is the address.
+  const link = open && receiving !== false ? `<a href="https://cornellphysicalintelligence.com/apply/${encodeURIComponent(key)}/" target="_blank" rel="noopener" title="Open this form on the website">cornellphysicalintelligence.com/apply/${MD.esc(key)}</a>` : '';
   const responses = `Responses <span class="count" data-rc-count="${MD.esc(key)}">${count.toLocaleString('en-US')}</span>`;
   const seg = recruitCan('lead')
     ? `<nav class="rc-seg" aria-label="View"><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Form</a></nav>`
