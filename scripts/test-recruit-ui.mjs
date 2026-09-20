@@ -158,11 +158,15 @@ function fixture({ remote = true, admin = true } = {}) {
     openMenu(items, anchor) { menus.push({ items, anchor }); base.UI.menu = { items }; },
     runAdminForm: async (form, submit) => submit(),
     adminFormMessage() {},
+    // The shell's dialog helpers: a veil appended to the body, no route render.
+    viewModal() { return `<div class="modal-veil" data-action="modal-veil">${run('RECRUIT.modal(UI.modal)')}</div>`; },
+    captureModalFocus() {},
+    mountModalFocus() { document.body.querySelector('.modal [data-action="modal-close"]')?.focus(); },
   };
   if (remote) base.REMOTE = { pending: 0 };
   const ctx = vm.createContext(base);
-  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.forms + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
   const run = (code) => vm.runInContext(code, ctx);
+  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.forms + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   return { ctx, document, app, requests, renders, backgrounds, toasts, menus, navs, closes, run, settle,
     mount() { app.innerHTML = run('viewRecruit()'); return app; },
@@ -437,16 +441,17 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   f.ctx.st = st;
   st.detail['in-1'] = { application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', section: 'interest', answers: {}, files: [], review: { comments: [] } }, form: null, history: [], audit: [] };
   f.run("recruitOpenApp('in-1')");
-  assert.equal(f.renders.length, 1, 'opening renders the dialog once');
-  f.mountModal();
+  assert.equal(f.renders.length, 0, 'opening appends the dialog in place; the page behind it is not rebuilt');
+  assert.ok(f.ctx.UI.modal.inPlace, 'the dialog is marked for an in-place close');
   const dialog = f.document.querySelector('.rc-app');
+  assert.ok(dialog, 'the veil is in the document');
   assert.equal(dialog.dataset.app, 'in-1');
   assert.match(dialog.querySelector('[data-rc="app-nav"]').innerHTML, /1 of 2/);
   assert.ok(f.requests.some((r) => r.url.endsWith('/applications/in-2')), 'the neighbour loads ahead of time');
   const next = dialog.querySelector('[data-action="recruit-app-next"]');
   next.focus();
   f.run('recruitStepApp(1)');
-  assert.equal(f.renders.length, 1, 'stepping never re-renders: the window stays');
+  assert.equal(f.renders.length, 0, 'stepping never re-renders: the window stays');
   assert.equal(f.ctx.UI.modal.id, 'in-2');
   assert.equal(dialog.dataset.app, 'in-2');
   assert.match(dialog.querySelector('[data-rc="app-identity"]').innerHTML, /two@cornell\.edu/, 'the head repaints in place');
@@ -456,7 +461,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   f.run('recruitStepApp(1)');
   assert.equal(f.ctx.UI.modal.id, 'in-2', 'a spare click at the end is harmless');
   f.run('recruitStepApp(-1)');
-  assert.equal(f.ctx.UI.modal.id, 'in-1'); assert.equal(f.renders.length, 1);
+  assert.equal(f.ctx.UI.modal.id, 'in-1'); assert.equal(f.renders.length, 0);
   console.log('PASS: Previous and Next swap the application inside the open dialog without a render, prefetch neighbours, and keep focus');
 }
 

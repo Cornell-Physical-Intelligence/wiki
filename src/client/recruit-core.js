@@ -521,6 +521,19 @@ function viewRecruit() {
   return recruitCycleShellHtml(id);
 }
 
+// Open a dialog over the route as it stands. The page behind the veil is not
+// rebuilt, so nothing behind it moves or fades; render() is the fallback
+// where the shell helpers are missing (tests, previews).
+function recruitShowModal(m) {
+  UI.modal = m;
+  const inPlace = typeof viewModal === 'function' && typeof mountModalFocus === 'function' && Boolean($('#app .rc-panel'));
+  if (!inPlace) { render(); return; }
+  if (typeof captureModalFocus === 'function') captureModalFocus();
+  document.querySelector('.modal-veil')?.remove();
+  document.body.insertAdjacentHTML('beforeend', viewModal());
+  mountModalFocus();
+}
+
 // The cycle's name is the switch: the big title opens the list of cycles.
 function recruitCycleTitleHtml(cycle, options) {
   return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
@@ -556,7 +569,10 @@ function recruitCycleShellHtml(id) {
   if (active) {
     let inner = '';
     try { inner = active.module.view ? String(active.module.view(cycle, role, active.id) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this section: ${MD.esc(e.message || 'error')}</p>`; }
-    body = `<div class="rc-panel" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
+    // The panel fades in when it changes, never on a re-render of the same one.
+    const enter = st.paintedPanel !== cycle.id + ':' + active.id;
+    st.paintedPanel = cycle.id + ':' + active.id;
+    body = `<div class="rc-panel ${enter ? 'rc-panel--enter' : ''}" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
   } else body = `<div class="empty">${I.info}<b>Nothing to show for your role in this cycle</b></div>`;
   const head = `<div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>`;
   return recruitShellHtml(crumbs(MD.esc(cycle.name)), head + tabs + body, right);

@@ -2004,9 +2004,9 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-tabs [role="tab"]:hover { color: var(--fg); background: var(--hover); }
 .rc-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
-.rc-panel { animation: rc-fade 160ms ease-out; }
+.rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .rc-panel { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .rc-panel--enter { animation: none; } }
 /* Sheet columns by name, so a module column never shifts the fixed ones. */
 .sheet.sheet--recruit table { min-width: 860px; }
 .sheet.sheet--recruit table { min-width: 960px; }
@@ -2099,18 +2099,28 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe__desc { display: block; width: 100%; margin-top: 4px; padding: 4px 0; font: inherit; font-size: 14.5px; line-height: 1.55; color: var(--muted); resize: none; field-sizing: content; min-height: 30px; }
 .fe__desc:focus { color: var(--fg); }
 .fe__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.fe-q { border: 1px solid var(--hairline); border-radius: 12px; background: var(--page); padding: 16px 20px 12px; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+/* Cards follow the popup geometry: a 14px corner, controls inset 8px from
+   the edge with the matching 6px inner curve, and text a further 12px in. */
+.fe-q {
+  --card-radius: 14px; --card-inset: 8px; --card-border: 1px;
+  --card-pad: calc(var(--card-inset) - var(--card-border));
+  --card-inner: calc(max(0px, calc(var(--card-radius) - var(--card-inset))) * var(--popup-corner-scale, 1));
+  border: var(--card-border) solid var(--hairline); border-radius: calc(var(--card-radius) * var(--popup-corner-scale, 1));
+  background: var(--page); padding: var(--card-pad);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
 .fe-q:focus-within { border-color: var(--rule); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px rgba(0, 0, 0, 0.06); }
-.fe-q__head { display: flex; align-items: center; gap: 14px; }
-.fe-q__label { flex: 1; min-width: 0; padding: 3px 0; font: inherit; font-size: 15.5px; font-weight: 500; }
+.fe-q__head { display: flex; align-items: flex-start; gap: 14px; padding-left: 12px; }
+.fe-q__label { flex: 1; min-width: 0; height: 28px; padding: 0; font: inherit; font-size: 15.5px; font-weight: 500; }
 .fe-q__type { flex: none; }
-.fe-q__type--fixed { font-size: 12px; color: var(--faint); padding: 0 2px; white-space: nowrap; }
-.fe-q__help { display: block; width: 100%; margin-top: 2px; padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
-.fe-q__answer { margin: 14px 0 12px; }
+.fe-q .dd.fe-q__type { height: 28px; border-radius: var(--card-inner); }
+.fe-q__type--fixed { height: 28px; display: inline-flex; align-items: center; padding: 0 8px; font-size: 12px; color: var(--faint); white-space: nowrap; }
+.fe-q__help { display: block; width: calc(100% - 24px); margin: 2px 12px 0; padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
+.fe-q__answer { margin: 12px 12px 10px; }
 .fe-ans { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--faint); }
-.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 8px; width: min(100%, 380px); }
-.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); border-radius: 8px; align-items: flex-start; }
-.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 8px; width: min(100%, 380px); }
+.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: var(--radius); width: min(100%, 380px); }
+.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); border-radius: var(--radius); align-items: flex-start; }
+.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: var(--radius); width: min(100%, 380px); }
 .fe-ans svg { width: 15px; height: 15px; flex: none; }
 .fe-ans--check { color: var(--muted); }
 .fe-mark { width: 16px; height: 16px; flex: none; border: 1.5px solid var(--rule); border-radius: 4px; }
@@ -2126,9 +2136,9 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe-opt--add .linklike { font-size: 13.5px; color: var(--muted); }
 .fe-opt--add .linklike:hover { color: var(--fg); }
 .fe-q__note { margin: 8px 0 0; font-size: 12.5px; color: var(--faint); }
-.fe-q__foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.fe-q__foot { display: flex; align-items: center; gap: 10px; margin: 0 0 0 12px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 .fe-q__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
-.fe-q__tools .icon-btn { width: 28px; height: 28px; }
+.fe-q__tools .icon-btn { width: 28px; height: 28px; border-radius: var(--card-inner); }
 .fe-q__tools .icon-btn svg { width: 15px; height: 15px; }
 .fe-q__tools .icon-btn[disabled] { opacity: 0.25; pointer-events: none; }
 .fe-q__up svg { transform: rotate(180deg); }
@@ -2148,7 +2158,10 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe__status--dirty { color: var(--muted); }
 .fe__error { color: var(--bad); }
 @media (max-width: 640px) {
-  .fe-q { padding: 14px 14px 10px; border-radius: 10px; }
+  .fe-q__head, .fe-q__foot { padding-left: 6px; }
+  .fe-q__foot { margin-left: 6px; }
+  .fe-q__help { width: calc(100% - 12px); margin: 2px 6px 0; }
+  .fe-q__answer { margin: 12px 6px 10px; }
   .fe__title { font-size: 24px; }
   .rc-mode { margin-top: 0; }
 }
@@ -2160,6 +2173,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .modal.rc-app { height: min(860px, 92dvh); }
 .modal.rc-app .modal__body { flex: 1 1 auto; min-height: 0; }
 .rc-app__nav { display: inline-flex; align-items: center; gap: 8px; }
+.rc-app .modal__foot .rc-app__nav > .btn, .rc-app .modal__head [data-rc="app-flag"] > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
 .rc-app__index { display: inline-block; min-width: 72px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 </style>
@@ -8742,6 +8756,19 @@ function viewRecruit() {
   return recruitCycleShellHtml(id);
 }
 
+// Open a dialog over the route as it stands. The page behind the veil is not
+// rebuilt, so nothing behind it moves or fades; render() is the fallback
+// where the shell helpers are missing (tests, previews).
+function recruitShowModal(m) {
+  UI.modal = m;
+  const inPlace = typeof viewModal === 'function' && typeof mountModalFocus === 'function' && Boolean($('#app .rc-panel'));
+  if (!inPlace) { render(); return; }
+  if (typeof captureModalFocus === 'function') captureModalFocus();
+  document.querySelector('.modal-veil')?.remove();
+  document.body.insertAdjacentHTML('beforeend', viewModal());
+  mountModalFocus();
+}
+
 // The cycle's name is the switch: the big title opens the list of cycles.
 function recruitCycleTitleHtml(cycle, options) {
   return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
@@ -8777,7 +8804,10 @@ function recruitCycleShellHtml(id) {
   if (active) {
     let inner = '';
     try { inner = active.module.view ? String(active.module.view(cycle, role, active.id) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this section: ${MD.esc(e.message || 'error')}</p>`; }
-    body = `<div class="rc-panel" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
+    // The panel fades in when it changes, never on a re-render of the same one.
+    const enter = st.paintedPanel !== cycle.id + ':' + active.id;
+    st.paintedPanel = cycle.id + ':' + active.id;
+    body = `<div class="rc-panel ${enter ? 'rc-panel--enter' : ''}" id="rc-panel-${MD.esc(active.id)}" role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}">${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
   } else body = `<div class="empty">${I.info}<b>Nothing to show for your role in this cycle</b></div>`;
   const head = `<div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>`;
   return recruitShellHtml(crumbs(MD.esc(cycle.name)), head + tabs + body, right);
@@ -10234,7 +10264,7 @@ function recruitAppNavHtml(id, cycle) {
   const rows = recruitVisibleRows(cycle);
   const index = rows.findIndex((r) => r.id === id);
   if (index < 0 || rows.length < 2) return '';
-  return `<button class="btn btn--sm" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${rows.length}</span><button class="btn btn--sm" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>`;
+  return `<button class="btn" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${rows.length}</span><button class="btn" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>`;
 }
 
 // Repaint the open dialog's regions in place; the composer keeps its text.
@@ -10310,8 +10340,7 @@ function recruitPaintDiscussion(id, { posted = false } = {}) {
 function recruitOpenApp(id, { comments = false } = {}) {
   const st = recruitState();
   if (st.busy.has('delete:' + id)) { toast('Deletion is in progress'); return; }
-  UI.modal = { kind: 'recruit-app', id };
-  render();
+  recruitShowModal({ kind: 'recruit-app', id, inPlace: true });
   if (st.detail[id] === undefined || st.detail[id]?.error) recruitLoadDetail(id);
   recruitPrefetchNeighbors(id);
   if (comments) $('.rc-app .interest-compose textarea')?.focus();
@@ -10337,7 +10366,7 @@ function recruitSwapApp(id) {
   const row = recruitApp(id);
   if (!dialog || !cycle || !row || UI.modal?.kind !== 'recruit-app') { recruitOpenApp(id); return; }
   if (st.busy.has('delete:' + id)) { toast('Deletion is in progress'); return; }
-  UI.modal = { kind: 'recruit-app', id };
+  UI.modal = { kind: 'recruit-app', id, inPlace: true };
   dialog.dataset.app = id;
   dialog.setAttribute('aria-label', `${recruitSectionNoun(row.section)} from ${row.name}`);
   recruitRepaint($('[data-rc="app-identity"]', dialog), recruitIdentityHtml(row, cycle));
@@ -10870,8 +10899,11 @@ function closeModal(after) {
     if (!after && !UI.editor && !UI.modal) resolveFocus(opener)?.focus({ preventScroll: true });
     if (pendingId) $$('[data-action="interest-pending-open"]').find((el) => el.dataset.id === pendingId)?.focus();
   };
+  // A dialog opened in place never rebuilt the page behind it; closing it
+  // needs no render either, unless a background repaint was held back.
+  const settled = () => { if (!closing?.inPlace || UI._backgroundRoute) render(); };
   const veil = document.querySelector('.modal-veil');
-  if (!veil) { UI.modal = null; syncSidebarInteraction(); after ? after() : render(); restoreFocus(); return; }
+  if (!veil) { UI.modal = null; syncSidebarInteraction(); after ? after() : settled(); restoreFocus(); return; }
   if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
   setTimeout(() => {
@@ -10883,7 +10915,7 @@ function closeModal(after) {
     // Keep-editing paths must not rebuild the textarea — a full render would
     // wipe the native undo stack the editor is built around.
     else if (UI.editor) { (resolveFocus(opener) || $('[data-ed="body"]'))?.focus({ preventScroll: true }); }
-    else render();
+    else settled();
     restoreFocus();
   }, 120);
 }

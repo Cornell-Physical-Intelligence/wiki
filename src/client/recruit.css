@@ -15,9 +15,9 @@
 .rc-tabs [role="tab"]:hover { color: var(--fg); background: var(--hover); }
 .rc-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
 .rc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
-.rc-panel { animation: rc-fade 160ms ease-out; }
+.rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .rc-panel { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .rc-panel--enter { animation: none; } }
 /* Sheet columns by name, so a module column never shifts the fixed ones. */
 .sheet.sheet--recruit table { min-width: 860px; }
 .sheet.sheet--recruit table { min-width: 960px; }
@@ -110,18 +110,28 @@
 .fe__desc { display: block; width: 100%; margin-top: 4px; padding: 4px 0; font: inherit; font-size: 14.5px; line-height: 1.55; color: var(--muted); resize: none; field-sizing: content; min-height: 30px; }
 .fe__desc:focus { color: var(--fg); }
 .fe__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.fe-q { border: 1px solid var(--hairline); border-radius: 12px; background: var(--page); padding: 16px 20px 12px; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+/* Cards follow the popup geometry: a 14px corner, controls inset 8px from
+   the edge with the matching 6px inner curve, and text a further 12px in. */
+.fe-q {
+  --card-radius: 14px; --card-inset: 8px; --card-border: 1px;
+  --card-pad: calc(var(--card-inset) - var(--card-border));
+  --card-inner: calc(max(0px, calc(var(--card-radius) - var(--card-inset))) * var(--popup-corner-scale, 1));
+  border: var(--card-border) solid var(--hairline); border-radius: calc(var(--card-radius) * var(--popup-corner-scale, 1));
+  background: var(--page); padding: var(--card-pad);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
 .fe-q:focus-within { border-color: var(--rule); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px rgba(0, 0, 0, 0.06); }
-.fe-q__head { display: flex; align-items: center; gap: 14px; }
-.fe-q__label { flex: 1; min-width: 0; padding: 3px 0; font: inherit; font-size: 15.5px; font-weight: 500; }
+.fe-q__head { display: flex; align-items: flex-start; gap: 14px; padding-left: 12px; }
+.fe-q__label { flex: 1; min-width: 0; height: 28px; padding: 0; font: inherit; font-size: 15.5px; font-weight: 500; }
 .fe-q__type { flex: none; }
-.fe-q__type--fixed { font-size: 12px; color: var(--faint); padding: 0 2px; white-space: nowrap; }
-.fe-q__help { display: block; width: 100%; margin-top: 2px; padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
-.fe-q__answer { margin: 14px 0 12px; }
+.fe-q .dd.fe-q__type { height: 28px; border-radius: var(--card-inner); }
+.fe-q__type--fixed { height: 28px; display: inline-flex; align-items: center; padding: 0 8px; font-size: 12px; color: var(--faint); white-space: nowrap; }
+.fe-q__help { display: block; width: calc(100% - 24px); margin: 2px 12px 0; padding: 3px 0; font: inherit; font-size: 13px; color: var(--muted); }
+.fe-q__answer { margin: 12px 12px 10px; }
 .fe-ans { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--faint); }
-.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 8px; width: min(100%, 380px); }
-.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); border-radius: 8px; align-items: flex-start; }
-.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 8px; width: min(100%, 380px); }
+.fe-ans--line { height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: var(--radius); width: min(100%, 380px); }
+.fe-ans--para { min-height: 78px; padding: 9px 12px; border: 1px dashed var(--rule); border-radius: var(--radius); align-items: flex-start; }
+.fe-ans--file { height: 44px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: var(--radius); width: min(100%, 380px); }
 .fe-ans svg { width: 15px; height: 15px; flex: none; }
 .fe-ans--check { color: var(--muted); }
 .fe-mark { width: 16px; height: 16px; flex: none; border: 1.5px solid var(--rule); border-radius: 4px; }
@@ -137,9 +147,9 @@
 .fe-opt--add .linklike { font-size: 13.5px; color: var(--muted); }
 .fe-opt--add .linklike:hover { color: var(--fg); }
 .fe-q__note { margin: 8px 0 0; font-size: 12.5px; color: var(--faint); }
-.fe-q__foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.fe-q__foot { display: flex; align-items: center; gap: 10px; margin: 0 0 0 12px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 .fe-q__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
-.fe-q__tools .icon-btn { width: 28px; height: 28px; }
+.fe-q__tools .icon-btn { width: 28px; height: 28px; border-radius: var(--card-inner); }
 .fe-q__tools .icon-btn svg { width: 15px; height: 15px; }
 .fe-q__tools .icon-btn[disabled] { opacity: 0.25; pointer-events: none; }
 .fe-q__up svg { transform: rotate(180deg); }
@@ -159,7 +169,10 @@
 .fe__status--dirty { color: var(--muted); }
 .fe__error { color: var(--bad); }
 @media (max-width: 640px) {
-  .fe-q { padding: 14px 14px 10px; border-radius: 10px; }
+  .fe-q__head, .fe-q__foot { padding-left: 6px; }
+  .fe-q__foot { margin-left: 6px; }
+  .fe-q__help { width: calc(100% - 12px); margin: 2px 6px 0; }
+  .fe-q__answer { margin: 12px 6px 10px; }
   .fe__title { font-size: 24px; }
   .rc-mode { margin-top: 0; }
 }
@@ -171,4 +184,5 @@
 .modal.rc-app { height: min(860px, 92dvh); }
 .modal.rc-app .modal__body { flex: 1 1 auto; min-height: 0; }
 .rc-app__nav { display: inline-flex; align-items: center; gap: 8px; }
+.rc-app .modal__foot .rc-app__nav > .btn, .rc-app .modal__head [data-rc="app-flag"] > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
 .rc-app__index { display: inline-block; min-width: 72px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }

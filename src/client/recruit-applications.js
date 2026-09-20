@@ -615,7 +615,7 @@ function recruitAppNavHtml(id, cycle) {
   const rows = recruitVisibleRows(cycle);
   const index = rows.findIndex((r) => r.id === id);
   if (index < 0 || rows.length < 2) return '';
-  return `<button class="btn btn--sm" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${rows.length}</span><button class="btn btn--sm" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>`;
+  return `<button class="btn" data-action="recruit-app-prev" ${index > 0 ? '' : 'disabled'}>← Previous</button><span class="faint rc-app__index">${index + 1} of ${rows.length}</span><button class="btn" data-action="recruit-app-next" ${index < rows.length - 1 ? '' : 'disabled'}>Next →</button>`;
 }
 
 // Repaint the open dialog's regions in place; the composer keeps its text.
@@ -691,8 +691,7 @@ function recruitPaintDiscussion(id, { posted = false } = {}) {
 function recruitOpenApp(id, { comments = false } = {}) {
   const st = recruitState();
   if (st.busy.has('delete:' + id)) { toast('Deletion is in progress'); return; }
-  UI.modal = { kind: 'recruit-app', id };
-  render();
+  recruitShowModal({ kind: 'recruit-app', id, inPlace: true });
   if (st.detail[id] === undefined || st.detail[id]?.error) recruitLoadDetail(id);
   recruitPrefetchNeighbors(id);
   if (comments) $('.rc-app .interest-compose textarea')?.focus();
@@ -718,7 +717,7 @@ function recruitSwapApp(id) {
   const row = recruitApp(id);
   if (!dialog || !cycle || !row || UI.modal?.kind !== 'recruit-app') { recruitOpenApp(id); return; }
   if (st.busy.has('delete:' + id)) { toast('Deletion is in progress'); return; }
-  UI.modal = { kind: 'recruit-app', id };
+  UI.modal = { kind: 'recruit-app', id, inPlace: true };
   dialog.dataset.app = id;
   dialog.setAttribute('aria-label', `${recruitSectionNoun(row.section)} from ${row.name}`);
   recruitRepaint($('[data-rc="app-identity"]', dialog), recruitIdentityHtml(row, cycle));

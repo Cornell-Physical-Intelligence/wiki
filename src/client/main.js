@@ -255,8 +255,11 @@ function closeModal(after) {
     if (!after && !UI.editor && !UI.modal) resolveFocus(opener)?.focus({ preventScroll: true });
     if (pendingId) $$('[data-action="interest-pending-open"]').find((el) => el.dataset.id === pendingId)?.focus();
   };
+  // A dialog opened in place never rebuilt the page behind it; closing it
+  // needs no render either, unless a background repaint was held back.
+  const settled = () => { if (!closing?.inPlace || UI._backgroundRoute) render(); };
   const veil = document.querySelector('.modal-veil');
-  if (!veil) { UI.modal = null; syncSidebarInteraction(); after ? after() : render(); restoreFocus(); return; }
+  if (!veil) { UI.modal = null; syncSidebarInteraction(); after ? after() : settled(); restoreFocus(); return; }
   if (veil.classList.contains('leaving')) return; // second click during the exit
   veil.classList.add('leaving');
   setTimeout(() => {
@@ -268,7 +271,7 @@ function closeModal(after) {
     // Keep-editing paths must not rebuild the textarea — a full render would
     // wipe the native undo stack the editor is built around.
     else if (UI.editor) { (resolveFocus(opener) || $('[data-ed="body"]'))?.focus({ preventScroll: true }); }
-    else render();
+    else settled();
     restoreFocus();
   }, 120);
 }
