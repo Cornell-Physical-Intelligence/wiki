@@ -93,6 +93,12 @@
 .rc-mode__status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .rc-mode__status a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); margin-left: 4px; }
 .rc-mode__status a:hover { color: var(--fg); border-bottom-color: var(--fg); }
+.rc-mode__sep { color: var(--faint); margin: 0 2px; }
+.rc-mode__link { font-variant-numeric: tabular-nums; }
+.rc-mode__copy { width: 24px; height: 24px; margin-left: -2px; }
+.rc-mode__copy svg { width: 13px; height: 13px; }
+.rc-mode__also { color: var(--faint); }
+.rc-mode__also .rc-mode__link { margin-left: 4px; }
 .rc-mode__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
 .rc-mode__dot--on { background: var(--good); }
 

@@ -122,6 +122,14 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const coffee = site2.sections.find((s) => s.key === 'coffee');
   assert.equal(coffee.open, true);
   assert.deepEqual(coffee.form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack']);
+  assert.equal(site2.landing, 'interest', 'with no choice, /apply shows the first open form');
+  const v1b = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1b, settings: { sections: {}, landing: 'nope' } })).status, 400, 'the /apply form must be one of the three');
+  const chose = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1b, settings: { sections: {}, landing: 'coffee' } });
+  assert.equal(chose.status, 200, chose.text);
+  assert.equal(chose.data.cycle.doc.site.landing, 'coffee');
+  assert.equal((await anon('GET', '/recruit/site')).data.landing, 'coffee', 'the chosen form is what /apply shows');
+  assert.deepEqual((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack'], 'choosing the /apply form leaves the sections alone');
   assert.deepEqual(coffee.form.questions.find((q) => q.key === 'subteam').options, ['Mechanical', 'Electrical', 'Software', 'Creative', 'Business & Marketing'], 'subteam options follow the cycle');
   console.log('PASS: the live cycle publishes its sections; Settings opens a section and shapes its form; members are refused');
 
@@ -171,6 +179,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const closed = await interest('POST', '/interest', { name: 'Late', email: 'late@cornell.edu', year: 'Senior' });
   assert.equal(closed.status, 409, 'a closed interest section refuses the fixed POST too'); assert.match(closed.data.error, /closed/);
   assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'interest').open, false);
+  assert.equal((await anon('GET', '/recruit/site')).data.landing, 'coffee', 'closing another form leaves the /apply choice');
   const v3 = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PATCH', '/recruit/cycles/cy-interest', { version: v3, capacity: 1 })).status, 200);
   const full = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Second', email: 'second@cornell.edu', availability: 'Thu' } });
