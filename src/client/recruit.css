@@ -40,16 +40,19 @@
   .sheet.sheet--recruit th[data-col="review"], .sheet.sheet--recruit td[data-col="review"] { display: table-cell; }
   .sheet.sheet--recruit th[data-col="stage"] { width: 96px; }
 }
-/* People: a cell per form, each a pill that opens that submission. */
-.sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 132px; }
-.sheet.sheet--people th[data-col="last"] { width: 96px; }
+/* People: one column per form. A sent form is its date, set like Received
+   and Latest; it opens that form. Nothing sent is the same dash as an empty
+   year. */
+.sheet.sheet--people th[data-col="interest"], .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people th[data-col="application"] { width: 100px; }
+.sheet.sheet--people th[data-col="last"] { width: 88px; }
 .rc-sent {
-  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px 0 7px;
-  border: 1px solid var(--hairline); border-radius: 999px; font-size: 12.5px; color: var(--fg); white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  display: inline-block; max-width: 100%; padding: 2px 0; background: none; border: 0; border-radius: 4px; cursor: pointer;
+  font: inherit; font-size: 12.5px; text-align: left;
+  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px;
+  transition: color 0.12s ease, text-decoration-color 0.12s ease;
 }
-.rc-sent:hover { background: var(--hover); border-color: var(--rule); }
-.rc-sent > svg { width: 12px; height: 12px; color: var(--good); flex: none; }
+.rc-sent:hover { color: var(--fg); text-decoration-color: var(--rule); }
+.rc-sent:focus-visible { color: var(--fg); outline: 2px solid var(--fg); outline-offset: 2px; }
 @container (max-width: 36em) {
   .sheet.sheet--people th[data-col="interest"], .sheet.sheet--people td[data-col="interest"],
   .sheet.sheet--people th[data-col="coffee"], .sheet.sheet--people td[data-col="coffee"],

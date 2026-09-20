@@ -65,10 +65,11 @@ function recruitPeopleFootText() {
   return shown === p.rows.length ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.rows.length, 'person', 'people')}`;
 }
 
-// A form the person sent: the date, opening that form in their dialog.
+// A form the person sent: its date, set like every other date in the sheet,
+// opening that form in their dialog.
 function recruitSentCell(r, p) {
   if (!r) return '<span class="faint">—</span>';
-  return `<button class="rc-sent" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionNoun(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${I.check}<span>${MD.esc(recruitDate(Number(r.ts)))}</span></button>`;
+  return `<button class="rc-sent interest-when" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionNoun(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${MD.esc(recruitDate(Number(r.ts)))}</button>`;
 }
 
 // The row's flag: the same control the list always had, on the person.
@@ -121,7 +122,7 @@ function recruitPeopleHtml(cycle) {
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest form')}${th('coffee', 'Coffee chat')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Last activity')}
+      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest')}${th('coffee', 'Coffee')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
         <th class="sheet__review-cell" data-col="review"><span class="sheet__sort sheet__sort--static">Review</span></th></tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
