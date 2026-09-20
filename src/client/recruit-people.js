@@ -71,27 +71,39 @@ function recruitSentCell(r, p) {
   return `<button class="rc-sent" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionNoun(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${I.check}<span>${MD.esc(recruitDate(Number(r.ts)))}</span></button>`;
 }
 
-// The flag and the size of the thread sit with the name: they are the person's.
-function recruitPersonMarksHtml(p) {
+// The row's flag: the same control the list always had, on the person.
+function recruitPersonRowFlagHtml(p) {
+  const flagged = Boolean(p.flagged);
+  const readOnly = !recruitCan('reviewer') || recruitCycleRow()?.status === 'archived';
+  const label = `${flagged ? 'Unflag' : 'Flag'} ${p.name}`;
+  if (readOnly) return flagged ? `<span class="interest-flag-readonly" title="Flagged">${RC_ICONS.flag}</span>` : '';
+  return `<button class="icon-btn interest-flag ${flagged ? 'is-flagged' : ''}" data-action="recruit-person-flag" data-email="${MD.esc(p.email)}" aria-pressed="${flagged}" aria-label="${MD.esc(label)}" title="${MD.esc(label)}" aria-disabled="${recruitState().busy.has('flag:' + p.email)}">${RC_ICONS.flag}</button>`;
+}
+
+// Flag and comments on the row, as the list always had them; both are the person's.
+function recruitPersonReviewCellHtml(p) {
   const comments = Number(p.comments || 0);
-  if (!p.flagged && !comments) return '';
-  return `<span class="rc-person__marks">${p.flagged ? `<span class="rc-person__flag" title="Flagged">${RC_ICONS.flag}</span>` : ''}${comments ? `<span class="rc-person__n" title="${comments} ${comments === 1 ? 'comment' : 'comments'}">${RC_ICONS.comment}${comments}</span>` : ''}</span>`;
+  return `<td class="sheet__review-cell" data-col="review"><div class="interest-row-actions">
+      ${recruitPersonRowFlagHtml(p)}
+      <button class="icon-btn interest-comments ${comments ? 'has-comments' : ''}" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-comments="true" aria-label="${comments ? `${comments} ${comments === 1 ? 'comment' : 'comments'} on` : 'Comment on'} ${MD.esc(p.name)}" title="${comments ? `${comments} ${comments === 1 ? 'comment' : 'comments'}` : 'Add comment'}">${RC_ICONS.comment}${comments ? `<span>${comments}</span>` : ''}</button>
+    </div></td>`;
 }
 
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const span = 7;
+  const span = 8;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No people match.' : 'Nobody yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}${recruitPersonMarksHtml(x)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
     <td data-col="interest">${recruitSentCell(x.sections?.interest, x)}</td>
     <td data-col="coffee">${recruitSentCell(x.sections?.coffee, x)}</td>
     <td data-col="application">${recruitSentCell(x.sections?.application, x)}</td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
+    ${recruitPersonReviewCellHtml(x)}
   </tr>`).join('');
 }
 
@@ -109,7 +121,8 @@ function recruitPeopleHtml(cycle) {
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest form')}${th('coffee', 'Coffee chat')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Last activity')}</tr></thead>
+      <thead><tr>${th('person', 'Person')}${th('interest', 'Interest form')}${th('coffee', 'Coffee chat')}${th('application', 'Application')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Last activity')}
+        <th class="sheet__review-cell" data-col="review"><span class="sheet__sort sheet__sort--static">Review</span></th></tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
     <div class="sheet__foot" role="status" data-rc="people-foot">${MD.esc(recruitPeopleFootText())}</div>
@@ -487,6 +500,7 @@ async function recruitTogglePersonFlag(email) {
     }
     recruitPaintPeople();
   };
+  paint();
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/review`, { method: 'PATCH', body: JSON.stringify({ flagged: want }) });
     recruitAcceptPersonReview(email, out);

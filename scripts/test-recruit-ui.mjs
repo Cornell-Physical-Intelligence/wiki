@@ -508,11 +508,16 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const body = f.app.querySelector('[data-rc="people-rows"]');
   assert.equal(body.querySelectorAll('tr').length, 2, 'one row per person');
   assert.match(body.innerHTML, /&lt;b&gt;Bo&lt;\/b&gt;/); assert.doesNotMatch(body.innerHTML, /<b>Bo/);
-  assert.equal(body.querySelectorAll('[data-action="recruit-person-open"][data-email="a@cornell.edu"]').length, 3, 'the name and each form they sent open the person');
+  assert.equal(body.querySelectorAll('[data-action="recruit-person-open"][data-email="a@cornell.edu"]').length, 4, 'the name, each form they sent, and the comments control open the person');
   assert.equal(body.querySelector('[data-action="recruit-person-open"][data-email="a@cornell.edu"][data-form="interest"]').dataset.form, 'interest', 'a form cell opens the person at that form');
   const ada = body.querySelector('tr[data-email="a@cornell.edu"]');
-  assert.match(ada.innerHTML, /rc-person__flag/); assert.match(ada.innerHTML, /rc-person__n[^>]*>(?:<svg[\s\S]*?<\/svg>)?2</, 'the flag and the thread size sit with the name');
-  assert.doesNotMatch(body.querySelector('tr[data-email="b@cornell.edu"]').innerHTML, /rc-person__marks/);
+  const adaFlag = ada.querySelector('[data-action="recruit-person-flag"][data-email="a@cornell.edu"]');
+  assert.ok(adaFlag && adaFlag.classList.contains('is-flagged') && adaFlag.getAttribute('aria-pressed') === 'true', 'the row flags the person with the list\'s own control');
+  const adaComments = ada.querySelector('.interest-comments');
+  assert.ok(adaComments.classList.contains('has-comments') && adaComments.innerHTML.includes('<span>2</span>') && adaComments.dataset.comments === 'true' && adaComments.dataset.email === 'a@cornell.edu', 'the row shows the thread size and opens the person at the thread');
+  const bo = body.querySelector('tr[data-email="b@cornell.edu"]');
+  assert.ok(!bo.querySelector('.interest-flag.is-flagged') && !bo.querySelector('.interest-comments.has-comments'), 'an unflagged person without comments shows quiet controls');
+  assert.match(f.app.querySelector('.sheet--people thead').innerHTML, /data-col="review"/, 'People has the review column');
   assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 interest · 1 coffee chat · 1 application · 1 flagged');
   const q = f.app.querySelector('[data-m="recruit-people-q"]');
   q.value = 'bo'; assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' }), true);
@@ -532,7 +537,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   f.run('recruitStepPerson(1)');
   assert.equal(f.ctx.UI.modal.email, 'b@cornell.edu', 'Next moves to the next person');
   f.run("recruitAcceptPersonReview('a@cornell.edu', { person: { email: 'a@cornell.edu', name: 'Ada', flagged: false, review: { comments: [] }, reviewVersion: 4 } })");
-  assert.doesNotMatch(f.app.querySelector('tr[data-email="a@cornell.edu"]').innerHTML, /rc-person__marks/, 'review changes repaint the person\'s row');
+  assert.ok(!f.app.querySelector('tr[data-email="a@cornell.edu"] .interest-flag.is-flagged') && !f.app.querySelector('tr[data-email="a@cornell.edu"] .interest-comments.has-comments'), 'review changes repaint the person\'s row');
   console.log('PASS: People lists everyone across the three forms with their flag and thread, escapes, searches and filters in place, opens any person at any form, and steps by person');
 }
 
