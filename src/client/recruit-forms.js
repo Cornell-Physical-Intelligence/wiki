@@ -94,7 +94,10 @@ function recruitFormModel(sec, key, landing = null) {
     if (q.maxBytes) out.maxBytes = Number(q.maxBytes);
     return out;
   });
-  return { title: sec?.title || RECRUIT_SECTION_LABELS[key], description: sec?.description || '', open: sec?.open === true, atApply: landing === key, questions };
+  return {
+    title: sec?.title || RECRUIT_SECTION_LABELS[key], description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
+    notify: sec?.notify !== false, replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
+  };
 }
 
 // One draft per cycle and section; it survives a look at the responses and
@@ -124,8 +127,23 @@ function recruitFormEditorHtml(cycle, key) {
     </div>
     <ol class="fe__list" data-rc="fe-list">${recruitQuestionCardsHtml(fe, cycle)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-fe-add">${I.plus} Add question</button></div>
+    <section class="fe-options" data-rc="fe-options" aria-label="How this form behaves">${recruitFormOptionsHtml(fe)}</section>
     <div class="fe__foot" data-rc="fe-foot">${recruitFormFootHtml(fe)}</div>
   </div>`;
+}
+
+// What happens around the form: whether the site shows it, whether it is
+// the one at /apply, who hears about a response, repeats, and a cap.
+function recruitFormOptionsHtml(fe) {
+  const m = fe.model;
+  const to = (recruitState().cycle?.notify || []).filter(Boolean);
+  const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
+  return `<h3 class="fe-options__title">This form</h3>
+    ${sw('recruit-fe-open', m.open, 'Open on the website', `cornellphysicalintelligence.com/apply/${MD.esc(fe.key)}`)}
+    ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
+    ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
+    ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers', 'Off: a second submission with the same email is refused.')}
+    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>`;
 }
 
 const recruitQuestionCardsHtml = (fe, cycle) => fe.model.questions.map((q, i, all) => recruitQuestionCardHtml(q, i, all.length, cycle)).join('');
@@ -133,9 +151,7 @@ const recruitQuestionCardsHtml = (fe, cycle) => fe.model.questions.map((q, i, al
 function recruitFormFootHtml(fe) {
   const dirty = recruitFormDirty(fe);
   const status = fe.saving ? 'Saving…' : dirty ? 'Unsaved changes' : fe.savedAt ? 'Saved' : '';
-  return `<label class="fe-switch fe-switch--lg"><input type="checkbox" data-action="recruit-fe-open" ${fe.model.open ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>
-    <label class="fe-switch fe-switch--lg" title="The QR code and the Apply link open /apply; one form shows there"><input type="checkbox" data-action="recruit-fe-landing" ${fe.model.atApply ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Shown at /apply</span></label>
-    ${fe.error ? `<span class="fe__error" role="alert">${MD.esc(fe.error)}</span>` : `<span class="fe__status ${dirty ? 'fe__status--dirty' : ''}" role="status">${status}</span>`}
+  return `${fe.error ? `<span class="fe__error" role="alert">${MD.esc(fe.error)}</span>` : `<span class="fe__status ${dirty ? 'fe__status--dirty' : ''}" role="status">${status}</span>`}
     <button type="button" class="btn" data-action="recruit-fe-discard" ${dirty && !fe.saving ? '' : 'disabled'}>Discard</button>
     <button type="button" class="btn btn--primary" data-action="recruit-fe-save" ${dirty && !fe.saving ? '' : 'disabled'}>Save</button>`;
 }
@@ -326,6 +342,7 @@ function recruitMoveQuestion(el, delta) {
 // What the server stores: keys for new questions come from their labels.
 function recruitFormPayload(fe) {
   const used = new Set(fe.model.questions.map((q) => q.key).filter(Boolean));
+  if (fe.model.capacity && (!Number.isInteger(fe.model.capacity) || fe.model.capacity < 0 || fe.model.capacity > 100000)) throw Object.assign(new Error('Stop accepting after a whole number of responses, up to 100,000.'), { focus: '[data-m="recruit-fe-capacity"]' });
   const questions = fe.model.questions.map((q, i) => {
     const label = String(q.label || '').trim();
     if (!label) throw Object.assign(new Error(`Question ${i + 1} needs a label.`), { focus: `[data-m="recruit-fe-label"][data-i="${i}"]` });
@@ -346,7 +363,10 @@ function recruitFormPayload(fe) {
     if (q.type === 'file') { out.accept = Array.isArray(q.accept) && q.accept.length ? q.accept : RECRUIT_FILE_ACCEPT; out.maxBytes = q.maxBytes || 2621440; }
     return out;
   });
-  return { title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key], description: String(fe.model.description || '').trim(), open: fe.model.open === true, form: { questions } };
+  return {
+    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key], description: String(fe.model.description || '').trim(), open: fe.model.open === true,
+    notify: fe.model.notify !== false, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
+  };
 }
 
 async function recruitSaveForm(el) {
@@ -372,7 +392,7 @@ async function recruitSaveForm(el) {
   } catch (e) { fe.error = recruitError(e); }
   fe.saving = false;
   const host = $('[data-rc="form-editor"]');
-  if (host?.dataset.section === key) { c.host = host; recruitPaintForm(c); recruitPaintModeBar(recruitCycleRow() || cycle, key, true); }
+  if (host?.dataset.section === key) { c.host = host; recruitPaintForm(c); recruitRepaint($('[data-rc="fe-options"]', host), recruitFormOptionsHtml(c.fe)); recruitPaintModeBar(recruitCycleRow() || cycle, key, true); }
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -404,6 +424,8 @@ RECRUIT.register({
     'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-open': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.open = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-landing': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.atApply = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-notify': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.notify = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-replace': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.replace = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-option-add': (el) => {
       const c = recruitFeCtx(el);
       if (!c?.q || c.q.fixed) return;
@@ -429,12 +451,14 @@ RECRUIT.register({
       if (!c) return;
       c.fe.model = JSON.parse(c.fe.saved); c.fe.error = '';
       recruitPaintForm(c);
+      recruitRepaint($('[data-rc="fe-options"]', c.host), recruitFormOptionsHtml(c.fe));
       toast('Changes discarded');
     },
   },
   inputs: {
     'recruit-fe-title': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.title = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-desc': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.description = el.value; recruitPaintForm(c, { list: false }); },
+    'recruit-fe-capacity': (el) => { const c = recruitFeCtx(el); if (!c) return; const n = Number(String(el.value || '').replace(/[^\d]/g, '')); c.fe.model.capacity = Number.isInteger(n) && n > 0 ? Math.min(n, 100000) : 0; recruitPaintForm(c, { list: false }); },
     'recruit-fe-label': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.label = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-help': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.help = el.value; recruitPaintAnswer(c); recruitPaintForm(c, { list: false }); },
     'recruit-fe-option': (el) => { const c = recruitFeCtx(el); if (!c?.q || !Array.isArray(c.q.options)) return; c.q.options[c.j] = el.value; recruitPaintForm(c, { list: false }); },

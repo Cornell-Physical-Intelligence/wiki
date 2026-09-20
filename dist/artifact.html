@@ -2081,6 +2081,35 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-cycle-title:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .rc-cycle-title .dd__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-cycle-title .dd__chev { width: 20px; height: 20px; color: var(--faint); flex: none; margin-top: 4px; }
+.rc-cycle-gear { width: 36px; height: 36px; margin: 0 0 0 2px; color: var(--faint); vertical-align: middle; border-radius: 10px; }
+.rc-cycle-gear svg { width: 20px; height: 20px; }
+.rc-cycle-gear:hover { color: var(--fg); }
+
+/* ---------------------------------------------------------------------------
+   Settings dialog: a few short groups under hairlines, actions in the foot. */
+.rc-settings .modal__body { gap: 0; padding-top: 2px; }
+.rc-set { padding: 16px 0 20px; border-top: 1px solid var(--hairline); }
+.rc-set:first-child { border-top: 0; }
+.rc-set__title { margin: 0 0 12px; font-size: 10.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.rc-set .rc-form { gap: 12px; }
+.rc-set__note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--faint); }
+.rc-set__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.rc-settings .rc-check, .rc-settings .modal__body label.rc-check { flex-direction: row; align-items: baseline; font-size: 13.5px; font-weight: 400; }
+.rc-set__website { margin-top: 16px; }
+.rc-seg--status button[disabled] { opacity: 0.35; cursor: default; }
+.rc-seg--status button[disabled]:hover { color: var(--muted); background: transparent; }
+.rc-settings__delete { color: var(--bad); }
+.rc-settings__delete:hover { color: var(--bad); background: var(--bad-bg); }
+.rc-set .rc-form--rows .rc-set__note { margin: 0 0 4px; }
+/* Who can review */
+.rc-roles__list { display: flex; flex-direction: column; margin-top: 12px; }
+.rc-role { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
+.rc-role:first-child { border-top: 0; }
+.rc-role > div { flex: 1; min-width: 0; }
+.rc-role .mail { display: block; font-size: 12px; color: var(--muted); }
+.rc-role__roles { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.rc-roles__add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.rc-roles .modal__body label { display: contents; }
 
 /* ---------------------------------------------------------------------------
    Section tab bar: Responses | Form, and the website status. */
@@ -2184,6 +2213,16 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .fe-switch input:focus-visible + .fe-switch__track { outline: 2px solid var(--fg); outline-offset: 2px; }
 .fe-switch--lg { font-size: 13.5px; }
 .fe__add { margin-top: 14px; }
+/* The form's own settings, one card under the questions. */
+.fe-options { margin-top: 22px; padding: 4px 20px 6px; border: 1px solid var(--hairline); border-radius: calc(14px * var(--popup-corner-scale, 1)); background: var(--page); }
+.fe-options__title { margin: 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.fe-switch--row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
+.fe-switch--row .fe-switch__track { margin-top: 1px; }
+.fe-switch--row .fe-switch__text { display: flex; flex-direction: column; gap: 2px; }
+.fe-switch--row small { font-size: 12.5px; color: var(--faint); }
+.fe-options__cap { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
+.fe-options__n { width: 96px; font-variant-numeric: tabular-nums; }
+.fe-options__n::placeholder { color: var(--faint); }
 .fe__foot { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 12px 0; border-top: 1px solid var(--hairline); background: var(--page); }
 .fe__status, .fe__error { margin-left: auto; font-size: 12.5px; color: var(--faint); }
 .fe__status--dirty { color: var(--muted); }
@@ -8481,7 +8520,7 @@ const RECRUIT = {
         .then((out) => {
           if (st.key !== key) return;                       // switched away meanwhile
           const roles = Array.isArray(out.me?.roles) ? out.me.roles : (st.me.admin ? ['admin'] : []);
-          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [] };
+          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [], notify: out.notify || [] };
           renderBackground('recruit');
         })
         .catch((e) => { if (st.key !== key) return; st.cycle = { error: recruitError(e), status: e.status }; renderBackground('recruit'); });
@@ -8798,8 +8837,9 @@ function recruitShowModal(m) {
 }
 
 // The cycle's name is the switch: the big title opens the list of cycles.
+// The gear beside it opens the cycle's settings.
 function recruitCycleTitleHtml(cycle, options) {
-  return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+  return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>${recruitCan('lead') ? `<button type="button" class="icon-btn rc-cycle-gear" data-action="recruit-settings-open" aria-label="Settings for ${MD.esc(cycle.name)}" title="Settings">${I.settings}</button>` : ''}`;
 }
 const recruitCycleChoiceLabel = (x) => {
   const name = x.term && x.term !== x.name ? `${x.name} · ${x.term}` : x.name;
@@ -9049,9 +9089,7 @@ function recruitOpenCycleTools(anchor) {
   const items = [{ label: 'Refresh', run: () => { const id = cycle.id; st.cycles = undefined; RECRUIT.reset(id); render(); } }];
   if (admin) items.push({ label: 'Sync queue', run: () => { st.queue = undefined; recruitLoadQueue(true); toast('Checking saved submissions…'); } });
   if (admin) items.push({ label: 'Check storage', run: recruitCheckStorage });
-  const moves = recruitStatusChoices(cycle, roles);
-  if (moves.length) items.push('-', ...moves.map((x) => ({ label: x.label, run: () => recruitSetStatus(x.status, x.confirm) })));
-  if (admin && (cycle.status === 'archived' || cycle.status === 'draft')) items.push('-', { label: 'Delete cycle…', danger: true, icon: I.trash, run: recruitConfirmDeleteCycle });
+  if (lead) items.push('-', { label: 'Settings', icon: I.settings, run: recruitOpenSettings });
   openMenu(items, anchor);
 }
 
@@ -9072,10 +9110,13 @@ function recruitSetStatus(status, confirm) {
     try {
       const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/status`, { method: 'POST', body: JSON.stringify({ version: cycle.version, status }) });
       if (st.cycle?.data?.id === cycle.id && out.cycle) st.cycle.data = out.cycle;
-      st.cycles = undefined;
+      if (st.cycles?.list) {
+        st.cycles.list = st.cycles.list.map((c) => (c.id === cycle.id && out.cycle ? { ...c, status: out.cycle.status, version: out.cycle.version } : c));
+        if (status !== 'open' && st.cycles.intakeCycleId === cycle.id) st.cycles.intakeCycleId = null;
+      }
       toast(status === 'open' ? 'Cycle is open' : status === 'closed' ? 'Cycle closed' : status === 'archived' ? 'Cycle archived' : 'Status updated');
     } catch (e) { recruitVersionToast(e, cycle.id); }
-    finally { st.busy.delete('status'); renderBackground('recruit'); }
+    finally { st.busy.delete('status'); recruitAfterSettings(); }
   };
   if (!confirm) { go(); return; }
   const st = recruitState();
@@ -9119,15 +9160,154 @@ function recruitConfirmDeleteCycle() {
 
 /* ------------------------------- settings panel -------------------------- */
 
-function recruitSettingsPanelHtml(cycle, role) {
+// Settings open from the gear beside the cycle's name, in one glass dialog:
+// about, status, subteams, who can review; archive and delete in the foot.
+function recruitSettingsBodyHtml(cycle, role) {
   const sections = RECRUIT.settingsSections(cycle, role);
   if (!sections.length) return `<div class="empty">${I.info}<b>No settings for your role</b></div>`;
-  return `<div class="admin-grid rc-settings">${sections.map((s) => {
+  return sections.map((s) => {
     let inner = '';
     try { inner = String(s.view?.(cycle, role) ?? ''); } catch (e) { console.error(e); inner = `<p class="field-error" role="alert">Could not draw this section.</p>`; }
-    return `<section class="admin-block" id="rc-settings-${MD.esc(s.id)}" aria-labelledby="rc-settings-${MD.esc(s.id)}-h">
-      <div class="admin-block__head"><h2 id="rc-settings-${MD.esc(s.id)}-h">${MD.esc(s.label || s.id)}</h2></div>${inner}</section>`;
-  }).join('')}</div>`;
+    return `<section class="rc-set" id="rc-set-${MD.esc(s.id)}" aria-labelledby="rc-set-${MD.esc(s.id)}-h"><h4 class="rc-set__title" id="rc-set-${MD.esc(s.id)}-h">${MD.esc(s.label || s.id)}</h4>${inner}</section>`;
+  }).join('');
+}
+
+function recruitSettingsModalHtml() {
+  const cycle = recruitCycleRow();
+  const role = recruitRole();
+  if (!cycle) return `<div class="modal" role="dialog" aria-label="Settings unavailable"><div class="modal__head"><h3>Settings unavailable</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div><div class="modal__body"><p>Open a cycle first.</p></div></div>`;
+  const admin = recruitCan('admin');
+  const foot = [
+    admin && (cycle.status === 'archived' || cycle.status === 'draft') ? `<button class="btn btn--ghost rc-settings__delete" data-action="recruit-cycle-delete">Delete cycle…</button>` : '',
+    admin && cycle.status === 'closed' ? `<button class="btn btn--ghost" data-action="recruit-status" data-status="archived" data-confirm="1">Archive cycle…</button>` : '',
+    admin && cycle.status === 'archived' ? `<button class="btn btn--ghost" data-action="recruit-status" data-status="closed">Unarchive cycle</button>` : '',
+  ].filter(Boolean).join('');
+  return `<div class="modal modal--wide rc-settings" role="dialog" aria-label="Settings for ${MD.esc(cycle.name)}">
+    <div class="modal__head"><h3>${MD.esc(cycle.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    <div class="modal__body" data-rc="settings-body">${recruitSettingsBodyHtml(cycle, role)}</div>
+    <div class="modal__foot modal__foot--split">${foot}<span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+  </div>`;
+}
+
+// The open dialog follows every save without a remount.
+function recruitPaintSettings() {
+  if (UI.modal?.kind !== 'recruit-settings') return false;
+  const dialog = $('.rc-settings');
+  if (!dialog) return false;
+  const fresh = document.createElement('div');
+  fresh.innerHTML = recruitSettingsModalHtml();
+  recruitRepaint(dialog, fresh.firstElementChild ? fresh.firstElementChild.innerHTML : fresh.innerHTML);
+  return true;
+}
+
+// After a change made from the dialog: the dialog repaints now, the page
+// behind it when the dialog closes.
+function recruitAfterSettings() {
+  recruitPaintSettings();
+  renderBackground('recruit');
+}
+
+function recruitOpenSettings() {
+  const cycle = recruitCycleRow(), role = recruitRole();
+  if (!cycle || !recruitCan('lead')) return;
+  UI.modal = { kind: 'recruit-settings' };
+  render();
+  for (const s of RECRUIT.settingsSections(cycle, role)) { try { s.mount?.(cycle, role); } catch (e) { console.error(e); } }
+}
+
+/* ------------------------------- who can review -------------------------- */
+
+const RECRUIT_ROLE_LABELS = { lead: 'Lead', reviewer: 'Reviewer', interviewer: 'Interviewer' };
+
+function recruitLoadRoles() {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  if (!cycle) return;
+  st.mod.roles = { key: st.key + ':' + cycle.id, loading: true, error: null, roles: [], members: [] };
+  const box = st.mod.roles, key = st.key;
+  RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/roles`)
+    .then((out) => { if (st.key !== key || st.mod.roles !== box) return; box.roles = Array.isArray(out.roles) ? out.roles : []; box.members = Array.isArray(out.members) ? out.members : []; box.loading = false; recruitPaintRoles(); })
+    .catch((e) => { if (st.key !== key || st.mod.roles !== box) return; box.loading = false; box.error = recruitError(e); recruitPaintRoles(); });
+}
+
+function recruitRolesBodyHtml() {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  const box = st.mod.roles;
+  const admin = recruitCan('admin');
+  if (!box || box.loading) return '<p class="sheet__note">Loading…</p>';
+  if (box.error) return `<p class="sheet__note">Could not load: ${MD.esc(box.error)}. <button class="linklike" data-action="recruit-roles-retry">Retry</button></p>`;
+  const rows = box.roles.map((g) => `<div class="rc-role" data-member="${MD.esc(g.member)}">
+      <div><b>${MD.esc(g.name || g.member)}</b>${g.name ? `<span class="mail">${MD.esc(g.member)}</span>` : ''}</div>
+      <span class="rc-role__roles">${MD.esc((g.roles || []).map((r) => RECRUIT_ROLE_LABELS[r] || r).join(', '))}</span>
+      ${admin ? `<button type="button" class="icon-btn" data-action="recruit-role-remove" data-member="${MD.esc(g.member)}" aria-label="Remove ${MD.esc(g.name || g.member)}">${I.x}</button>` : ''}
+    </div>`).join('');
+  const taken = new Set(box.roles.map((g) => g.member));
+  const members = box.members.filter((m) => !taken.has(m.email)).sort((x, y) => String(x.name || x.email).localeCompare(String(y.name || y.email)))
+    .map((m) => ({ value: m.email, label: m.name ? `${m.name} · ${m.email}` : m.email }));
+  const roleChoices = [{ value: 'reviewer', label: 'Reviewer' }, ...(admin ? [{ value: 'lead', label: 'Lead' }] : [])];
+  const add = cycle?.status === 'archived' ? '' : members.length
+    ? `<form class="rc-roles__add" data-action="recruit-role-form" aria-label="Add a reviewer">${dd('recruit-role-member', members, members[0].value)}${dd('recruit-role-role', roleChoices, 'reviewer', { small: true })}<button type="submit" class="btn btn--primary">Add</button></form>`
+    : '<p class="rc-set__note">Everyone on the wiki roster already has a role here.</p>';
+  return `<p class="rc-set__note">Admins can do everything in every cycle. Leads edit forms and see everyone here; reviewers read and comment.</p>
+    <div class="rc-roles__list">${rows || '<p class="rc-set__note">Nobody yet besides admins.</p>'}</div>${add}`;
+}
+
+function recruitRolesModalHtml() {
+  const cycle = recruitCycleRow();
+  return `<div class="modal rc-roles" role="dialog" aria-label="Who can review ${MD.esc(cycle?.name || '')}">
+    <div class="modal__head"><h3>Who can review</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    <div class="modal__body" data-rc="roles-body">${recruitRolesBodyHtml()}</div>
+    <div class="modal__foot modal__foot--split"><button class="btn btn--ghost" data-action="recruit-settings-open">Back to settings</button><span style="flex:1"></span><button class="btn" data-action="modal-close">Close</button></div>
+  </div>`;
+}
+
+function recruitPaintRoles() {
+  if (UI.modal?.kind !== 'recruit-roles') return false;
+  const body = $('.rc-roles [data-rc="roles-body"]');
+  if (!body) return false;
+  recruitRepaint(body, recruitRolesBodyHtml());
+  return true;
+}
+
+// The cycle's grants follow the dialog, so the settings row counts right.
+function recruitSyncGrants() {
+  const st = recruitState();
+  if (st.cycle && st.mod.roles) st.cycle.grants = st.mod.roles.roles.map((g) => ({ member: g.member, roles: g.roles, subteams: g.subteams || [] }));
+}
+
+async function recruitAddRole(form) {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  const member = $('[data-m="recruit-role-member"]', form)?.dataset.value;
+  const role = $('[data-m="recruit-role-role"]', form)?.dataset.value || 'reviewer';
+  if (!cycle || !member || st.busy.has('role')) return;
+  st.busy.add('role');
+  try {
+    const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/roles/${encodeURIComponent(member)}`, { method: 'PUT', body: JSON.stringify({ requestId: recruitId('rq'), roles: [role], subteams: [] }) });
+    const box = st.mod.roles;
+    if (box && out.role) {
+      const name = box.members.find((m) => m.email === member)?.name || '';
+      box.roles = [...box.roles.filter((g) => g.member !== member), { ...out.role, name }];
+      recruitSyncGrants();
+    }
+    form.dataset.adminDirty = 'false';
+    toast(`${RECRUIT_ROLE_LABELS[role] || role} added`);
+  } catch (e) { toast(`Could not add: ${recruitError(e)}`); }
+  finally { st.busy.delete('role'); recruitPaintRoles(); }
+}
+
+async function recruitRemoveRole(member) {
+  const st = recruitState();
+  const cycle = recruitCycleRow();
+  if (!cycle || !member || !recruitCan('admin') || st.busy.has('role')) return;
+  st.busy.add('role');
+  try {
+    await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/roles/${encodeURIComponent(member)}`, { method: 'DELETE' });
+    if (st.mod.roles) { st.mod.roles.roles = st.mod.roles.roles.filter((g) => g.member !== member); recruitSyncGrants(); }
+    toast('Removed');
+  } catch (e) { toast(`Could not remove: ${recruitError(e)}`); }
+  finally { st.busy.delete('role'); recruitPaintRoles(); }
 }
 
 const recruitDateInput = (ts) => (ts ? new Date(Number(ts)).toISOString().slice(0, 10) : '');
@@ -9148,52 +9328,47 @@ function recruitFormField(label, inner, note) {
 
 const RECRUIT_SETTINGS = [
   {
-    id: 'cycle', label: 'Cycle', when: (c, role) => recruitCan('lead'),
-    view: (cycle) => `<form class="rc-form" data-action="recruit-settings-cycle">
+    id: 'about', label: 'About', when: () => recruitCan('lead'),
+    view: (cycle) => `<form class="rc-form" data-action="recruit-settings-about">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Term', dd('recruit-term', recruitTermOptions(cycle.term), cycle.term || recruitDefaultTerm()))}
-      ${recruitFormField('Opens', `<input class="text-input" name="opensAt" value="${MD.esc(recruitDateInput(cycle.opensAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Closes', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
-      ${recruitCan('admin') ? recruitFormField('Capacity', `<input class="text-input" name="capacity" value="${MD.esc(String(cycle.doc?.capacity || 0))}" inputmode="numeric" maxlength="6" autocomplete="off">`, '0 = unlimited') : ''}
+      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`, 'Shown with the cycle. Nothing opens or closes on its own.')}
       <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
     </form>`,
     submit: async (form, cycle) => {
-      const opensAt = recruitParseDate(form.elements.opensAt?.value), closesAt = recruitParseDate(form.elements.closesAt?.value, true);
-      if (Number.isNaN(opensAt) || Number.isNaN(closesAt)) throw new Error('Dates are YYYY-MM-DD.');
-      if (opensAt && closesAt && closesAt < opensAt) throw new Error('Closes before it opens.');
-      const body = { version: cycle.version, name: String(form.elements.name.value || '').trim(), term: $('[data-m="recruit-term"]', form)?.dataset.value || cycle.term, opensAt, closesAt };
-      if (!body.name) throw new Error('A cycle needs a name.');
-      if (form.elements.capacity) {
-        const cap = Number(String(form.elements.capacity.value || '0').trim());
-        if (!Number.isInteger(cap) || cap < 0) throw new Error('Capacity is a whole number.');
-        body.capacity = cap;
-      }
-      const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const closesAt = recruitParseDate(form.elements.closesAt?.value, true);
+      if (Number.isNaN(closesAt)) throw new Error('The deadline is a date, YYYY-MM-DD.');
+      const name = String(form.elements.name.value || '').trim();
+      if (!name) throw new Error('A cycle needs a name.');
+      const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}`, { method: 'PATCH', body: JSON.stringify({ version: cycle.version, name, closesAt }) });
       recruitAdoptCycle(out.cycle);
       form.dataset.adminDirty = 'false';
       toast('Saved');
-      renderBackground('recruit');
+      recruitAfterSettings();
     },
   },
   {
     id: 'status', label: 'Status', when: () => recruitCan('lead'),
     view: (cycle) => {
       const st = recruitState();
-      const moves = recruitStatusChoices(cycle);
-      return `<p class="admin-block__sub">${MD.esc(recruitStatusText(cycle, st.cycles?.intakeCycleId))}${cycle.closedAt ? ` · closed ${MD.esc(recruitDate(Number(cycle.closedAt)))}` : ''}</p>
-      <div class="rc-actions">${moves.map((x) => `<button class="btn" data-action="recruit-status" data-status="${MD.esc(x.status)}" data-confirm="${x.confirm ? '1' : ''}">${MD.esc(x.label)}</button>`).join('') || '<span class="faint">Nothing to change.</span>'}</div>`;
-    },
-  },
-  {
-    id: 'website', label: 'Website form', when: () => recruitCan('admin'),
-    view: (cycle) => {
-      const st = recruitState();
+      const roles = recruitMyRoles();
+      const choices = recruitStatusChoices(cycle, roles);
+      const seg = [['draft', 'Draft'], ['open', 'Open'], ['closed', 'Closed']].map(([status, label]) => {
+        const current = cycle.status === status;
+        const move = choices.find((x) => x.status === status);
+        return `<button type="button" data-action="recruit-status-set" data-status="${status}" data-confirm="${move?.confirm ? '1' : ''}" aria-current="${current ? 'page' : 'false'}" ${current || move ? '' : 'disabled'}>${label}</button>`;
+      }).join('');
       const current = st.cycles?.intakeCycleId || null;
       const receiving = current === cycle.id;
-      const other = current && !receiving ? (st.cycles?.list || []).find((c) => c.id === current) : null;
-      const note = receiving ? 'This cycle receives the website form.' : other ? `${other.name} receives the website form.` : st.cycles?.migration?.done ? 'No cycle receives the website form. Submissions wait as orphans.' : 'The old list receives the website form until the import runs.';
-      return `<p class="admin-block__sub">${MD.esc(note)}</p>
-      <div class="rc-actions"><button class="btn ${receiving ? '' : 'btn--primary'}" data-action="recruit-intake" data-on="${receiving ? '' : '1'}" ${cycle.status !== 'open' && !receiving ? 'disabled title="Open the cycle first"' : ''} aria-pressed="${receiving}">${receiving ? 'Stop receiving the website form' : 'Receive the website form'}</button></div>`;
+      const holder = current && !receiving ? (st.cycles?.list || []).find((c) => c.id === current) : null;
+      const canToggle = recruitCan('admin') && (receiving || cycle.status === 'open');
+      const note = receiving ? 'The website posts every form here.'
+        : holder ? `${holder.name} receives them now. Only one cycle can.`
+        : cycle.status !== 'open' ? 'Open the cycle first.'
+        : st.cycles === undefined ? '' : 'No cycle receives them right now.';
+      return `<nav class="rc-seg rc-seg--status" aria-label="Status">${seg}</nav>
+        ${cycle.status === 'archived' ? `<p class="rc-set__note">Archived and read only${cycle.closedAt ? `, closed ${MD.esc(recruitDate(Number(cycle.closedAt)))}` : ''}. Unarchive it below to change anything.</p>` : ''}
+        <label class="rc-check rc-set__website"><input type="checkbox" data-action="recruit-website-toggle" ${receiving ? 'checked' : ''} ${canToggle ? '' : 'disabled'}> This cycle receives the forms on the website</label>
+        ${note ? `<p class="rc-set__note">${MD.esc(note)}</p>` : ''}`;
     },
   },
   {
@@ -9201,6 +9376,7 @@ const RECRUIT_SETTINGS = [
     view: (cycle) => {
       const teams = recruitSubteams(cycle);
       return `<form class="rc-form rc-form--rows" data-action="recruit-settings-subteams">
+        <p class="rc-set__note">The choices on the forms' subteam question and the subteam filter.</p>
         <div class="rc-rows" data-rc="subteam-rows">${teams.map((t) => recruitSubteamRowHtml(t)).join('')}</div>
         <div class="rc-form__foot"><button type="button" class="btn btn--sm" data-action="recruit-subteam-add">${I.plus} Add subteam</button><span style="flex:1"></span><button type="submit" class="btn btn--primary">Save</button></div>
       </form>`;
@@ -9214,44 +9390,22 @@ const RECRUIT_SETTINGS = [
         const key = row.dataset.key || recruitSlug(name);
         if (!key || seen.has(key)) throw new Error(`Two subteams share the key "${key}".`);
         seen.add(key);
-        const capacity = Number(String($('[name="capacity"]', row)?.value || '0').trim());
-        if (!Number.isInteger(capacity) || capacity < 0) throw new Error(`Capacity for ${name} is a whole number.`);
         const prior = recruitSubteams(cycle).find((t) => t.key === key);
-        settings.push({ key, name, capacity, leads: prior?.leads || [] });
+        settings.push({ key, name, capacity: prior?.capacity || 0, leads: prior?.leads || [] });
       }
       await recruitPutSettings(cycle, 'subteams', settings);
       form.dataset.adminDirty = 'false';
       toast('Subteams saved');
-      renderBackground('recruit');
+      recruitAfterSettings();
     },
   },
   {
-    id: 'intake', label: 'Intake', when: () => recruitCan('admin'),
-    view: (cycle) => {
-      const it = cycle.doc?.intake || {};
-      return `<form class="rc-form" data-action="recruit-settings-intake">
-        ${recruitFormField('Per address per hour', `<input class="text-input" name="perIpHour" value="${MD.esc(String(it.perIpHour ?? 5))}" inputmode="numeric" maxlength="4">`)}
-        ${recruitFormField('Per day', `<input class="text-input" name="perDay" value="${MD.esc(String(it.perDay ?? 2000))}" inputmode="numeric" maxlength="6">`)}
-        <div class="rc-checks">
-          <label class="rc-check"><input type="checkbox" name="notify" ${it.notify !== false ? 'checked' : ''}> Email the team on each new application</label>
-          <label class="rc-check"><input type="checkbox" name="confirmUpdate" ${it.confirmUpdate !== false ? 'checked' : ''}> Let a returning applicant update their answers</label>
-        </div>
-        <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
-      </form>`;
+    id: 'review', label: 'Who can review', when: () => recruitCan('lead'),
+    view: () => {
+      const grants = recruitState().cycle?.grants || [];
+      const n = grants.length;
+      return `<div class="rc-set__row"><span>${n ? `${MD.esc(recruitPlural(n, 'person', 'people'))} besides admins` : 'Admins only so far'}</span><button type="button" class="btn btn--sm" data-action="recruit-roles-open">Manage</button></div>`;
     },
-    submit: async (form, cycle) => {
-      const perIpHour = Number(form.elements.perIpHour.value), perDay = Number(form.elements.perDay.value);
-      if (!Number.isInteger(perIpHour) || perIpHour < 1 || !Number.isInteger(perDay) || perDay < 1) throw new Error('Limits are whole numbers of at least 1.');
-      await recruitPutSettings(cycle, 'intake', { ...(cycle.doc?.intake || {}), perIpHour, perDay, notify: form.elements.notify.checked, confirmUpdate: form.elements.confirmUpdate.checked });
-      form.dataset.adminDirty = 'false';
-      toast('Intake saved');
-      renderBackground('recruit');
-    },
-  },
-  {
-    id: 'danger', label: 'Danger', when: (cycle) => recruitCan('admin'),
-    view: (cycle) => `<p class="admin-block__sub">${cycle.status === 'archived' || cycle.status === 'draft' ? 'Deleting erases every record in this cycle.' : 'Only draft and archived cycles can be deleted.'}</p>
-      <div class="rc-actions"><button class="btn btn--danger" data-action="recruit-cycle-delete" ${cycle.status === 'archived' || cycle.status === 'draft' ? '' : 'disabled'}>Delete cycle…</button></div>`,
   },
 ];
 
@@ -9265,7 +9419,6 @@ function recruitSections(cycle) {
 function recruitSubteamRowHtml(t = {}) {
   return `<div class="rc-row" data-key="${MD.esc(t.key || '')}">
     <input class="text-input" name="name" value="${MD.esc(t.name || '')}" placeholder="Subteam" maxlength="40" aria-label="Subteam name" autocomplete="off" spellcheck="false">
-    <input class="text-input rc-row__num" name="capacity" value="${MD.esc(String(t.capacity || 0))}" inputmode="numeric" maxlength="4" aria-label="Capacity" title="0 = unlimited">
     <button type="button" class="icon-btn" data-action="recruit-subteam-remove" aria-label="Remove ${MD.esc(t.name || 'subteam')}">${I.x}</button>
   </div>`;
 }
@@ -9293,11 +9446,10 @@ async function recruitToggleIntake(on) {
     const body = { on: Boolean(on) };
     if (st.cycles?.settingsVersion !== null && st.cycles?.settingsVersion !== undefined) body.version = st.cycles.settingsVersion;
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/intake`, { method: 'POST', body: JSON.stringify(body) });
-    if (st.cycles?.list) st.cycles.intakeCycleId = out.intakeCycleId || null;
-    st.cycles = undefined;
-    toast(on ? `${cycle.name} receives the website form` : 'The website form has no cycle now');
+    if (st.cycles) { st.cycles.intakeCycleId = out.intakeCycleId || null; if (out.settingsVersion !== undefined) st.cycles.settingsVersion = out.settingsVersion; }
+    toast(on ? `${cycle.name} receives the website's forms` : 'No cycle receives the website\'s forms now');
   } catch (e) { recruitVersionToast(e, cycle.id); }
-  finally { st.busy.delete('intake'); renderBackground('recruit'); }
+  finally { st.busy.delete('intake'); recruitAfterSettings(); }
 }
 
 /* ------------------------------- register -------------------------------- */
@@ -9306,9 +9458,14 @@ RECRUIT.register({
   name: 'cycles',
   order: 0,
   kernel: true,
-  panel: { id: 'settings', label: 'Settings', order: 100, when: (cycle, role) => role === 'admin' || role === 'lead' },
-  view: recruitSettingsPanelHtml,
   actions: {
+    'recruit-settings-open': recruitOpenSettings,
+    'recruit-status-set': (el) => { if (el.getAttribute('aria-current') === 'page' || el.disabled) return; recruitSetStatus(el.dataset.status, Boolean(el.dataset.confirm)); },
+    'recruit-website-toggle': (el) => recruitToggleIntake(Boolean(el.checked)),
+    'recruit-roles-open': () => { const st = recruitState(); UI.modal = { kind: 'recruit-roles' }; render(); if (!st.mod.roles || st.mod.roles.key !== st.key + ':' + recruitCycleRow()?.id) recruitLoadRoles(); },
+    'recruit-roles-retry': () => recruitLoadRoles(),
+    'recruit-role-form': (form) => recruitAddRole(form),
+    'recruit-role-remove': (el) => recruitRemoveRole(el.dataset.member),
     'recruit-refresh': () => { const st = recruitState(); UI.recruitMe = undefined; st.me = undefined; st.cycles = undefined; RECRUIT.reset(st.cycleId); render(); },
     'recruit-cycle-open': (el) => { nav(recruitPanelHref(el.dataset.id)); },
     'recruit-cycle-new': () => { UI.modal = { kind: 'recruit-cycle' }; render(); },
@@ -9339,11 +9496,8 @@ RECRUIT.register({
   dd: {
     'recruit-cycle-switch': (host, value) => { if (value !== undefined && value !== recruitCycleRow()?.id) nav(recruitPanelHref(value, UI.route?.params?.sub || '')); },
   },
-  modals: { 'recruit-cycle': recruitCycleModalHtml },
+  modals: { 'recruit-cycle': recruitCycleModalHtml, 'recruit-settings': recruitSettingsModalHtml, 'recruit-roles': recruitRolesModalHtml },
   settings: RECRUIT_SETTINGS,
-  mount: (cycle, role) => {
-    for (const s of RECRUIT.settingsSections(cycle, role)) { try { s.mount?.(cycle, role); } catch (e) { console.error(e); } }
-  },
   reset() {},
 });
 
@@ -9445,7 +9599,10 @@ function recruitFormModel(sec, key, landing = null) {
     if (q.maxBytes) out.maxBytes = Number(q.maxBytes);
     return out;
   });
-  return { title: sec?.title || RECRUIT_SECTION_LABELS[key], description: sec?.description || '', open: sec?.open === true, atApply: landing === key, questions };
+  return {
+    title: sec?.title || RECRUIT_SECTION_LABELS[key], description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
+    notify: sec?.notify !== false, replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
+  };
 }
 
 // One draft per cycle and section; it survives a look at the responses and
@@ -9475,8 +9632,23 @@ function recruitFormEditorHtml(cycle, key) {
     </div>
     <ol class="fe__list" data-rc="fe-list">${recruitQuestionCardsHtml(fe, cycle)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-fe-add">${I.plus} Add question</button></div>
+    <section class="fe-options" data-rc="fe-options" aria-label="How this form behaves">${recruitFormOptionsHtml(fe)}</section>
     <div class="fe__foot" data-rc="fe-foot">${recruitFormFootHtml(fe)}</div>
   </div>`;
+}
+
+// What happens around the form: whether the site shows it, whether it is
+// the one at /apply, who hears about a response, repeats, and a cap.
+function recruitFormOptionsHtml(fe) {
+  const m = fe.model;
+  const to = (recruitState().cycle?.notify || []).filter(Boolean);
+  const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
+  return `<h3 class="fe-options__title">This form</h3>
+    ${sw('recruit-fe-open', m.open, 'Open on the website', `cornellphysicalintelligence.com/apply/${MD.esc(fe.key)}`)}
+    ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
+    ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
+    ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers', 'Off: a second submission with the same email is refused.')}
+    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>`;
 }
 
 const recruitQuestionCardsHtml = (fe, cycle) => fe.model.questions.map((q, i, all) => recruitQuestionCardHtml(q, i, all.length, cycle)).join('');
@@ -9484,9 +9656,7 @@ const recruitQuestionCardsHtml = (fe, cycle) => fe.model.questions.map((q, i, al
 function recruitFormFootHtml(fe) {
   const dirty = recruitFormDirty(fe);
   const status = fe.saving ? 'Saving…' : dirty ? 'Unsaved changes' : fe.savedAt ? 'Saved' : '';
-  return `<label class="fe-switch fe-switch--lg"><input type="checkbox" data-action="recruit-fe-open" ${fe.model.open ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>
-    <label class="fe-switch fe-switch--lg" title="The QR code and the Apply link open /apply; one form shows there"><input type="checkbox" data-action="recruit-fe-landing" ${fe.model.atApply ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Shown at /apply</span></label>
-    ${fe.error ? `<span class="fe__error" role="alert">${MD.esc(fe.error)}</span>` : `<span class="fe__status ${dirty ? 'fe__status--dirty' : ''}" role="status">${status}</span>`}
+  return `${fe.error ? `<span class="fe__error" role="alert">${MD.esc(fe.error)}</span>` : `<span class="fe__status ${dirty ? 'fe__status--dirty' : ''}" role="status">${status}</span>`}
     <button type="button" class="btn" data-action="recruit-fe-discard" ${dirty && !fe.saving ? '' : 'disabled'}>Discard</button>
     <button type="button" class="btn btn--primary" data-action="recruit-fe-save" ${dirty && !fe.saving ? '' : 'disabled'}>Save</button>`;
 }
@@ -9677,6 +9847,7 @@ function recruitMoveQuestion(el, delta) {
 // What the server stores: keys for new questions come from their labels.
 function recruitFormPayload(fe) {
   const used = new Set(fe.model.questions.map((q) => q.key).filter(Boolean));
+  if (fe.model.capacity && (!Number.isInteger(fe.model.capacity) || fe.model.capacity < 0 || fe.model.capacity > 100000)) throw Object.assign(new Error('Stop accepting after a whole number of responses, up to 100,000.'), { focus: '[data-m="recruit-fe-capacity"]' });
   const questions = fe.model.questions.map((q, i) => {
     const label = String(q.label || '').trim();
     if (!label) throw Object.assign(new Error(`Question ${i + 1} needs a label.`), { focus: `[data-m="recruit-fe-label"][data-i="${i}"]` });
@@ -9697,7 +9868,10 @@ function recruitFormPayload(fe) {
     if (q.type === 'file') { out.accept = Array.isArray(q.accept) && q.accept.length ? q.accept : RECRUIT_FILE_ACCEPT; out.maxBytes = q.maxBytes || 2621440; }
     return out;
   });
-  return { title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key], description: String(fe.model.description || '').trim(), open: fe.model.open === true, form: { questions } };
+  return {
+    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key], description: String(fe.model.description || '').trim(), open: fe.model.open === true,
+    notify: fe.model.notify !== false, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
+  };
 }
 
 async function recruitSaveForm(el) {
@@ -9723,7 +9897,7 @@ async function recruitSaveForm(el) {
   } catch (e) { fe.error = recruitError(e); }
   fe.saving = false;
   const host = $('[data-rc="form-editor"]');
-  if (host?.dataset.section === key) { c.host = host; recruitPaintForm(c); recruitPaintModeBar(recruitCycleRow() || cycle, key, true); }
+  if (host?.dataset.section === key) { c.host = host; recruitPaintForm(c); recruitRepaint($('[data-rc="fe-options"]', host), recruitFormOptionsHtml(c.fe)); recruitPaintModeBar(recruitCycleRow() || cycle, key, true); }
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -9755,6 +9929,8 @@ RECRUIT.register({
     'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-open': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.open = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-landing': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.atApply = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-notify': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.notify = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-replace': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.replace = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-option-add': (el) => {
       const c = recruitFeCtx(el);
       if (!c?.q || c.q.fixed) return;
@@ -9780,12 +9956,14 @@ RECRUIT.register({
       if (!c) return;
       c.fe.model = JSON.parse(c.fe.saved); c.fe.error = '';
       recruitPaintForm(c);
+      recruitRepaint($('[data-rc="fe-options"]', c.host), recruitFormOptionsHtml(c.fe));
       toast('Changes discarded');
     },
   },
   inputs: {
     'recruit-fe-title': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.title = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-desc': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.description = el.value; recruitPaintForm(c, { list: false }); },
+    'recruit-fe-capacity': (el) => { const c = recruitFeCtx(el); if (!c) return; const n = Number(String(el.value || '').replace(/[^\d]/g, '')); c.fe.model.capacity = Number.isInteger(n) && n > 0 ? Math.min(n, 100000) : 0; recruitPaintForm(c, { list: false }); },
     'recruit-fe-label': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.label = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-help': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.help = el.value; recruitPaintAnswer(c); recruitPaintForm(c, { list: false }); },
     'recruit-fe-option': (el) => { const c = recruitFeCtx(el); if (!c?.q || !Array.isArray(c.q.options)) return; c.q.options[c.j] = el.value; recruitPaintForm(c, { list: false }); },

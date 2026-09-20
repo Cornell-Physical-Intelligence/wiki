@@ -207,10 +207,10 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.throws(() => f.run("RECRUIT.register({ name: 'noorder' })"), /needs an order/);
   const cycle = cycleRow();
   f.ctx.cycle = cycle;
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['people', 'zeta', 'interest', 'coffee', 'application', 'settings'], 'People leads, the three section tabs follow module tabs by panel order, Settings is last');
+  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['people', 'zeta', 'interest', 'coffee', 'application'], 'People leads, the three section tabs follow module tabs by panel order; settings is a dialog, not a tab');
   same(f.run("RECRUIT.panels(cycle, 'reviewer').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application'], 'tabs are gated by role');
   f.ctx.cycle = cycleRow({ doc: { modules: { zeta: false } } });
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application', 'settings'], 'a module switched off for the cycle loses its tab');
+  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application'], 'a module switched off for the cycle loses its tab');
   assert.match(f.run("RECRUIT.modal({ kind: 'recruit-zeta' })"), /data-zeta/, 'modal kinds resolve through the registry');
   assert.equal(f.run("RECRUIT.modal({ kind: 'recruit-nope' })"), '', 'unknown kinds draw nothing');
   const el = f.run("document.createElement('button')"); el.setAttribute('data-action', 'recruit-zeta'); el.setAttribute('data-id', 'x');
@@ -224,7 +224,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   loadCycle(f);
   f.mount();
   const tabs = f.app.querySelectorAll('.rc-tabs [role="tab"]');
-  same(tabs.map((t) => t.textContent), ['People', 'Zeta', 'Interest form', 'Coffee chats', 'Applications', 'Settings']);
+  same(tabs.map((t) => t.textContent), ['People', 'Zeta', 'Interest form', 'Coffee chats', 'Applications']);
   assert.equal(tabs[2].getAttribute('aria-current'), 'page');
   tabs[2].focus(); f.ctx.evt.target = tabs[2];
   assert.equal(f.run('RECRUIT.keydown(evt)'), true); assert.ok(f.document.activeElement === tabs[3], 'arrow keys rove the tablist');
@@ -322,16 +322,40 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const listCalls = f.requests.filter((r) => r.url.includes('/applications?'));
   assert.match(listCalls[1].url, /subteam=Electrical/, 'server filters ride the query');
   assert.ok(listCalls.every((r) => r.signal instanceof AbortSignal), 'every list fetch is bounded');
+  // Settings is a dialog from the gear beside the name: about, status, subteams, who can review.
+  assert.ok(f.app.querySelector('.rc-cycle-gear[data-action="recruit-settings-open"]'), 'the gear sits beside the cycle name');
+  f.run('recruitOpenSettings()');
+  assert.equal(f.ctx.UI.modal.kind, 'recruit-settings');
+  const settings = f.mountModal();
+  assert.equal(settings.querySelector('[data-action="recruit-settings-about"] [name="name"]').value, 'Fall 2026', 'About holds the name');
+  assert.ok(!settings.querySelector('[data-m="recruit-term"]') && !settings.querySelector('[name="opensAt"]') && !settings.querySelector('[name="capacity"]') && !settings.querySelector('[name="perIpHour"]'), 'term, opens, capacity and rate limits are gone from the dialog');
+  const seg = settings.querySelectorAll('.rc-seg--status [data-action="recruit-status-set"]');
+  same([...seg].map((b) => [b.dataset.status, b.getAttribute('aria-current') === 'page', b.disabled]), [['draft', false, true], ['open', true, false], ['closed', false, false]], 'status is a segmented control: the current one pressed, only real moves enabled');
+  assert.equal(settings.querySelector('[data-action="recruit-website-toggle"]').checked, true, 'the receiving checkbox reflects the index');
+  assert.equal(settings.querySelectorAll('[data-rc="subteam-rows"] .rc-row').length, 2); assert.ok(!settings.querySelector('[name="capacity"]'), 'subteam rows are names only');
+  assert.match(settings.querySelector('#rc-set-review').innerHTML, /Admins only so far/); assert.ok(settings.querySelector('[data-action="recruit-roles-open"]'));
+  assert.ok(!settings.querySelector('[data-action="recruit-cycle-delete"]'), 'an open cycle cannot be deleted; nothing offers it');
+  assert.doesNotMatch(f.app.innerHTML + settings.innerHTML, /<select/);
   // A dd without a handler gets the default menu from data-opts and marks its form dirty.
-  f.ctx.UI.route.params.sub = 'settings'; f.mount();
-  const term = f.app.querySelector('[data-m="recruit-term"]');
-  assert.ok(term, 'Settings draws the Cycle form with a term dropdown');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(term);
-  const pick = f.menus.at(-1).items.find((i) => i.label === 'Rolling'); pick.run();
-  assert.equal(term.dataset.value, 'Rolling'); assert.equal(term.closest('form').dataset.adminDirty, 'true');
-  assert.doesNotMatch(f.app.innerHTML, /<select/);
+  const st0 = f.run('recruitState()');
+  st0.mod.roles = { key: st0.key + ':cy-a', loading: false, error: null, roles: [], members: [{ email: 'r@cornell.edu', name: 'Rae' }] };
+  f.ctx.UI.modal = { kind: 'recruit-roles' };
+  const rolesVeil = f.mountModal();
+  const roleDd = rolesVeil.querySelector('[data-m="recruit-role-role"]');
+  assert.ok(roleDd, 'Who can review offers a role dropdown');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(roleDd);
+  const pick = f.menus.at(-1).items.find((i) => i.label === 'Lead'); pick.run();
+  assert.equal(roleDd.dataset.value, 'lead'); assert.equal(roleDd.closest('form').dataset.adminDirty, 'true');
+  const adding = f.run('recruitAddRole')(rolesVeil.querySelector('[data-action="recruit-role-form"]'));
+  const putRole = f.requests.find((r) => r.method === 'PUT' && r.url === '/recruit/cycles/cy-a/roles/r%40cornell.edu');
+  assert.ok(putRole, 'adding sends one PUT for the member'); same(putRole.body.roles, ['lead']); assert.match(putRole.body.requestId, /^rq-/);
+  putRole.resolve({ role: { member: 'r@cornell.edu', roles: ['lead'], subteams: [], ts: 1 } }); await adding;
+  assert.equal(f.toasts.at(-1), 'Lead added');
+  assert.match(rolesVeil.querySelector('[data-rc="roles-body"]').innerHTML, /Rae/, 'the list repaints in place');
+  assert.equal(st0.cycle.grants.length, 1, 'the cycle knows its new grant');
+  f.ctx.UI.modal = null; f.ctx.UI.route.params.sub = 'coffee';
   const sw = f.app.querySelector('[data-m="recruit-cycle-switch"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(sw, 'cy-b'); assert.equal(f.navs.at(-1), '#/applications/cy-b/settings', 'switching cycles keeps the panel');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(sw, 'cy-b'); assert.equal(f.navs.at(-1), '#/applications/cy-b/coffee', 'switching cycles keeps the panel');
   console.log('PASS: sheet rows escape user data, focus survives repaints, dd() drives every choice with composed labels, and no template contains a native select');
 }
 
@@ -410,6 +434,9 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'a', target: grip, preventDefault() {} }), false);
   const open = f.app.querySelector('[data-action="recruit-fe-open"]'); open.checked = true; await click('recruit-fe-open');
   const landing = f.app.querySelector('[data-action="recruit-fe-landing"]'); landing.checked = true; await click('recruit-fe-landing');
+  assert.ok(f.app.querySelector('[data-rc="fe-options"] [data-action="recruit-fe-notify"]').checked, 'emailing the team is on by default');
+  const replace = f.app.querySelector('[data-action="recruit-fe-replace"]'); replace.checked = false; await click('recruit-fe-replace');
+  type('recruit-fe-capacity', '40');
   type('recruit-fe-desc', 'Grab a coffee.');
   const saving = click('recruit-fe-save');
   await f.settle();
@@ -418,6 +445,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const saved = put.body.settings.sections.coffee;
   assert.equal(put.body.settings.landing, 'coffee', 'the /apply choice rides with the save');
   assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.');
+  assert.deepEqual([saved.notify, saved.replace, saved.capacity], [true, false, 40], 'the form\'s own email, replace and cap settings ride with the save');
   same(saved.form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a new question gets a key from its label');
   same(saved.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
   assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Saving…/);

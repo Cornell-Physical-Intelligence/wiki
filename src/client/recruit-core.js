@@ -218,7 +218,7 @@ const RECRUIT = {
         .then((out) => {
           if (st.key !== key) return;                       // switched away meanwhile
           const roles = Array.isArray(out.me?.roles) ? out.me.roles : (st.me.admin ? ['admin'] : []);
-          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [] };
+          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [], notify: out.notify || [] };
           renderBackground('recruit');
         })
         .catch((e) => { if (st.key !== key) return; st.cycle = { error: recruitError(e), status: e.status }; renderBackground('recruit'); });
@@ -535,8 +535,9 @@ function recruitShowModal(m) {
 }
 
 // The cycle's name is the switch: the big title opens the list of cycles.
+// The gear beside it opens the cycle's settings.
 function recruitCycleTitleHtml(cycle, options) {
-  return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+  return `<button type="button" class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch" data-value="${MD.esc(cycle.id)}" data-opts="${MD.esc(JSON.stringify(options))}" aria-haspopup="menu" title="Switch cycle"><span class="dd__label">${MD.esc(cycle.name)}</span><svg class="dd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>${recruitCan('lead') ? `<button type="button" class="icon-btn rc-cycle-gear" data-action="recruit-settings-open" aria-label="Settings for ${MD.esc(cycle.name)}" title="Settings">${I.settings}</button>` : ''}`;
 }
 const recruitCycleChoiceLabel = (x) => {
   const name = x.term && x.term !== x.name ? `${x.name} · ${x.term}` : x.name;

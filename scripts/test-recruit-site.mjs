@@ -174,6 +174,24 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(lines[0], '"Name","Email","Cornell","Year","Subteam","Received","Updated","When are you free?","Snack","Files"', 'a section CSV is answers only; flags and comments belong to people');
   assert.match(lines[1], /^"Cam Chat","cam@cornell.edu","yes","","Software",/);
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/applications.csv?section=coffee', {}, plain)).status, 403);
+  /* ---- each form owns its cap, its email, and whether repeats replace ---- */
+  const v1c = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1c, settings: { sections: { coffee: { capacity: 'lots' } } } })).status, 400, 'a cap is a whole number');
+  const tuned = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1c, settings: { sections: { coffee: { notify: false, replace: false } } } });
+  assert.equal(tuned.status, 200, tuned.text);
+  const coffeeNow = (await recruit('GET', '/recruit/cycles/cy-interest')).data.sections.coffee;
+  assert.deepEqual([coffeeNow.capacity, coffeeNow.notify, coffeeNow.replace], [0, false, false]);
+  assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').notify, undefined, 'the website never sees these');
+  const emailsBefore = sent.length;
+  const repeat = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', subteam: 'Software', availability: 'Thu', snack: 'Tea' }, confirmUpdate: true });
+  assert.equal(repeat.status, 409, repeat.text); assert.equal(repeat.data.exists, true); assert.equal(repeat.data.replaceable, false, 'with replacing off a repeat is refused even when confirmed');
+  const capped = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: tuned.data.cycle.version, settings: { sections: { coffee: { capacity: 1 } } } });
+  assert.equal(capped.status, 200, capped.text);
+  const third = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Third', email: 'third@cornell.edu', availability: 'Fri', snack: 'Tea' } });
+  assert.equal(third.status, 409, third.text); assert.match(third.data.error, /full/, 'the form\'s own cap applies');
+  assert.equal(sent.length, emailsBefore, 'nothing was emailed for refused submissions');
+  const v1d = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1d, settings: { sections: { coffee: { capacity: 0, notify: true, replace: true } } } })).status, 200);
   const v2 = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v2, settings: { sections: { interest: { open: false } } } })).status, 200);
   const closed = await interest('POST', '/interest', { name: 'Late', email: 'late@cornell.edu', year: 'Senior' });
