@@ -166,9 +166,9 @@ function recruitFormEditorHtml(cycle, key) {
   const m = fe.model;
   return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(recruitSectionTitle(key, cycle))} editor">
     <div class="fe__head">
-      <input class="fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
-      <textarea class="fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
-      <label class="fe__thanks"><span class="fe__thanks-label">After they send it</span><input class="fe__thanks-input" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." aria-label="What applicants read after sending" autocomplete="off"></label>
+      <label class="fe__field"><span class="fe__field-label">Title</span><input class="text-input fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" autocomplete="off" spellcheck="false"></label>
+      <label class="fe__field"><span class="fe__field-label">Description</span><textarea class="text-input fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600">${MD.esc(m.description)}</textarea></label>
+      <label class="fe__field"><span class="fe__field-label">After they send it</span><input class="text-input fe__thanks-input" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." autocomplete="off"></label>
     </div>
     <ol class="fe__list" data-rc="fe-list">${recruitQuestionCardsHtml(fe, cycle)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-fe-add">${I.plus} Add question</button></div>
