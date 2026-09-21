@@ -186,6 +186,14 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.deepEqual([coffeeNow.capacity, coffeeNow.notify, coffeeNow.replace], [0, false, false]);
   assert.deepEqual(secsNow.interest.required, ['name', 'email', 'subteam', 'year', 'project', 'file'], 'the interest form says which questions it keeps');
   assert.deepEqual(coffeeNow.required, ['name', 'email'], 'every other form keeps only a name and an email');
+  /* ---- what applicants read after sending is the form's own line ---- */
+  assert.equal(coffeeNow.thanks, 'A member will email you to find a time.', 'a default form starts with its stock line');
+  assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').thanks, 'A member will email you to find a time.', 'the website reads it');
+  const thanked = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: tuned.data.cycle.version, settings: { sections: { coffee: { thanks: '  We will write back within a week.  ' } } } });
+  assert.equal(thanked.status, 200, thanked.text);
+  assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').thanks, 'We will write back within a week.', 'trimmed, and live on the website');
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: thanked.data.cycle.version, settings: { sections: { coffee: { thanks: '' } } } })).status, 200);
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest')).data.sections.coffee.thanks, '', 'cleared, the site falls back to its plain line');
   assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').notify, undefined, 'the website never sees these');
   /* ---- a reviewer with no module narrowing the list reads the whole cycle ---- */
   const reviewerGrant = await recruit('PUT', '/recruit/cycles/cy-interest/roles/plain%40example.com', { requestId: 'rq-site-reviewer-0001', roles: ['reviewer'] });
@@ -197,7 +205,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const emailsBefore = sent.length;
   const repeat = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', subteam: 'Software', availability: 'Thu', snack: 'Tea' }, confirmUpdate: true });
   assert.equal(repeat.status, 409, repeat.text); assert.equal(repeat.data.exists, true); assert.equal(repeat.data.replaceable, false, 'with replacing off a repeat is refused even when confirmed');
-  const capped = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: tuned.data.cycle.version, settings: { sections: { coffee: { capacity: 1 } } } });
+  const capped = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version, settings: { sections: { coffee: { capacity: 1 } } } });
   assert.equal(capped.status, 200, capped.text);
   const third = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Third', email: 'third@cornell.edu', availability: 'Fri', snack: 'Tea' } });
   assert.equal(third.status, 409, third.text); assert.match(third.data.error, /full/, 'the form\'s own cap applies');
@@ -250,6 +258,28 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const vD = dropped.data.cycle.version;
   const revived = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: vD, settings: { sections: { application: { title: 'Application' } } } });
   assert.equal(revived.status, 200, revived.text);
+  /* ---- a long answer with a file in one question ---- */
+  const vLF = revived.data.cycle.version;
+  const withPortfolio = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: vLF, settings: { sections: { application: { open: true, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }, { key: 'portfolio', type: 'longfile', label: 'Portfolio', required: true }] } } } } });
+  assert.equal(withPortfolio.status, 200, withPortfolio.text);
+  const pub = (await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'application');
+  assert.deepEqual(pub.form.questions.map((qq) => qq.type), ['short', 'email', 'longfile'], 'the website sees the combined type');
+  assert.equal((await anon('POST', '/recruit/site/application', { answers: { name: 'Neither', email: 'neither@cornell.edu' } })).status, 400, 'required means text or a file');
+  const textOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'Text Only', email: 'textonly@cornell.edu', portfolio: 'Built a rover' } });
+  assert.equal(textOnly.status, 200, textOnly.text);
+  const fileOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'File Only', email: 'fileonly@cornell.edu' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: 'JVBERi0xLjQK' } } });
+  assert.equal(fileOnly.status, 200, fileOnly.text);
+  const both = await anon('POST', '/recruit/site/application', { answers: { name: 'Both', email: 'both@cornell.edu', portfolio: 'See attached' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: 'JVBERi0xLjQK' } } });
+  assert.equal(both.status, 200, both.text);
+  const appRows = (await recruit('GET', '/recruit/cycles/cy-interest/applications?section=application')).data.rows;
+  const bothRow = (await recruit('GET', `/recruit/cycles/cy-interest/applications/${appRows.find((r) => r.email === 'both@cornell.edu').id}`)).data.application;
+  assert.equal(bothRow.answers.portfolio, 'See attached'); assert.equal(bothRow.files.length, 1, 'the text and the file land on one row');
+  const fileRow = (await recruit('GET', `/recruit/cycles/cy-interest/applications/${appRows.find((r) => r.email === 'fileonly@cornell.edu').id}`)).data.application;
+  assert.equal(fileRow.files[0].name, 'rover.pdf'); assert.equal(fileRow.answers.portfolio || '', '', 'a file alone leaves the text empty');
+  assert.equal((await anon('POST', '/recruit/site/application', { answers: { name: 'Bad File', email: 'badfile@cornell.edu' }, files: { portfolio: { name: 'x.txt', type: 'text/plain', data: 'aGk=' } } })).status, 400, 'images or PDF only');
+  const csvLF = await recruit('GET', '/recruit/cycles/cy-interest/applications.csv?section=application');
+  assert.match(csvLF.text, /"Portfolio"/); assert.match(csvLF.text, /"See attached"/); assert.match(csvLF.text, /rover\.pdf/);
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: withPortfolio.data.cycle.version, settings: { sections: { application: { open: false } } } })).status, 200);
   assert.deepEqual(Object.keys((await recruit('GET', '/recruit/cycles/cy-interest')).data.sections), ['interest', 'coffee-2', 'coffee', 'application'], 'a dropped default comes back on request');
   const v2 = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v2, settings: { sections: { interest: { open: false } } } })).status, 200);

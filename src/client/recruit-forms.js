@@ -10,20 +10,21 @@
 // recruit:forms:start
 
 const RECRUIT_QUESTION_TYPES = [
-  { value: 'short', label: 'Short text' }, { value: 'long', label: 'Long text' }, { value: 'email', label: 'Email' },
+  { value: 'short', label: 'Short text' }, { value: 'long', label: 'Long text' }, { value: 'longfile', label: 'Long text + file' }, { value: 'email', label: 'Email' },
   { value: 'single', label: 'Choose one' }, { value: 'multi', label: 'Choose many' }, { value: 'checkbox', label: 'Checkbox' },
   { value: 'link', label: 'Link' }, { value: 'file', label: 'File' },
 ];
 const RECRUIT_FILE_ACCEPT = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 // What the note under a question does on the website, by type.
 const RECRUIT_HELP_HINT = {
-  short: 'Short answer', long: 'Long answer', email: 'netid@cornell.edu', link: 'https://',
+  short: 'Short answer', long: 'Long answer', longfile: 'Long answer', email: 'netid@cornell.edu', link: 'https://',
   checkbox: 'Text next to the box', single: 'Note under the question (optional)', multi: 'Note under the question (optional)', file: 'Note under the question (optional)',
 };
 const recruitQuestionKey = (label) => { const k = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40); return /^[a-z]/.test(k) ? k : 'q_' + k; };
 const recruitTypeLabel = (type) => (RECRUIT_QUESTION_TYPES.find((t) => t.value === type) || RECRUIT_QUESTION_TYPES[0]).label;
 const recruitIsChoice = (type) => type === 'single' || type === 'multi';
-const recruitIsText = (type) => type === 'short' || type === 'long' || type === 'email' || type === 'link';
+const recruitIsText = (type) => type === 'short' || type === 'long' || type === 'longfile' || type === 'email' || type === 'link';
+const recruitTakesFile = (type) => type === 'file' || type === 'longfile';
 
 const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
 const RECRUIT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -138,7 +139,7 @@ function recruitFormModel(sec, key, landing = null) {
     return out;
   });
   return {
-    title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
+    title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', thanks: sec?.thanks || '', open: sec?.open === true, atApply: landing === key,
     notify: sec?.notify !== false, notifyTo: Array.isArray(sec?.notifyTo) ? sec.notifyTo.map(String) : [], replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
   };
 }
@@ -185,6 +186,7 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${recruitFormNotifyHtml(fe)}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
+    <label class="fe-options__text"><span class="fe-switch__text">After they send it</span><input class="text-input fe-options__thanks" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." aria-label="What applicants read after sending" autocomplete="off"></label>
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
 }
@@ -311,6 +313,7 @@ function recruitAnswerPreviewHtml(q, i) {
     case 'email': return edit('fe-ans--line', RECRUIT_HELP_HINT.email);
     case 'link': return edit('fe-ans--line', RECRUIT_HELP_HINT.link);
     case 'file': return `<div class="fe-ans fe-ans--file">${I.paperclip}<span>Photo or PDF, up to 2.5 MB</span></div>`;
+    case 'longfile': return `<div class="fe-ans-stack"><textarea class="fe-ans fe-ans--para fe-ans--edit" data-m="recruit-fe-help" data-i="${i}" placeholder="${MD.esc(RECRUIT_HELP_HINT.longfile)}" maxlength="300" rows="3" aria-label="Placeholder for question ${i + 1}">${MD.esc(q.help)}</textarea><div class="fe-ans fe-ans--file">${I.paperclip}<span>Attach a photo or PDF, up to 2.5 MB</span></div></div>`;
     case 'checkbox': return `<div class="fe-ans fe-ans--check"><span class="fe-mark"></span><span>${MD.esc(q.help || 'Yes')}</span></div>`;
     case 'single': case 'multi': return recruitOptionsHtml(q, i);
     default: return edit('fe-ans--line', RECRUIT_HELP_HINT.short);
@@ -493,7 +496,7 @@ function recruitFormPayload(fe) {
       out.options = options;
     }
     if (q.max) out.max = q.max;
-    if (q.type === 'file') { out.accept = Array.isArray(q.accept) && q.accept.length ? q.accept : RECRUIT_FILE_ACCEPT; out.maxBytes = q.maxBytes || 2621440; }
+    if (recruitTakesFile(q.type)) { out.accept = Array.isArray(q.accept) && q.accept.length ? q.accept : RECRUIT_FILE_ACCEPT; out.maxBytes = q.maxBytes || 2621440; }
     return out;
   });
   const notifyTo = [];
@@ -505,7 +508,7 @@ function recruitFormPayload(fe) {
   });
   if (notifyTo.length > RECRUIT_NOTIFY_MAX) throw Object.assign(new Error(`Up to ${RECRUIT_NOTIFY_MAX} addresses.`), { focus: '[data-action="recruit-fe-recipient-add"]' });
   return {
-    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), open: fe.model.open === true,
+    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), thanks: String(fe.model.thanks || '').trim().slice(0, 300), open: fe.model.open === true,
     notify: fe.model.notify !== false, notifyTo, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
   };
 }
@@ -621,6 +624,7 @@ RECRUIT.register({
   inputs: {
     'recruit-fe-title': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.title = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-desc': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.description = el.value; recruitPaintForm(c, { list: false }); },
+    'recruit-fe-thanks': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.thanks = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-capacity': (el) => { const c = recruitFeCtx(el); if (!c) return; const n = Number(String(el.value || '').replace(/[^\d]/g, '')); c.fe.model.capacity = Number.isInteger(n) && n > 0 ? Math.min(n, 100000) : 0; recruitPaintForm(c, { list: false }); },
     'recruit-fe-label': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.label = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-help': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.help = el.value; recruitPaintAnswer(c); recruitPaintForm(c, { list: false }); },
@@ -645,7 +649,7 @@ RECRUIT.register({
       c.q.type = value;
       if (isChoice && !wasChoice) c.q.options = [''];
       if (!isChoice) delete c.q.options;
-      if (value === 'file') { c.q.accept = [...RECRUIT_FILE_ACCEPT]; c.q.maxBytes = 2621440; } else { delete c.q.accept; delete c.q.maxBytes; }
+      if (recruitTakesFile(value)) { c.q.accept = [...RECRUIT_FILE_ACCEPT]; c.q.maxBytes = 2621440; } else { delete c.q.accept; delete c.q.maxBytes; }
       recruitPaintForm(c);
       $(`[data-m="recruit-fe-type"][data-i="${c.i}"]`, c.host)?.focus({ preventScroll: true });
     },

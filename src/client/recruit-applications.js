@@ -324,12 +324,12 @@ function recruitApplicationsView(cycle, role, panel) {
 /* ------------------------------- queue block ----------------------------- */
 
 function recruitPendingReason(reason) {
-  if (reason === 'duplicate') return 'Same email as an earlier response';
-  if (reason === 'capacity') return 'The form was full';
+  if (reason === 'duplicate') return 'A repeat from an email that had already sent this form, never confirmed';
+  if (reason === 'capacity') return 'Arrived after the form was full';
   if (reason === 'replay_failed') return 'Could not be written to its form yet';
   if (reason === 'unsynced') return 'Not yet written to its form';
   if (reason === 'legacy') return 'Sent to the old list';
-  return 'Waiting to join its form';
+  return 'Not on its form yet';
 }
 
 function recruitPendingHtml() {
@@ -343,7 +343,7 @@ function recruitPendingHtml() {
   if (!pending.length) return unavailable;
   return `<section aria-labelledby="recruit-pending-heading">
     <h2 class="sheet__heading" id="recruit-pending-heading">Held responses <span class="count">${pending.length}</span></h2>
-    <p class="sheet__note">Saved in the receipt journal; not yet on a form's list or in its CSV.</p>
+    <p class="sheet__note">The website took these but did not put them on a form: a repeat that was never confirmed, or a form that was full. Place one on the form, or leave it.</p>
     ${unavailable}
     <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive rc-pending">
       <button class="interest-person" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review the held response from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
@@ -363,7 +363,7 @@ function recruitQueueModalHtml(m) {
   return `<div class="modal modal--wide" role="dialog" aria-label="Held response">
     <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body">
-      <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it copies the answers onto a form; the saved record stays.</p>
+      <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it puts these answers on the form${r.reason === 'duplicate' ? ', replacing what that email sent before' : ''}.</p>
       <dl class="interest-detail">
         <dt>Email</dt><dd>${MD.esc(r.email)}</dd>
         ${r.sectionTitle ? `<dt>Form</dt><dd>${MD.esc(r.sectionTitle)}</dd>` : ''}

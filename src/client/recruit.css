@@ -247,6 +247,11 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .fe-switch--row small { font-size: 12.5px; color: var(--faint); }
 .fe-options__cap { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
 .fe-options__n { width: 96px; height: 28px; font-variant-numeric: tabular-nums; }
+/* A line of applicant-facing text among the switches. */
+.fe-options__text { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
+.fe-options__text .fe-switch__text { flex: none; }
+.fe-options__thanks { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
+.fe-ans-stack { display: flex; flex-direction: column; gap: 6px; }
 /* Recipients under the email switch: option rows, indented to its text. */
 .fe-notify { margin: 0 0 12px 42px; }
 .fe-switch--row:has(+ .fe-notify) { padding-bottom: 4px; }
@@ -264,6 +269,8 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 @media (max-width: 640px) {
   .fe__title { font-size: 24px; }
   .rc-mode { gap: 12px; }
+  .fe-options__text { flex-wrap: wrap; }
+  .fe-options__thanks { flex-basis: 100%; }
   /* The address takes a row of its own under the switch; no dot between. */
   .rc-mode__addr { flex-basis: 100%; }
   .rc-mode__sep { display: none; }

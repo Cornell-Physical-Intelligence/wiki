@@ -474,13 +474,14 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   type('recruit-fe-recipient', ' Lead@Cornell.edu ', undefined, 0);
   type('recruit-fe-capacity', '40');
   type('recruit-fe-desc', 'Grab a coffee.');
+  type('recruit-fe-thanks', ' A member will write to you. ');
   const saving = click('recruit-fe-save');
   await f.settle();
   const put = f.requests.at(-1);
   assert.equal(put.url, '/recruit/cycles/cy-a/settings/site'); assert.equal(put.method, 'PUT'); assert.equal(put.body.version, 4, 'the version the bar switch brought back');
   const saved = put.body.settings.sections.coffee;
   assert.equal(put.body.settings.landing, 'coffee', 'the /apply choice rides with the save');
-  assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.');
+  assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.'); assert.equal(saved.thanks, 'A member will write to you.', 'what applicants read after sending rides along, trimmed');
   assert.deepEqual([saved.notify, saved.replace, saved.capacity], [true, false, 40], 'the form\'s own email, replace and cap settings ride with the save');
   assert.deepEqual(saved.notifyTo, ['lead@cornell.edu'], 'its recipients ride along, trimmed and lowercased');
   same(saved.form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a new question gets a key from its label');
