@@ -168,6 +168,7 @@ function recruitFormEditorHtml(cycle, key) {
     <div class="fe__head">
       <input class="fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
       <textarea class="fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
+      <label class="fe__thanks"><span class="fe__thanks-label">After they send it</span><input class="fe__thanks-input" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." aria-label="What applicants read after sending" autocomplete="off"></label>
     </div>
     <ol class="fe__list" data-rc="fe-list">${recruitQuestionCardsHtml(fe, cycle)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-fe-add">${I.plus} Add question</button></div>
@@ -186,7 +187,6 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${recruitFormNotifyHtml(fe)}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
-    <label class="fe-options__text"><span class="fe-switch__text">After they send it</span><input class="text-input fe-options__thanks" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." aria-label="What applicants read after sending" autocomplete="off"></label>
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
 }
