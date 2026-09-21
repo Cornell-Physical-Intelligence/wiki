@@ -110,7 +110,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
 
   /* ---- open coffee chats with an extra question, from Settings ---- */
   const version = detail.cycle.version;
-  const put = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version, settings: { sections: { coffee: { open: true, form: { questions: [
+  const put = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version, settings: { sections: { coffee: { open: true, notifyTo: ['team@cornell.edu'], form: { questions: [
     { key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true },
     { key: 'subteam', type: 'single', label: 'Subteam', options: ['Mechanical', 'Software'] }, { key: 'availability', type: 'long', label: 'When are you free?', required: true, max: 400 },
     { key: 'snack', type: 'single', label: 'Snack', options: ['Coffee', 'Tea'] },
@@ -154,6 +154,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.deepEqual(row.form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack'], 'the detail carries the section form');
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/applications?section=interest')).data.rows.length, 1, 'sections do not mix');
   assert.equal(sent.length, 1, 'the team is emailed once per new submission'); assert.match(sent[0].body.subject, /^Coffee chats: Cam Chat$/);
+  assert.deepEqual([].concat(sent[0].body.to), ['team@cornell.edu'], 'to the addresses the form names');
   assert.match(sent[0].body.html, /When are you free\?<\/b><br>Tue 3pm/); assert.doesNotMatch(sent[0].body.html, /extra/);
   // Same email, same section: refused until confirmed; another section is separate.
   const dup = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', availability: 'Wed' } });
@@ -202,14 +203,14 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(routed.status, 200, routed.text);
   assert.deepEqual((await recruit('GET', '/recruit/cycles/cy-interest')).data.sections.coffee.notifyTo, ['lead@cornell.edu', 'second@cornell.edu'], 'recipients are trimmed, lowercased and deduplicated');
   assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').notifyTo, undefined, 'the website never sees recipients');
-  const defaultsTo = [].concat(sent[0].body.to);
   const fourth = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Fourth Person', email: 'fourth@cornell.edu', availability: 'Sat', snack: 'Tea' } });
   assert.equal(fourth.status, 200, fourth.text);
   assert.deepEqual([].concat(sent.at(-1).body.to), ['lead@cornell.edu', 'second@cornell.edu'], "the form's own recipients get its emails");
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: routed.data.cycle.version, settings: { sections: { coffee: { notifyTo: [] } } } })).status, 200);
+  const beforeFifth = sent.length;
   const fifth = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Fifth Person', email: 'fifth@cornell.edu', availability: 'Sun', snack: 'Tea' } });
   assert.equal(fifth.status, 200, fifth.text);
-  assert.deepEqual([].concat(sent.at(-1).body.to), defaultsTo, 'with no addresses of its own a form emails the default recipients');
+  assert.equal(sent.length, beforeFifth, 'with no addresses of its own a form emails nobody');
   /* ---- a cycle adds forms of its own, orders them, and drops them when empty ---- */
   const vA = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: vA, settings: { sections: { 'coffee-2': { open: true } } } })).status, 400, 'a new form needs a title');

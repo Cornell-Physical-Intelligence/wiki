@@ -453,11 +453,13 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const landing = f.app.querySelector('[data-action="recruit-fe-landing"]'); landing.checked = true; await click('recruit-fe-landing');
   assert.ok(f.app.querySelector('[data-rc="fe-options"] [data-action="recruit-fe-notify"]').checked, 'emailing the team is on by default');
   const replace = f.app.querySelector('[data-action="recruit-fe-replace"]'); replace.checked = false; await click('recruit-fe-replace');
-  assert.ok(f.app.querySelector('[data-rc="fe-notify-default"]').hidden, 'with no default recipients known there is no "To" line to show');
+  const note = f.app.querySelector('[data-rc="fe-notify-default"]');
+  assert.ok(!note.hidden && /Nobody is emailed until an address is added/.test(note.textContent), 'with no addresses the row says nobody is emailed');
   await click('recruit-fe-recipient-add');
   const recipient = f.app.querySelector('[data-m="recruit-fe-recipient"][data-j="0"]');
   assert.ok(recipient, 'the email row grows a recipient input');
   type('recruit-fe-recipient', 'nope', undefined, 0);
+  assert.ok(f.app.querySelector('[data-rc="fe-notify-default"]').hidden, 'once an address is written the line goes');
   const requestsBefore = f.requests.length;
   await click('recruit-fe-save'); await f.settle();
   assert.match(f.app.querySelector('[data-rc="fe-foot"]').textContent, /"nope" is not an email address/, 'a bad address stops the save');

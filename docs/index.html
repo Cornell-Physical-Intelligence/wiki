@@ -8565,7 +8565,7 @@ const RECRUIT = {
         .then((out) => {
           if (st.key !== key) return;                       // switched away meanwhile
           const roles = Array.isArray(out.me?.roles) ? out.me.roles : (st.me.admin ? ['admin'] : []);
-          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [], notify: out.notify || [] };
+          st.cycle = { data: out.cycle, role: recruitRoleOf(roles), roles, counts: out.counts || { total: 0, bySection: {} }, sections: out.sections || null, grants: out.roles || [] };
           renderBackground('recruit');
         })
         .catch((e) => { if (st.key !== key) return; st.cycle = { error: recruitError(e), status: e.status }; renderBackground('recruit'); });
@@ -9789,26 +9789,25 @@ function recruitFormEditorHtml(cycle, key) {
 // the one at /apply, who hears about a response, repeats, and a cap.
 function recruitFormOptionsHtml(fe) {
   const m = fe.model;
-  const to = (recruitState().cycle?.notify || []).filter(Boolean);
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
   return `<h3 class="fe-options__title">Form settings</h3>
     ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
-    ${recruitFormNotifyHtml(fe, to)}
+    ${recruitFormNotifyHtml(fe)}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
 }
 
-// Who hears about a response: the wiki's default addresses until the form
-// lists its own; the list shows only while emailing is on.
-function recruitFormNotifyHtml(fe, defaults) {
+// Who hears about a response: only the addresses the form lists. The list
+// shows while emailing is on; with nothing written, it says so.
+function recruitFormNotifyHtml(fe) {
   const m = fe.model;
   const own = Array.isArray(m.notifyTo) ? m.notifyTo : [];
   const listed = own.some((e) => String(e).trim());
-  const small = m.notify && !listed && defaults.length ? `To ${MD.esc(defaults.join(', '))}` : '';
+  const small = m.notify && !listed ? 'Nobody is emailed until an address is added.' : '';
   const rows = own.map((e, j) => `<li class="fe-opt"><input class="fe-opt__text" data-m="recruit-fe-recipient" data-j="${j}" value="${MD.esc(e)}" placeholder="name@cornell.edu" inputmode="email" maxlength="120" aria-label="Recipient ${j + 1}" autocomplete="off" spellcheck="false"><button type="button" class="icon-btn" data-action="recruit-fe-recipient-remove" data-j="${j}" aria-label="Remove ${MD.esc(e || 'this address')}">${I.x}</button></li>`).join('');
-  const list = m.notify ? `<ul class="fe-opts fe-notify" data-rc="fe-notify">${rows}<li class="fe-opt fe-opt--add"><button type="button" class="linklike" data-action="recruit-fe-recipient-add">${own.length ? 'Add another address' : 'Send it to other addresses'}</button></li></ul>` : '';
+  const list = m.notify ? `<ul class="fe-opts fe-notify" data-rc="fe-notify">${rows}<li class="fe-opt fe-opt--add"><button type="button" class="linklike" data-action="recruit-fe-recipient-add">${own.length ? 'Add another address' : 'Add an address'}</button></li></ul>` : '';
   return `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="recruit-fe-notify" ${m.notify ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Email the team when someone submits<small data-rc="fe-notify-default" ${small ? '' : 'hidden'}>${small}</small></span></label>${list}`;
 }
 
@@ -10240,9 +10239,9 @@ RECRUIT.register({
       const c = recruitFeCtx(el);
       if (!c || !Array.isArray(c.fe.model.notifyTo)) return;
       c.fe.model.notifyTo[c.j] = el.value;
-      // The default-recipients line stands only while no address is written.
+      // "Nobody is emailed" stands only while no address is written.
       const note = $('[data-rc="fe-notify-default"]', c.host);
-      if (note) note.hidden = c.fe.model.notifyTo.some((e) => String(e).trim()) || !note.textContent;
+      if (note) note.hidden = c.fe.model.notifyTo.some((e) => String(e).trim());
       recruitPaintForm(c, { list: false });
     },
   },
