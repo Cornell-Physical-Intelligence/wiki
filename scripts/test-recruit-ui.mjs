@@ -453,6 +453,16 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const landing = f.app.querySelector('[data-action="recruit-fe-landing"]'); landing.checked = true; await click('recruit-fe-landing');
   assert.ok(f.app.querySelector('[data-rc="fe-options"] [data-action="recruit-fe-notify"]').checked, 'emailing the team is on by default');
   const replace = f.app.querySelector('[data-action="recruit-fe-replace"]'); replace.checked = false; await click('recruit-fe-replace');
+  assert.ok(f.app.querySelector('[data-rc="fe-notify-default"]').hidden, 'with no default recipients known there is no "To" line to show');
+  await click('recruit-fe-recipient-add');
+  const recipient = f.app.querySelector('[data-m="recruit-fe-recipient"][data-j="0"]');
+  assert.ok(recipient, 'the email row grows a recipient input');
+  type('recruit-fe-recipient', 'nope', undefined, 0);
+  const requestsBefore = f.requests.length;
+  await click('recruit-fe-save'); await f.settle();
+  assert.match(f.app.querySelector('[data-rc="fe-foot"]').textContent, /"nope" is not an email address/, 'a bad address stops the save');
+  assert.equal(f.requests.length, requestsBefore, 'nothing was sent');
+  type('recruit-fe-recipient', ' Lead@Cornell.edu ', undefined, 0);
   type('recruit-fe-capacity', '40');
   type('recruit-fe-desc', 'Grab a coffee.');
   const saving = click('recruit-fe-save');
@@ -463,6 +473,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.equal(put.body.settings.landing, 'coffee', 'the /apply choice rides with the save');
   assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.');
   assert.deepEqual([saved.notify, saved.replace, saved.capacity], [true, false, 40], 'the form\'s own email, replace and cap settings ride with the save');
+  assert.deepEqual(saved.notifyTo, ['lead@cornell.edu'], 'its recipients ride along, trimmed and lowercased');
   same(saved.form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a new question gets a key from its label');
   same(saved.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
   assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Saving…/);

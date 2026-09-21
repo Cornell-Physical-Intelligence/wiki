@@ -193,6 +193,23 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(sent.length, emailsBefore, 'nothing was emailed for refused submissions');
   const v1d = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1d, settings: { sections: { coffee: { capacity: 0, notify: true, replace: true } } } })).status, 200);
+  /* ---- each form can name who gets its emails ---- */
+  const v1e = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
+  const badTo = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1e, settings: { sections: { coffee: { notifyTo: ['lead@cornell.edu', 'not an address'] } } } });
+  assert.equal(badTo.status, 400, badTo.text); assert.match(badTo.data.error, /"not an address" is not an email address/);
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1e, settings: { sections: { coffee: { notifyTo: 'lead@cornell.edu' } } } })).status, 400, 'recipients are a list');
+  const routed = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1e, settings: { sections: { coffee: { notifyTo: ['Lead@Cornell.edu', 'lead@cornell.edu', ' second@cornell.edu '] } } } });
+  assert.equal(routed.status, 200, routed.text);
+  assert.deepEqual((await recruit('GET', '/recruit/cycles/cy-interest')).data.sections.coffee.notifyTo, ['lead@cornell.edu', 'second@cornell.edu'], 'recipients are trimmed, lowercased and deduplicated');
+  assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').notifyTo, undefined, 'the website never sees recipients');
+  const defaultsTo = [].concat(sent[0].body.to);
+  const fourth = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Fourth Person', email: 'fourth@cornell.edu', availability: 'Sat', snack: 'Tea' } });
+  assert.equal(fourth.status, 200, fourth.text);
+  assert.deepEqual([].concat(sent.at(-1).body.to), ['lead@cornell.edu', 'second@cornell.edu'], "the form's own recipients get its emails");
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: routed.data.cycle.version, settings: { sections: { coffee: { notifyTo: [] } } } })).status, 200);
+  const fifth = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Fifth Person', email: 'fifth@cornell.edu', availability: 'Sun', snack: 'Tea' } });
+  assert.equal(fifth.status, 200, fifth.text);
+  assert.deepEqual([].concat(sent.at(-1).body.to), defaultsTo, 'with no addresses of its own a form emails the default recipients');
   /* ---- a cycle adds forms of its own, orders them, and drops them when empty ---- */
   const vA = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: vA, settings: { sections: { 'coffee-2': { open: true } } } })).status, 400, 'a new form needs a title');

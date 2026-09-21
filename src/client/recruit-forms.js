@@ -28,6 +28,8 @@ const recruitIsChoice = (type) => type === 'single' || type === 'multi';
 const recruitIsText = (type) => type === 'short' || type === 'long' || type === 'email' || type === 'link';
 
 const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
+const RECRUIT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RECRUIT_NOTIFY_MAX = 10;
 const RECRUIT_GRIP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
 
 // The form view of a section tab (?edit=1) is for leads.
@@ -137,7 +139,7 @@ function recruitFormModel(sec, key, landing = null) {
   });
   return {
     title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', open: sec?.open === true, atApply: landing === key,
-    notify: sec?.notify !== false, replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
+    notify: sec?.notify !== false, notifyTo: Array.isArray(sec?.notifyTo) ? sec.notifyTo.map(String) : [], replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
   };
 }
 
@@ -182,10 +184,22 @@ function recruitFormOptionsHtml(fe) {
   return `<h3 class="fe-options__title">Form settings</h3>
     ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
-    ${sw('recruit-fe-notify', m.notify, 'Email the team when someone submits', to.length ? `To ${MD.esc(to.join(', '))}` : '')}
+    ${recruitFormNotifyHtml(fe, to)}
     ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
+}
+
+// Who hears about a response: the wiki's default addresses until the form
+// lists its own; the list shows only while emailing is on.
+function recruitFormNotifyHtml(fe, defaults) {
+  const m = fe.model;
+  const own = Array.isArray(m.notifyTo) ? m.notifyTo : [];
+  const listed = own.some((e) => String(e).trim());
+  const small = m.notify && !listed && defaults.length ? `To ${MD.esc(defaults.join(', '))}` : '';
+  const rows = own.map((e, j) => `<li class="fe-opt"><input class="fe-opt__text" data-m="recruit-fe-recipient" data-j="${j}" value="${MD.esc(e)}" placeholder="name@cornell.edu" inputmode="email" maxlength="120" aria-label="Recipient ${j + 1}" autocomplete="off" spellcheck="false"><button type="button" class="icon-btn" data-action="recruit-fe-recipient-remove" data-j="${j}" aria-label="Remove ${MD.esc(e || 'this address')}">${I.x}</button></li>`).join('');
+  const list = m.notify ? `<ul class="fe-opts fe-notify" data-rc="fe-notify">${rows}<li class="fe-opt fe-opt--add"><button type="button" class="linklike" data-action="recruit-fe-recipient-add">${own.length ? 'Add another address' : 'Send it to other addresses'}</button></li></ul>` : '';
+  return `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="recruit-fe-notify" ${m.notify ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Email the team when someone submits<small data-rc="fe-notify-default" ${small ? '' : 'hidden'}>${small}</small></span></label>${list}`;
 }
 
 // Any form can go once it has no responses.
@@ -329,6 +343,13 @@ function recruitFeCtx(el) {
 
 // Structural changes repaint the list and animate every card from where it
 // was to where it is; typing repaints only the footer.
+// The options card and the foot together: switches that show or hide rows.
+function recruitPaintOptions(c) {
+  if (!c?.host) return;
+  recruitRepaint($('[data-rc="fe-options"]', c.host), recruitFormOptionsHtml(c.fe));
+  recruitPaintForm(c, { list: false });
+}
+
 function recruitPaintForm(c, { list = true } = {}) {
   if (!c?.host) return;
   if (list) {
@@ -476,9 +497,17 @@ function recruitFormPayload(fe) {
     if (q.type === 'file') { out.accept = Array.isArray(q.accept) && q.accept.length ? q.accept : RECRUIT_FILE_ACCEPT; out.maxBytes = q.maxBytes || 2621440; }
     return out;
   });
+  const notifyTo = [];
+  (fe.model.notifyTo || []).forEach((e, j) => {
+    const v = String(e || '').trim().toLowerCase();
+    if (!v) return;
+    if (!RECRUIT_EMAIL.test(v)) throw Object.assign(new Error(`"${v}" is not an email address.`), { focus: `[data-m="recruit-fe-recipient"][data-j="${j}"]` });
+    if (!notifyTo.includes(v)) notifyTo.push(v);
+  });
+  if (notifyTo.length > RECRUIT_NOTIFY_MAX) throw Object.assign(new Error(`Up to ${RECRUIT_NOTIFY_MAX} addresses.`), { focus: '[data-action="recruit-fe-recipient-add"]' });
   return {
     title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), open: fe.model.open === true,
-    notify: fe.model.notify !== false, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
+    notify: fe.model.notify !== false, notifyTo, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
   };
 }
 
@@ -540,7 +569,21 @@ RECRUIT.register({
     'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-open': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.open = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-landing': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.atApply = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
-    'recruit-fe-notify': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.notify = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-notify': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.notify = Boolean(el.checked); recruitPaintOptions(c); },
+    'recruit-fe-recipient-add': (el) => {
+      const c = recruitFeCtx(el);
+      if (!c) return;
+      c.fe.model.notifyTo = [...(c.fe.model.notifyTo || []), ''];
+      recruitPaintOptions(c);
+      $$('[data-m="recruit-fe-recipient"]', c.host).at(-1)?.focus({ preventScroll: true });
+    },
+    'recruit-fe-recipient-remove': (el) => {
+      const c = recruitFeCtx(el);
+      if (!c || !Array.isArray(c.fe.model.notifyTo)) return;
+      c.fe.model.notifyTo.splice(c.j, 1);
+      recruitPaintOptions(c);
+      ($$('[data-m="recruit-fe-recipient"]', c.host)[Math.min(c.j, c.fe.model.notifyTo.length - 1)] || $('[data-action="recruit-fe-recipient-add"]', c.host))?.focus({ preventScroll: true });
+    },
     'recruit-fe-replace': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.replace = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-option-add': (el) => {
       const c = recruitFeCtx(el);
@@ -583,6 +626,15 @@ RECRUIT.register({
     'recruit-fe-label': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.label = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-help': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.help = el.value; recruitPaintAnswer(c); recruitPaintForm(c, { list: false }); },
     'recruit-fe-option': (el) => { const c = recruitFeCtx(el); if (!c?.q || !Array.isArray(c.q.options)) return; c.q.options[c.j] = el.value; recruitPaintForm(c, { list: false }); },
+    'recruit-fe-recipient': (el) => {
+      const c = recruitFeCtx(el);
+      if (!c || !Array.isArray(c.fe.model.notifyTo)) return;
+      c.fe.model.notifyTo[c.j] = el.value;
+      // The default-recipients line stands only while no address is written.
+      const note = $('[data-rc="fe-notify-default"]', c.host);
+      if (note) note.hidden = c.fe.model.notifyTo.some((e) => String(e).trim()) || !note.textContent;
+      recruitPaintForm(c, { list: false });
+    },
   },
   dd: {
     // The default menu from data-opts opens; the pick lands here with a value.
