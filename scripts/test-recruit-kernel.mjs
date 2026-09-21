@@ -92,7 +92,7 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
       { method: 'POST', path: '/cycles/:cycle/probe', access: 'lead', mutates: true, async handler(rq, kit) { const b = await rq.body(); return { status: 200, body: { ok: true, n: b.n }, audit: { kind: 'probe.poke', detail: { n: b.n } } }; } },
       { method: 'POST', path: '/cycles/:cycle/probe/once', access: 'lead', mutates: true, async handler(rq, kit) { const b = await rq.body(); const out = await kit.once(b.requestId, rq.me.email, async () => { events.push('ran'); if (b.boom) throw Object.assign(new Error('boom'), { status: 400, error: 'boom' }); return { stamp: kit.now() }; }); return { status: 200, body: out }; } },
       { method: 'GET', path: '/public-probe', access: 'public', async handler() { return { status: 200, body: { open: true }, headers: { 'cache-control': 'public, max-age=60' } }; } },
-      { method: 'GET', path: '/cycles/:cycle/probe/:kind/:round', access: 'role', async handler(rq) { return { status: 200, body: rq.params }; } },
+      { method: 'GET', path: '/cycles/:cycle/probe/:module/:section', access: 'role', async handler(rq) { return { status: 200, body: rq.params }; } },
       { method: 'GET', path: '/applicants/:email', access: 'lead', async handler(rq) { return { status: 200, body: { email: rq.params.email } }; } },
     ],
     hooks: { 'cycle.status': async (ev) => { events.push(`status:${ev.from}>${ev.to}`); }, 'cycle.created': async () => { throw new Error('hook exploded'); } },
@@ -275,9 +275,9 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   assert.ok(disk.audit.length > 0 && disk.cycles.length === 1 && disk.roles.length === 1 && Array.isArray(disk.probes), 'module memory collections are merged into the dev document');
   console.log('PASS: kit.once replay, actor guard, release on failure, memory document persistence');
 
-  /* ---- params: kind/round, member; a lead reading an applicant ---- */
-  assert.deepEqual((await request('GET', `/api/recruit/cycles/${cycle.id}/probe/review/r1`)).data, { cycle: cycle.id, kind: 'review', round: 'r1' });
-  assert.equal((await request('GET', `/api/recruit/cycles/${cycle.id}/probe/other/r1`)).status, 404, 'kind is pinned to review|interview');
+  /* ---- params: module/section, member; a lead reading an applicant ---- */
+  assert.deepEqual((await request('GET', `/api/recruit/cycles/${cycle.id}/probe/review/r1`)).data, { cycle: cycle.id, module: 'review', section: 'r1' });
+  assert.equal((await request('GET', `/api/recruit/cycles/${cycle.id}/probe/Other9/r1`)).status, 404, 'a module name is lowercase letters');
   const applicant = await request('GET', '/api/recruit/applicants/amy%40example.com', {}, lead);
   assert.equal(applicant.status, 200);
   assert.equal(applicant.data.applicant.applications, 1);

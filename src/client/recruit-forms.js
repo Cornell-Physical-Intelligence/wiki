@@ -15,8 +15,6 @@ const RECRUIT_QUESTION_TYPES = [
   { value: 'link', label: 'Link' }, { value: 'file', label: 'File' },
 ];
 const RECRUIT_FILE_ACCEPT = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-// Questions the website posts as columns: they keep their key and type.
-const RECRUIT_FIXED_KEYS = { interest: ['name', 'email', 'subteam', 'year', 'project', 'file'], coffee: ['name', 'email'], application: ['name', 'email'] };
 // What the note under a question does on the website, by type.
 const RECRUIT_HELP_HINT = {
   short: 'Short answer', long: 'Long answer', email: 'netid@cornell.edu', link: 'https://',
@@ -124,7 +122,9 @@ let recruitQuestionSeq = 0;
 const recruitQuestionId = () => `q${++recruitQuestionSeq}`;
 
 function recruitFormModel(sec, key, landing = null) {
-  const fixed = new Set(RECRUIT_FIXED_KEYS[key] || ['name', 'email']);
+  // The server says which questions this form must keep (name and email,
+  // plus the fixed six on the interest form the old route posts to).
+  const fixed = new Set(Array.isArray(sec?.required) ? sec.required : ['name', 'email']);
   const questions = (Array.isArray(sec?.form?.questions) ? sec.form.questions : []).map((q) => {
     const out = {
       _id: recruitQuestionId(),

@@ -12,7 +12,7 @@
 
 function recruitCycleRowHtml(c, intakeCycleId) {
   const by = c.counts?.bySection || {};
-  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), ...recruitSectionKeys(c).map((key) => `${recruitSectionTitle(key, c)} ${Number(by[key] || 0).toLocaleString('en-US')}`), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
+  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), c.status !== 'archived' && c.closesAt ? 'closes ' + recruitDate(Number(c.closesAt)) : '', ...recruitSectionKeys(c).map((key) => `${recruitSectionTitle(key, c)} ${Number(by[key] || 0).toLocaleString('en-US')}`), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
   return `<div class="sheet__archive">
     <button class="sheet__archivename" data-action="recruit-cycle-open" data-id="${MD.esc(c.id)}"><span class="sheet__archivetitle">${MD.esc(c.name)}</span>
       <span class="sheet__archivemeta">${MD.esc(meta)}</span></button>
@@ -240,8 +240,8 @@ function recruitSetStatus(status, confirm) {
     kind: 'confirm',
     title: status === 'archived' ? `Archive ${cycle.name}?` : `Close ${cycle.name}?`,
     text: status === 'archived'
-      ? `Archived cycles are read-only. ${intake ? 'The website form stops landing here. ' : ''}You can unarchive it later.`
-      : `Closed cycles stop taking applications.${intake ? ' The website form stops landing here until another cycle receives it.' : ''}`,
+      ? `Archived cycles are read-only. ${intake ? "The website's forms stop landing here. " : ''}You can unarchive it later.`
+      : `Closed cycles stop taking responses.${intake ? " The website's forms stop landing here until another cycle receives them." : ''}`,
     confirm: status === 'archived' ? 'Archive cycle' : 'Close cycle',
     onGo: go,
   };
@@ -258,7 +258,7 @@ function recruitConfirmDeleteCycle() {
   if (!cycle || !recruitCan('admin')) return;
   UI.modal = {
     kind: 'confirm', title: `Delete ${cycle.name}?`, danger: true, typed: 'delete cycle', confirm: 'Delete cycle',
-    text: `Every application, score, interview, email record and role in <b>${MD.esc(cycle.name)}</b> is erased for good. Export the CSV first if you want a record.`,
+    text: `Every response, comment, flag and role in <b>${MD.esc(cycle.name)}</b> is erased for good. Export the CSVs first if you want a record.`,
     onGo: async () => {
       const st = recruitState();
       try {
@@ -514,8 +514,7 @@ const RECRUIT_SETTINGS = [
         const key = row.dataset.key || recruitSlug(name);
         if (!key || seen.has(key)) throw new Error(`Two subteams share the key "${key}".`);
         seen.add(key);
-        const prior = recruitSubteams(cycle).find((t) => t.key === key);
-        settings.push({ key, name, capacity: prior?.capacity || 0, leads: prior?.leads || [] });
+        settings.push({ key, name });
       }
       await recruitPutSettings(cycle, 'subteams', settings);
       form.dataset.adminDirty = 'false';
@@ -599,7 +598,6 @@ RECRUIT.register({
     'recruit-queue-sync': () => { const st = recruitState(); st.queue = undefined; recruitLoadQueue(true); },
     'recruit-cycle-tools': (el) => recruitOpenCycleTools(el),
     'recruit-status': (el) => recruitSetStatus(el.dataset.status, Boolean(el.dataset.confirm)),
-    'recruit-intake': (el) => recruitToggleIntake(Boolean(el.dataset.on)),
     'recruit-cycle-delete': recruitConfirmDeleteCycle,
     'recruit-subteam-add': (el) => {
       const rows = $('[data-rc="subteam-rows"]', el.closest('form'));

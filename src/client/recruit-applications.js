@@ -1,9 +1,8 @@
 /* ============================================================================
-   Applications — applications module (client). The Applications panel for a
-   cycle: stage strip, sheet (server-side search, filters, sort, keyset
-   paging), selection toolbar, the application dialog (answers, files, tags,
-   decision, module sections, comments, activity), the saved-submission
-   queue, and Add / Import / Copy.
+   Applications — applications module (client). One tab per form of the
+   cycle: the mode bar (open on the website, address, Responses | Edit form),
+   the response sheet (server-side search, filters, sort, keyset paging), the
+   selection bar (copy emails, delete), and the held-responses queue.
    ========================================================================== */
 
 'use strict';
@@ -27,11 +26,15 @@ function recruitCoreFilters(cycle) {
   const teams = recruitSubteams(cycle).map((t) => t.name).filter(Boolean);
   const rowTeams = [...new Set(rows.map((r) => String(r.subteam || '').trim()).filter((t) => t && !teams.includes(t)))].sort();
   return [
-    { group: 'subteam', value: '', label: 'All subteams' },
-    ...[...teams, ...rowTeams].map((name) => ({ group: 'subteam', value: name, label: name, query: { subteam: name } })),
-    { group: 'subteam', value: '__undecided', label: 'Undecided', test: (r) => !String(r.subteam || '').trim() },
-    { group: 'year', value: '', label: 'All years' },
-    ...RECRUIT_YEARS.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
+    ...(recruitFormAsks(cycle, 'subteam') ? [
+      { group: 'subteam', value: '', label: 'All subteams' },
+      ...[...teams, ...rowTeams].map((name) => ({ group: 'subteam', value: name, label: name, query: { subteam: name } })),
+      { group: 'subteam', value: '__undecided', label: 'Undecided', test: (r) => !String(r.subteam || '').trim() },
+    ] : []),
+    ...(recruitFormAsks(cycle, 'year') ? [
+      { group: 'year', value: '', label: 'All years' },
+      ...RECRUIT_YEARS.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
+    ] : []),
   ];
 }
 
@@ -133,54 +136,6 @@ async function recruitLoadApps(more = false) {
   if (!recruitPaintRows()) renderBackground('recruit');
 }
 
-// Cached rows accept a server row only when its edit version is not older;
-// otherwise the row is fetched again so a stale answer never wins.
-function recruitAcceptRow(row) {
-  const st = recruitState();
-  if (!row?.id) return false;
-  let accepted = false;
-  const apps = st.apps;
-  const cached = apps?.byId?.[row.id];
-  if (cached) {
-    const next = Number(row.editVersion ?? cached.editVersion ?? 0), cur = Number(cached.editVersion ?? 0);
-    if (next < cur) { recruitRefetchRow(row.id); return false; }
-    const merged = { ...cached, ...row };
-    apps.byId[row.id] = merged;
-    const i = apps.rows.findIndex((r) => r.id === row.id);
-    if (i >= 0) apps.rows[i] = merged;
-    accepted = true;
-  }
-  return accepted;
-}
-
-function recruitRefetchRow(id) {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
-  if (!cycle || st.busy.has('refetch:' + id)) return;
-  st.busy.add('refetch:' + id);
-  const key = st.key;
-  RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications/${encodeURIComponent(id)}`)
-    .then((out) => {
-      if (st.key !== key) return;
-      if (st.detail[id] && !st.detail[id].loading) st.detail[id] = recruitDetailData(out);
-      const row = recruitRowFromApplication(out.application);
-      if (row && st.apps?.byId?.[id]) { st.apps.byId[id] = { ...st.apps.byId[id], ...row }; const i = st.apps.rows.findIndex((r) => r.id === id); if (i >= 0) st.apps.rows[i] = st.apps.byId[id]; recruitPaintRow(id); }
-    })
-    .catch(() => {})
-    .finally(() => st.busy.delete('refetch:' + id));
-}
-
-// A ListRow projected from a full application, for merges after a detail load.
-function recruitRowFromApplication(a) {
-  if (!a?.id) return null;
-  const review = a.review || {};
-  return {
-    id: a.id, cycleId: a.cycleId, email: a.email, name: a.name, ts: a.ts, updated: a.updated, cornell: a.cornell, subteam: a.subteam, year: a.year, source: a.source,
-    stage: a.stage, stageAt: a.stageAt, outcome: a.outcome, tags: a.tags || [], flagged: Boolean(review.flagged), comments: (review.comments || []).length,
-    files: (a.files || []).map((f) => ({ id: f.id, name: f.name, size: f.size, type: f.type })),
-    editVersion: a.editVersion, reviewVersion: a.reviewVersion,
-  };
-}
 
 /* ------------------------------- selection ------------------------------- */
 
@@ -235,10 +190,12 @@ function recruitPaintSelection() {
 
 /* ------------------------------- sheet ----------------------------------- */
 
+// Year and Subteam are columns only when this form asks for them.
+const recruitFormAsks = (cycle, key) => (recruitSections(cycle)[recruitSection()]?.form?.questions || []).some((q) => q.key === key);
 function recruitBaseColumns(cycle) {
   return [
-    { id: 'year', label: 'Year', sortKey: null, cell: (r) => (r.year ? MD.esc(r.year) : '<span class="faint">—</span>') },
-    { id: 'subteam', label: 'Subteam', sortKey: null, cell: (r) => MD.esc(r.subteam || 'Undecided') },
+    ...(recruitFormAsks(cycle, 'year') ? [{ id: 'year', label: 'Year', sortKey: null, cell: (r) => (r.year ? MD.esc(r.year) : '<span class="faint">—</span>') }] : []),
+    ...(recruitFormAsks(cycle, 'subteam') ? [{ id: 'subteam', label: 'Subteam', sortKey: null, cell: (r) => MD.esc(r.subteam || 'Undecided') }] : []),
   ];
 }
 
@@ -318,7 +275,6 @@ function recruitPaintRows(updatedId) {
   return true;
 }
 
-const recruitPaintRow = (id) => recruitPaintRows(id);
 
 function recruitSheetHtml(cycle) {
   const st = recruitState();
@@ -360,18 +316,20 @@ function recruitApplicationsView(cycle, role, panel) {
   const editing = recruitEditingForm();
   const bar = recruitModeBarHtml(cycle, panel, editing);
   if (editing) return bar + recruitFormEditorHtml(cycle, panel);
-  const pending = panel === 'interest' && st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
+  // Held responses belong to the cycle receiving the website, whichever form they name.
+  const pending = st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
   return bar + recruitSheetHtml(cycle) + pending;
 }
 
 /* ------------------------------- queue block ----------------------------- */
 
 function recruitPendingReason(reason) {
-  if (reason === 'duplicate') return 'Existing application needs review';
-  if (reason === 'capacity') return 'Cycle is full';
-  if (reason === 'replay_failed') return 'Could not add to the cycle yet';
-  if (reason === 'no_cycle') return 'No cycle was receiving the form';
-  return 'Waiting to join the cycle';
+  if (reason === 'duplicate') return 'Same email as an earlier response';
+  if (reason === 'capacity') return 'The form was full';
+  if (reason === 'replay_failed') return 'Could not be written to its form yet';
+  if (reason === 'unsynced') return 'Not yet written to its form';
+  if (reason === 'legacy') return 'Sent to the old list';
+  return 'Waiting to join its form';
 }
 
 function recruitPendingHtml() {
@@ -380,16 +338,16 @@ function recruitPendingHtml() {
   const q = st.queue;
   if (!q || q.loading) return '';
   const unavailable = q.error || q.queueUnavailable
-    ? `<p class="sheet__note" role="status">Could not check for saved submissions waiting to join the cycle. <button class="linklike" data-action="recruit-queue-sync">Retry</button></p>` : '';
+    ? `<p class="sheet__note" role="status">Could not check for held responses. <button class="linklike" data-action="recruit-queue-sync">Retry</button></p>` : '';
   const pending = q.pending || [];
   if (!pending.length) return unavailable;
   return `<section aria-labelledby="recruit-pending-heading">
-    <h2 class="sheet__heading" id="recruit-pending-heading">Saved submissions awaiting review <span class="count">${pending.length}</span></h2>
-    <p class="sheet__note">These responses are saved separately and are not in any cycle or its CSV.</p>
+    <h2 class="sheet__heading" id="recruit-pending-heading">Held responses <span class="count">${pending.length}</span></h2>
+    <p class="sheet__note">Saved in the receipt journal; not yet on a form's list or in its CSV.</p>
     ${unavailable}
     <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive rc-pending">
-      <button class="interest-person" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review saved submission from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
-      <span class="sheet__archivemeta">${MD.esc(recruitPendingReason(r.reason))}</span>
+      <button class="interest-person" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review the held response from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
+      <span class="sheet__archivemeta">${r.sectionTitle ? MD.esc(r.sectionTitle) + ' · ' : ''}${MD.esc(recruitPendingReason(r.reason))}</span>
       <span class="interest-when" title="${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}">${recruitDate(Number(r.receivedAt))}</span>
       <button class="btn" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button>
     </div>`).join('')}</div>
@@ -398,22 +356,24 @@ function recruitPendingHtml() {
 
 function recruitQueueModalHtml(m) {
   const r = (recruitState().queue?.pending || []).find((row) => row.id === m.id);
-  if (!r) return `<div class="modal" role="dialog" aria-label="Saved submission"><div class="modal__head"><h3>Saved submission</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div><div class="modal__body"><p>This submission has already joined a cycle. Close this window to refresh.</p></div></div>`;
+  if (!r) return `<div class="modal" role="dialog" aria-label="Held response"><div class="modal__head"><h3>Held response</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div><div class="modal__body"><p>This entry is no longer waiting. Close this window to refresh.</p></div></div>`;
   const fileUrl = `/api/recruit/queue/${encodeURIComponent(r.id)}/file`;
-  return `<div class="modal modal--wide" role="dialog" aria-label="Saved submission">
+  const questions = Array.isArray(r.questions) ? r.questions : [];
+  const has = (key) => questions.some((q) => q.key === key);
+  return `<div class="modal modal--wide" role="dialog" aria-label="Held response">
     <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body">
-      <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it copies the answers into a cycle; the saved record stays.</p>
+      <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it copies the answers onto a form; the saved record stays.</p>
       <dl class="interest-detail">
         <dt>Email</dt><dd>${MD.esc(r.email)}</dd>
-        <dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Undecided')}</dd>
-        <dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>
+        ${r.sectionTitle ? `<dt>Form</dt><dd>${MD.esc(r.sectionTitle)}</dd>` : ''}
+        ${has('subteam') || r.subteam ? `<dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Undecided')}</dd>` : ''}
+        ${has('year') || r.year ? `<dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>` : ''}
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
-      <h4 class="interest-subhead">Coolest project</h4>
-      <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">They left this blank.</span>'}</p>
+      ${recruitAnswersHtml({ application: { answers: r.answers || {}, files: [], section: r.section }, form: { questions } })}
     </div>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Close</button><button class="btn btn--primary" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button></div>
   </div>`;
@@ -463,9 +423,9 @@ function recruitConfirmRemoval(ids) {
   const visible = new Set(recruitVisibleRows(cycle).map((r) => r.id));
   const hidden = rows.filter((r) => !visible.has(r.id)).length;
   UI.modal = {
-    kind: 'confirm', title: rows.length === 1 ? `Delete ${rows[0].name}?` : `Delete ${rows.length} applications?`,
+    kind: 'confirm', title: rows.length === 1 ? `Delete ${rows[0].name}?` : `Delete ${rows.length} responses?`,
     text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including comments and attachments. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
-    confirm: rows.length === 1 ? 'Delete application' : `Delete ${rows.length} applications`, danger: true, typed: rows.length > 1 ? 'delete applications' : undefined,
+    confirm: rows.length === 1 ? 'Delete response' : `Delete ${rows.length} responses`, danger: true, typed: rows.length > 1 ? 'delete responses' : undefined,
     onGo: async () => {
       const pending = rows.filter((r) => !st.busy.has('delete:' + r.id));
       if (!pending.length) return;
@@ -474,11 +434,11 @@ function recruitConfirmRemoval(ids) {
       pending.forEach((r) => st.busy.delete('delete:' + r.id));
       const deleted = new Set(pending.filter((r, i) => results[i].status === 'fulfilled' || results[i].reason?.status === 404).map((r) => r.id));
       if (st.apps?.rows) { st.apps.rows = st.apps.rows.filter((r) => !deleted.has(r.id)); for (const id of deleted) delete st.apps.byId[id]; st.apps.total = Math.max(0, st.apps.total - deleted.size); }
-      for (const id of deleted) { st.selected?.delete(id); delete st.drafts[id]; delete st.detail[id]; }
+      for (const id of deleted) st.selected?.delete(id);
       if (st.cycle?.counts) st.cycle.counts.total = Math.max(0, (st.cycle.counts.total || 0) - deleted.size);
       recruitRefreshAfterRemoval(deleted);
       const failed = pending.length - deleted.size;
-      toast(failed ? `${deleted.size} deleted; ${failed} could not be deleted. Try again.` : `Deleted ${deleted.size} ${deleted.size === 1 ? 'application' : 'applications'}`);
+      toast(failed ? `${deleted.size} deleted; ${failed} could not be deleted. Try again.` : `Deleted ${deleted.size} ${deleted.size === 1 ? 'response' : 'responses'}`);
     },
   };
   render();
@@ -509,7 +469,7 @@ RECRUIT.register({
       if (!cycle) return;
       const f = recruitFilters(cycle.id);
       const key = el.dataset.key;
-      const firstDir = key === 'ts' || key === 'updated' || key === 'stage_at' || key === 'score' ? 'desc' : 'asc';
+      const firstDir = key === 'ts' || key === 'updated' ? 'desc' : 'asc';
       if (f.sort === key) f.dir = f.dir === 'asc' ? 'desc' : 'asc'; else { f.sort = key; f.dir = firstDir; }
       for (const btn of $$('.sheet--recruit .sheet__sort[data-key]')) {
         const on = btn.dataset.key === f.sort;

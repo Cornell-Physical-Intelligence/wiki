@@ -66,14 +66,6 @@ const RECRUIT = {
     }
     return out;
   },
-  selectionActions(ids, cycle, role) {
-    const out = [];
-    for (const m of this.active(cycle)) {
-      const list = typeof m.selectionActions === 'function' ? m.selectionActions(ids, cycle, role) : m.selectionActions;
-      for (const a of list || []) if (a && a.label && typeof a.run === 'function') out.push(Object.assign({ id: a.id || `${m.name}-${out.length}`, module: m.name }, a));
-    }
-    return out;
-  },
   detailSections(app, cycle, role) {
     const out = [];
     for (const m of this.active(cycle)) {
@@ -233,7 +225,7 @@ const RECRUIT = {
   },
 
   // 30 s loop while the route is open and the tab visible. Counts and the
-  // stage strip repaint in place; list rows never refresh on their own.
+  // counts repaint in place; list rows never refresh on their own.
   sync() {
     const st = recruitState();
     clearTimeout(st._syncTimer);
@@ -250,7 +242,6 @@ const RECRUIT = {
     st.queue = undefined;
     st.selected = new Set();
     st.selectionScope = null;
-    st.detail = {};
     st.busy = new Set();
     st.mod = {};
     st.panel = null;
@@ -274,27 +265,23 @@ const RECRUIT = {
   },
 };
 
-// The forms every cycle starts with; a cycle can add its own and drop any
-// but the interest form. The cycle's own list (in order) is the truth.
+// A cycle's forms, in its order: any number, any key. The server sends the
+// merged list with the open cycle and a key/title list with every index row;
+// the three defaults name a brand-new cycle's forms before either arrives.
 const RECRUIT_SECTION_KEYS = ['interest', 'coffee', 'application'];
 const RECRUIT_SECTION_LABELS = { interest: 'Interest form', coffee: 'Coffee chats', application: 'Application form' };
-// The open cycle carries its merged, ordered forms from the server; any
-// other row (the index) is read from its saved settings over the defaults.
 function recruitSectionKeys(cycle = recruitCycleRow()) {
   const st = recruitState();
   if (cycle && st.cycle?.data?.id === cycle.id && st.cycle.sections) return Object.keys(st.cycle.sections).filter((k) => st.cycle.sections[k]);
-  const saved = cycle?.doc?.site?.sections && typeof cycle.doc.site.sections === 'object' ? cycle.doc.site.sections : {};
-  const order = Array.isArray(cycle?.doc?.site?.order) ? cycle.doc.site.order : [];
-  const known = [...RECRUIT_SECTION_KEYS.filter((k) => saved[k] !== null), ...Object.keys(saved).filter((k) => !RECRUIT_SECTION_KEYS.includes(k) && saved[k] && typeof saved[k] === 'object')];
-  return [...order.filter((k) => known.includes(k)), ...known.filter((k) => !order.includes(k))];
+  if (Array.isArray(cycle?.sections)) return cycle.sections.map((s) => s.key);
+  return [...RECRUIT_SECTION_KEYS];
 }
 function recruitSectionTitle(key, cycle = recruitCycleRow()) {
   const st = recruitState();
   const merged = cycle && st.cycle?.data?.id === cycle.id ? st.cycle.sections?.[key] : null;
-  return merged?.title || cycle?.doc?.site?.sections?.[key]?.title || RECRUIT_SECTION_LABELS[key] || key;
+  const listed = Array.isArray(cycle?.sections) ? cycle.sections.find((s) => s.key === key) : null;
+  return merged?.title || listed?.title || RECRUIT_SECTION_LABELS[key] || key;
 }
-// One row of a form, as a noun: what a dialog is showing.
-const recruitSectionNoun = (key, cycle = recruitCycleRow()) => recruitSectionTitle(key, cycle);
 // The form a cycle URL points at; the first form when it names none.
 function recruitSection() { const sub = UI.route?.params?.sub; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
 
@@ -308,7 +295,7 @@ function recruitState() {
   return UI.recruit ||= {
     me: undefined, cycles: undefined, cycleId: null, cycle: undefined, panel: null,
     apps: undefined, filters: {}, selected: new Set(), selectionScope: null,
-    drafts: {}, busy: new Set(), detail: {}, queue: undefined, mod: {}, key: 0, _syncTimer: null,
+    drafts: {}, busy: new Set(), queue: undefined, mod: {}, key: 0, _syncTimer: null,
   };
 }
 
@@ -330,13 +317,12 @@ function recruitCan(access, roles = recruitMyRoles()) {
   if (access === 'admin') return has('admin');
   if (access === 'lead') return has('admin') || has('lead');
   if (access === 'reviewer') return has('admin') || has('lead') || has('reviewer');
-  if (access === 'interviewer') return has('admin') || has('lead') || has('interviewer');
   return false;
 }
 
 function recruitEnabled(m, cycle) {
   if (!m || m.kernel) return true;
-  if (['cycles', 'applications', 'roles'].includes(m.name)) return true;
+  if (['cycles', 'applications'].includes(m.name)) return true;
   const map = cycle?.doc?.modules;
   return !map || map[m.name] !== false;
 }
@@ -352,7 +338,6 @@ function recruitAdoptCycles(out) {
 }
 
 // Late responses after a cycle switch or Refresh compare this key.
-const recruitKey = () => recruitState().key;
 
 function recruitId(prefix) {
   const rnd = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -365,7 +350,7 @@ function recruitError(e) {
   return e.message || 'Something went wrong';
 }
 
-// 8/28/26 — the same short form the interest list uses.
+// 8/28/26 — the short date used across the sheets.
 function recruitDate(ts) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
 }
@@ -504,19 +489,9 @@ async function recruitSyncTick() {
   RECRUIT.sync();
 }
 
-function recruitCountsLine(cycle = recruitCycleRow(), counts = recruitState().cycle?.counts) {
-  if (!cycle) return '';
-  const st = recruitState();
-  const parts = [recruitStatusText(cycle, st.cycles?.intakeCycleId)];
-  if (cycle.status === 'open' && cycle.closesAt) parts.push('closes ' + new Date(Number(cycle.closesAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-  const by = counts?.bySection || {};
-  for (const key of recruitSectionKeys(cycle)) parts.push(`${recruitSectionTitle(key, cycle)} ${Number(by[key] || 0).toLocaleString('en-US')}`);
-  return parts.filter(Boolean).join(' · ');
-}
-
 function recruitStatusText(cycle, intakeCycleId) {
   if (!cycle) return '';
-  if (cycle.status === 'open') return intakeCycleId && cycle.id === intakeCycleId ? 'Open · receives the website form' : 'Open';
+  if (cycle.status === 'open') return intakeCycleId && cycle.id === intakeCycleId ? "Open · receives the website's forms" : 'Open';
   if (cycle.status === 'draft') return 'Draft';
   if (cycle.status === 'closed') return 'Closed';
   if (cycle.status === 'archived') return 'Archived';
@@ -530,7 +505,6 @@ function recruitPaintCounts() {
   const cycle = st.cycle?.data;
   if (!cycle) return;
   const counts = st.cycle.counts || { total: 0, bySection: {} };
-  for (const el of $$('[data-rc="counts"]')) el.textContent = recruitCountsLine(cycle, counts);
   for (const el of $$('[data-rc-count]')) {
     const k = el.dataset.rcCount;
     el.textContent = k === 'all' ? Number(counts.total || 0).toLocaleString('en-US') : Number(counts.bySection?.[k] || 0).toLocaleString('en-US');

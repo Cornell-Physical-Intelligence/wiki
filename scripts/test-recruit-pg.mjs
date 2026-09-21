@@ -448,7 +448,7 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
   assert.ok(db.schema.some((t) => t.includes('recruit_settings')) && db.schema.some((t) => t.includes('recruit_applications')) && db.schema.some((t) => t.includes('recruit_audit')));
   assert.ok(db.trace.some((t) => t.startsWith('INSERT INTO recruit_settings (id, version, doc) VALUES (1, 1,')), 'the settings row is seeded inside kit.sql()');
   assert.deepEqual(db.settings.doc.intakeCycleId, null);
-  assert.deepEqual(db.settings.doc.notify, [], 'no recipients unless INTEREST_NOTIFY names them; forms name their own');
+  assert.equal(db.settings.doc.notify, undefined, 'no global recipients: each form names its own');
   const afterSchema = since();
   await kit.sql();
   await R.kitFor(baseCtx(admin)).sql();

@@ -1,6 +1,6 @@
 /* ============================================================================
    Applications — people module (client). The People tab: everyone in the
-   cycle across the three forms; and the person dialog, where their forms are
+   cycle across its forms; and the person dialog, where their forms are
    read and where the flag and the comment thread live. Forms hold answers;
    the person is who the team talks about.
    ========================================================================== */
@@ -70,7 +70,7 @@ function recruitPeopleFootText() {
 // opening that form in their dialog.
 function recruitSentCell(r, p) {
   if (!r) return '<span class="faint">—</span>';
-  return `<button class="rc-sent interest-when" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionNoun(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${MD.esc(recruitDate(Number(r.ts)))}</button>`;
+  return `<button class="rc-sent interest-when" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionTitle(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${MD.esc(recruitDate(Number(r.ts)))}</button>`;
 }
 
 // The row's flag: the same control the list always had, on the person.
@@ -161,7 +161,8 @@ function recruitAnswersHtml(d) {
   for (const [k, v] of Object.entries(answers)) {
     if (shown.has(k) || system.has(k)) continue;
     const text = Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v);
-    blocks.push(`<h4 class="interest-subhead">${MD.esc(k === 'project' ? 'Coolest project' : k)}</h4><p class="interest-project">${text ? MD.esc(text) : '<span class="faint">Left blank.</span>'}</p>`);
+    const label = k.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+    blocks.push(`<h4 class="interest-subhead">${MD.esc(label)}</h4><p class="interest-project">${text ? MD.esc(text) : '<span class="faint">Left blank.</span>'}</p>`);
   }
   if (!blocks.length) blocks.push('<p class="interest-project"><span class="faint">No answers beyond the basics.</span></p>');
   const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" download="${MD.esc(f.name || 'file')}">${RC_ICONS.download}<span>${MD.esc(f.name || 'Attachment')}<small>${Math.max(1, Math.round(Number(f.size || 0) / 1024))} KB</small></span></a>`).join('');
@@ -219,7 +220,7 @@ function recruitPersonForm(email, want) {
   const subs = d?.submissions || [];
   if (want && subs.some((s) => s.application.section === want)) return want;
   const latest = subs.find((s) => s.application.id === d?.person?.latest);
-  return latest ? latest.application.section : (subs.at(-1)?.application.section || want || 'interest');
+  return latest ? latest.application.section : (subs.at(-1)?.application.section || want || null);
 }
 
 const recruitPersonIdentityHtml = (row, cycle) => `<h3>${MD.esc(row.name)}</h3><span>${MD.esc(row.email)} · ${MD.esc(cycle.name)}</span>`;
@@ -247,16 +248,18 @@ function recruitPersonMainHtml(email, want) {
   d.shown = a.section;
   const from = was && was !== a.section ? subs.findIndex((s) => s.application.section === was) : -1;
   const switcher = subs.length > 1
-    ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent"${from >= 0 ? ` data-seg-from="${from}"` : ''}><span class="rc-seg__thumb" aria-hidden="true"></span>${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionNoun(s.application.section))}</button>`).join('')}</nav>`
-    : `<h4 class="interest-subhead">${MD.esc(recruitSectionNoun(a.section))}</h4>`;
+    ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent"${from >= 0 ? ` data-seg-from="${from}"` : ''}><span class="rc-seg__thumb" aria-hidden="true"></span>${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionTitle(s.application.section))}</button>`).join('')}</nav>`
+    : `<h4 class="interest-subhead">${MD.esc(recruitSectionTitle(a.section))}</h4>`;
+  // Subteam and Year rows only where this form asked, or the answer exists.
+  const asks = (key) => (sub.form?.questions || []).some((q) => q.key === key);
   const basics = `<dl class="interest-detail">
-    <dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>
-    <dt>Year</dt><dd>${MD.esc(a.year || 'Not provided')}</dd>
+    ${asks('subteam') || a.subteam ? `<dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>` : ''}
+    ${asks('year') || a.year ? `<dt>Year</dt><dd>${MD.esc(a.year || 'Not provided')}</dd>` : ''}
     <dt>Received</dt><dd>${MD.esc(recruitDate(Number(a.ts)))}${a.updated && a.updated !== a.ts ? ` <span class="faint">updated ${MD.esc(recruitDate(Number(a.updated)))}</span>` : ''}</dd>
     ${a.cornell === false ? '<dt>Address</dt><dd><span class="interest-outside">Outside cornell.edu</span></dd>' : ''}
   </dl>`;
   const others = (d.history || []).filter((h) => h.cycleId !== cycle?.id);
-  const history = others.length ? `<p class="rc-history">Also sent ${others.map((h) => `${MD.esc(h.cycleName || h.cycleId)}${h.section && h.section !== 'interest' ? ' · ' + MD.esc(RECRUIT_SECTION_LABELS[h.section] || h.section) : ''}`).join(', ')}</p>` : '';
+  const history = others.length ? `<p class="rc-history">Also sent ${others.map((h) => `${MD.esc(h.cycleName || h.cycleId)} · ${MD.esc(h.sectionTitle || h.section || '')}`).join(', ')}</p>` : '';
   return switcher + basics + recruitAnswersHtml(sub) + history;
 }
 

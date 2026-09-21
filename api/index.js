@@ -151,23 +151,6 @@ export default async function handler(req, res) {
         const cookie = info && renewSession(info);
         return cookie ? { 'set-cookie': cookie } : {};
       },
-      wiki: {
-        // Onboarding invites accepted applicants through the same op admins
-        // use, re-checked against the current roster inside the write.
-        addMembers: async (emails, actorEmail) => {
-          let results = null, settings = null;
-          const out = await updateState((s) => {
-            const actor = s.users.find((u) => u.email === actorEmail && u.status === 'active' && u.role === 'admin');
-            if (!actor) return false;
-            const r = applyOp(s, 'addMembers', { emails, role: 'member' }, actor.email, actor.role);
-            if (r.error) return false;
-            results = r.result; settings = s.settings?.email || null;
-            return s;
-          });
-          return { results: results || [], settings: settings || out?.state?.settings?.email || null };
-        },
-        sendWelcome,
-      },
     };
     if (path === '/interest' || path === '/interest.csv' || path.startsWith('/interest/')) return await handleInterest(req, res, path, { ...modCtx, intake: intakeBridge });
     if (path === '/recruit' || path.startsWith('/recruit/')) return await handleRecruit(req, res, path, modCtx);

@@ -81,16 +81,16 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(merged.sections.application.open, false, 'untouched sections keep their defaults');
   console.log('PASS: sections helper — three sections, fixed interest questions, per-section validation and merge');
 
-  /* ---- before migration: the site sees the interest form, nothing else ---- */
+  /* ---- before a cycle receives the website: the site sees nothing open ---- */
   const before = await anon('GET', '/recruit/site');
-  assert.equal(before.status, 200); assert.equal(before.data.cycle, null);
-  assert.deepEqual(before.data.sections.map((s) => [s.key, s.open]), [['interest', true]]);
+  assert.equal(before.status, 200); assert.equal(before.data.cycle, null); assert.equal(before.data.landing, null);
+  assert.deepEqual(before.data.sections, [], 'with no receiving cycle the website shows applications closed');
   assert.equal(before.headers['cache-control'], 'no-store');
   assert.equal(before.headers['access-control-allow-origin'], 'https://cornellphysicalintelligence.com');
   assert.equal((await anon('GET', '/recruit/site', {}, 'https://evil.example')).status, 403, 'other origins are refused');
   assert.equal((await anon('POST', '/recruit/site/coffee', { answers: { name: 'X', email: 'x@cornell.edu' } })).status, 409, 'no cycle receives the site yet');
   assert.equal((await anon('POST', '/recruit/site/bogus', {})).status, 409, 'before a cycle receives the website, every form answers not open');
-  console.log('PASS: before a cycle receives the website, the site gets the fixed interest form and the fixed POST still works');
+  console.log('PASS: before a cycle receives the website, the site sees nothing open and every form answers not open');
 
   /* ---- import, then the live cycle publishes its sections ---- */
   assert.equal((await recruit('POST', '/recruit/migrate', { requestId: requestId(), step: 'live' })).status, 200);
@@ -181,9 +181,19 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1c, settings: { sections: { coffee: { capacity: 'lots' } } } })).status, 400, 'a cap is a whole number');
   const tuned = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1c, settings: { sections: { coffee: { notify: false, replace: false } } } });
   assert.equal(tuned.status, 200, tuned.text);
-  const coffeeNow = (await recruit('GET', '/recruit/cycles/cy-interest')).data.sections.coffee;
+  const secsNow = (await recruit('GET', '/recruit/cycles/cy-interest')).data.sections;
+  const coffeeNow = secsNow.coffee;
   assert.deepEqual([coffeeNow.capacity, coffeeNow.notify, coffeeNow.replace], [0, false, false]);
+  assert.deepEqual(secsNow.interest.required, ['name', 'email', 'subteam', 'year', 'project', 'file'], 'the interest form says which questions it keeps');
+  assert.deepEqual(coffeeNow.required, ['name', 'email'], 'every other form keeps only a name and an email');
   assert.equal((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').notify, undefined, 'the website never sees these');
+  /* ---- a reviewer with no module narrowing the list reads the whole cycle ---- */
+  const reviewerGrant = await recruit('PUT', '/recruit/cycles/cy-interest/roles/plain%40example.com', { requestId: 'rq-site-reviewer-0001', roles: ['reviewer'] });
+  assert.equal(reviewerGrant.status, 200, reviewerGrant.text);
+  const asReviewer = await recruit('GET', '/recruit/cycles/cy-interest/applications?section=coffee', {}, plain);
+  assert.equal(asReviewer.status, 200, asReviewer.text);
+  assert.ok(asReviewer.data.rows.length >= 1, 'a reviewer sees the responses; no module scopes them to nothing');
+  assert.equal((await recruit('DELETE', '/recruit/cycles/cy-interest/roles/plain%40example.com', { requestId: 'rq-site-reviewer-0002' }, admin)).status, 200);
   const emailsBefore = sent.length;
   const repeat = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', subteam: 'Software', availability: 'Thu', snack: 'Tea' }, confirmUpdate: true });
   assert.equal(repeat.status, 409, repeat.text); assert.equal(repeat.data.exists, true); assert.equal(repeat.data.replaceable, false, 'with replacing off a repeat is refused even when confirmed');
@@ -253,9 +263,11 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const vBack = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: vBack, settings: { sections: { coffee: { open: true } } } })).status, 200);
   const v3 = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
-  assert.equal((await recruit('PATCH', '/recruit/cycles/cy-interest', { version: v3, capacity: 1 })).status, 200);
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v3, settings: { sections: { coffee: { capacity: 1 } } } })).status, 200);
   const full = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Second', email: 'second@cornell.edu', availability: 'Thu' } });
   assert.equal(full.status, 409); assert.match(full.data.error, /full/);
+  assert.equal((await recruit('PATCH', '/recruit/cycles/cy-interest', { version: v3 + 1, capacity: 0 })).status, 200, 'a cycle-level capacity is ignored, not refused');
+  assert.equal((await anon('POST', '/recruit/site/coffee', { answers: { name: 'Third Try', email: 'third-try@cornell.edu', availability: 'Thu' } })).status, 409, 'the form\'s own cap still holds');
   /* ---- people: one row per email across the forms ---- */
   const people = await recruit('GET', '/recruit/cycles/cy-interest/people');
   assert.equal(people.status, 200, people.text);

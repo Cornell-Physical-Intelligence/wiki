@@ -157,13 +157,13 @@ function nav(hash) { if (UI.editor?.saving) return; location.hash = hash; }
 function route() {
   const { seg, params } = parseHash();
   const me = Store.me();
-  // "Applications" is the UI name for the intake list; the route stays
-  // "interest" internally (API, store, tests) and the old hash keeps working.
+  // Applications holds recruitment; the old #/interest address lands there.
   const raw = seg[0] || (me ? 'home' : 'login');
+  if (raw === 'interest') { UI.route = { name: 'recruit', params: {} }; nav('#/applications'); return; }
   const name = raw === 'applications' ? 'recruit' : raw;
   if (!me && !['login', 'denied'].includes(name)) { UI.route = { name: 'login', params: {} }; return; }
   if (me && name === 'login') { UI.route = { name: 'home', params: {} }; return; }
-  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'integrations', 'trash', 'health', 'interest', 'recruit', 'new', 'edit', 'login', 'denied'];
+  const KNOWN = ['home', 'page', 'history', 'activity', 'admin', 'integrations', 'trash', 'health', 'recruit', 'new', 'edit', 'login', 'denied'];
   if (!KNOWN.includes(name)) { UI.route = { name: 'home', params: {} }; nav('#/home'); return; }
   UI.route = { name, params: { id: seg[1], sub: seg[2], ...params } };
 }
@@ -287,7 +287,7 @@ function viewSidebar() {
     </button>
     <nav class="sidebar__nav">
       <a class="navlink ${r.name === 'home' ? 'active' : ''}" href="#/home">${I.home} Home</a>
-      ${(Store.isAdmin() || UI.recruitMe?.cycles?.length) ? `<a class="navlink ${r.name === 'recruit' || r.name === 'interest' ? 'active' : ''}" href="#/applications" title="Club applications">${I.mail} Applications</a>` : ''}
+      ${(Store.isAdmin() || UI.recruitMe?.cycles?.length) ? `<a class="navlink ${r.name === 'recruit' ? 'active' : ''}" href="#/applications" title="Club applications">${I.mail} Applications</a>` : ''}
       <button class="navlink" data-action="new-page">${I.plus} New page <span class="kbd">N</span></button>
       ${typeof draftStash !== 'undefined' && draftStash.has('new') ? `<button class="navlink navlink--draft" data-action="resume-new-draft" title="Resume your unsaved new page">Unsaved new page</button>` : ''}
     </nav>

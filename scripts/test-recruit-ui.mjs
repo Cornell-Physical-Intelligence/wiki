@@ -178,13 +178,21 @@ const rows = () => [
   { id: 'in-1', name: '<img src=x onerror=alert(1)>', email: '"x"@cornell.edu', ts: 1700000000000, year: 'Junior', subteam: 'Electrical', stage: 'applied', tags: ['<b>'], flagged: false, comments: 1, files: [], editVersion: 2, reviewVersion: 1, source: 'form' },
   { id: 'in-2', name: 'Two', email: 'two@cornell.edu', ts: 1700000100000, year: '', subteam: '', stage: 'screening', tags: [], flagged: true, comments: 0, files: [], editVersion: 0, reviewVersion: 0, source: 'admin' },
 ];
+// The forms the server merges for a fresh cycle: the interest form keeps its
+// six fixed questions, the other two ask only for a name and an email.
+const q = (key, type, label, extra = {}) => ({ key, type, label, required: false, ...extra });
+const defaultSections = () => ({
+  interest: { title: 'Interest form', description: '', open: true, required: ['name', 'email', 'subteam', 'year', 'project', 'file'], form: { questions: [q('name', 'short', 'Name', { required: true }), q('email', 'email', 'Email', { required: true }), q('subteam', 'single', 'Subteam', { options: ['Electrical', 'Software'] }), q('year', 'single', 'Year', { options: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'] }), q('project', 'long', 'Coolest project'), q('file', 'file', 'Photo or PDF')] } },
+  coffee: { title: 'Coffee chats', description: '', open: false, required: ['name', 'email'], form: { questions: [q('name', 'short', 'Name', { required: true }), q('email', 'email', 'Email', { required: true })] } },
+  application: { title: 'Application form', description: '', open: false, required: ['name', 'email'], form: { questions: [q('name', 'short', 'Name', { required: true }), q('email', 'email', 'Email', { required: true })] } },
+});
 function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, bySection: { interest: 2 } } } = {}) {
   const st = f.run('recruitState()');
   st.me = { admin: roles.includes('admin'), cycles: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', roles }] };
   f.ctx.UI.recruitMe = st.me;
   st.cycles = { list: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', counts, updated: 1, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true, orphans: 0 } };
   st.cycleId = 'cy-a';
-  st.cycle = { data: cycleRow(), role, roles, counts, sections: null, grants: [] };
+  st.cycle = { data: cycleRow(), role, roles, counts, sections: defaultSections(), grants: [] };
   st.apps = { key: st.key + ':cy-a:interest', rows: rows(), byId: Object.fromEntries(rows().map((r) => [r.id, r])), next: 'cursor-1', total: 200, counts, loading: false, error: null };
   f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'interest' } };
   return st;
@@ -199,7 +207,6 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
     actions: { 'recruit-zeta': (el, ev, stop) => zetaCalls.push(el.dataset.id) }, modals: { 'recruit-zeta': (m) => '<div class="modal" data-zeta></div>' },
     columns: [{ id: 'score', label: 'Score', sortKey: 'score', cell: (r) => '<b>' + (r.extras?.score?.mean ?? '—') + '</b>' }],
     filters: [{ group: 'review', value: 'unscored', label: 'Unscored', query: { unscored: 1 } }],
-    selectionActions: (ids) => [{ id: 'zeta-move', label: 'Zeta ' + ids.length, run: () => {} }],
     detailSections: (app) => ({ id: 'zeta', title: 'Zeta', html: '<p data-zeta-section>' + app.id + '</p>' }) })`);
   same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'people', 'applications', 'forms'], 'registry sorts by order');
   assert.throws(() => f.run("RECRUIT.register({ name: 'zeta', order: 9 })"), /already registered/);
@@ -264,7 +271,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   ], intakeCycleId: 'cy-a', migration: { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 } };
   const html = f.run('viewRecruit()');
   assert.match(html, /&lt;b&gt;Fall&lt;\/b&gt; 2026/, 'cycle names are escaped'); assert.doesNotMatch(html, /<b>Fall<\/b>/);
-  assert.match(html, /Open · receives the website form · Interest form 10 · Coffee chats 2 · Application form 0/);
+  assert.match(html, /Open · receives the website's forms · Interest form 10 · Coffee chats 2 · Application form 0/);
   assert.match(html, /Archived<\/h2>/, 'archived cycles sit under a second heading');
   assert.match(html, /Import the current list and archives/); assert.match(html, /40 submissions and 1 archive/);
   assert.match(html, /data-action="recruit-cycle-new"/);
@@ -649,11 +656,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const cycleReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-a');
   assert.ok(cycleReq); assert.ok(cycleReq.signal instanceof AbortSignal);
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-b' } })");   // switched before the answer
-  cycleReq.resolve({ cycle: cycleRow(), counts: { total: 1, byStage: {} }, me: { roles: ['admin'] } }); await f.settle();
+  cycleReq.resolve({ cycle: cycleRow(), counts: { total: 1, bySection: {} }, me: { roles: ['admin'] } }); await f.settle();
   const st = f.run('recruitState()');
   assert.equal(st.cycleId, 'cy-b'); assert.equal(st.cycle?.loading, true, 'a late cycle answer after a switch is dropped');
   const bReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-b');
-  bReq.resolve({ cycle: cycleRow({ id: 'cy-b', name: 'B' }), counts: { total: 0, byStage: {} }, me: { roles: ['admin'] } }); await f.settle();
+  bReq.resolve({ cycle: cycleRow({ id: 'cy-b', name: 'B' }), counts: { total: 0, bySection: {} }, me: { roles: ['admin'] } }); await f.settle();
   assert.equal(st.cycle.data.id, 'cy-b'); assert.equal(st.cycle.role, 'admin');
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-b' } })");
   const peopleReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-b/people');
@@ -797,26 +804,20 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
 {
   const f = fixture();
   const st = loadCycle(f);
-  assert.equal(f.run('recruitAcceptRow')({ id: 'in-1', editVersion: 0, name: 'Old' }), false, 'an older edit version is refused');
-  assert.equal(st.apps.byId['in-1'].name, '<img src=x onerror=alert(1)>');
-  assert.equal(f.requests[0]?.url, '/recruit/cycles/cy-a/applications/in-1', 'the row is fetched again instead');
-  assert.equal(f.run('recruitAcceptRow')({ id: 'in-1', editVersion: 2, name: 'Same' }), true, 'an equal edit version merges');
-  assert.equal(f.run('recruitAcceptRow')({ id: 'in-1', editVersion: 5, name: 'Newer' }), true);
-  assert.equal(st.apps.byId['in-1'].name, 'Newer'); assert.equal(st.apps.rows[0].name, 'Newer');
   f.mount();
   st.selected = new Set(['in-1', 'in-2']);
   await f.run("RECRUIT.click('recruit-copy-emails', document.querySelector('[data-action=\"recruit-copy-emails\"]') || document.createElement('button'), { preventDefault() {}, stopPropagation() {} }, () => {})");
   assert.equal(f.toasts.at(-1), 'Copied 2 emails as CSV');
   // Bulk delete: a typed confirm, one DELETE per id, rows drop, dialog on a removed row closes.
   f.run("recruitConfirmRemoval(['in-1', 'in-2'])");
-  assert.equal(f.ctx.UI.modal.kind, 'confirm'); assert.equal(f.ctx.UI.modal.typed, 'delete applications'); assert.equal(f.ctx.UI.modal.danger, true);
+  assert.equal(f.ctx.UI.modal.kind, 'confirm'); assert.equal(f.ctx.UI.modal.typed, 'delete responses'); assert.equal(f.ctx.UI.modal.danger, true);
   const go = f.ctx.UI.modal.onGo; f.ctx.UI.modal = { kind: 'recruit-person', email: '"x"@cornell.edu' };
   const removing = go();
   const dels = f.requests.filter((r) => r.method === 'DELETE');
   assert.equal(dels.length, 2); dels.forEach((r) => r.resolve({ ok: true })); await removing;
   assert.equal(st.apps.rows.length, 0); assert.equal(f.closes.length, 1, 'an open person dialog closes when submissions are deleted');
-  assert.equal(f.toasts.at(-1), 'Deleted 2 applications');
-  console.log('PASS: rows merge only when editVersion is not older, copy and delete toast their counts, and removal closes the open dialog');
+  assert.equal(f.toasts.at(-1), 'Deleted 2 responses');
+  console.log('PASS: copy and delete toast their counts, and removal closes the open dialog');
 }
 
 console.log('PASS: recruit UI — registry, cycle index, sheet, dialog, sync and merges');

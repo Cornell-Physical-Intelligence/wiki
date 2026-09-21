@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------------
-   Applications (recruit): the cycle tabs, the stage strip, sheet column
-   widths by data-col, settings forms, tags, and the scorecard. Tokens only;
-   every surface reuses .sheet / .admin-block / .modal / .menu.
+   Applications (recruit): the cycle title and tabs, the per-form mode bar
+   and editor, sheet column widths by data-col, the settings and person
+   dialogs. Tokens only; every surface reuses .sheet / .modal / .menu.
    ------------------------------------------------------------------------- */
 
 /* Cycle tabs: a hairline rail, the current tab underlined in ink. */
@@ -29,9 +29,6 @@
 .sheet.sheet--recruit th[data-col="person"] { width: auto; }
 .sheet.sheet--recruit th[data-col="year"] { width: 84px; }
 .sheet.sheet--recruit th[data-col="subteam"] { width: 118px; }
-.sheet.sheet--recruit th[data-col="stage"] { width: 104px; }
-.sheet.sheet--recruit th[data-col="score"] { width: 76px; }
-.sheet.sheet--recruit th[data-col="interview"] { width: 104px; }
 .sheet.sheet--recruit th[data-col="received"] { width: 88px; }
 .sheet.sheet--recruit th[data-col="review"] { width: 104px; }
 .sheet.sheet--recruit .sheet__foot .linklike { margin-left: 4px; }
@@ -39,9 +36,7 @@
   .sheet.sheet--recruit th[data-col], .sheet.sheet--recruit td[data-col] { display: none; }
   .sheet.sheet--recruit th[data-col="check"], .sheet.sheet--recruit td[data-col="check"],
   .sheet.sheet--recruit th[data-col="person"], .sheet.sheet--recruit td[data-col="person"],
-  .sheet.sheet--recruit th[data-col="stage"], .sheet.sheet--recruit td[data-col="stage"],
   .sheet.sheet--recruit th[data-col="review"], .sheet.sheet--recruit td[data-col="review"] { display: table-cell; }
-  .sheet.sheet--recruit th[data-col="stage"] { width: 96px; }
 }
 /* People: one column per form. A sent form is its date, set like Received
    and Latest; it opens that form. Nothing sent is the same dash as an empty
@@ -76,7 +71,7 @@
 .rc-row .text-input { flex: 1; min-width: 0; }
 .rc-row .icon-btn { flex: none; width: 34px; height: 34px; }
 .rc-index__tools { display: flex; justify-content: flex-end; margin: -8px 0 10px; }
-/* Application dialog additions on top of the interest-review layout. */
+/* Person dialog additions on top of the review layout. */
 .rc-history { margin: -8px 0 20px; font-size: 13px; color: var(--muted); }
 
 /* ---------------------------------------------------------------------------

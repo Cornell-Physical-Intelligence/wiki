@@ -90,7 +90,7 @@ test('the kernel modules provide the kit facades', async () => {
   assert.equal(typeof applications.provide, 'function');
   const fakeKit = { mode: 'memory', modules: [cycles, applications], tables: new Set(), mem: { settings: null, cycles: [], applications: [], applicants: [], receipts: {}, audit: [], roles: [] }, memSave() {}, cached: (k, t, f) => f(), uncache() {}, id: () => 'x', now: () => 0, build: () => {}, asArray: (v) => v, asObject: (v) => v, files: {} };
   const c = cycles.provide(fakeKit).cycles;
-  for (const fn of ['get', 'intakeTarget', 'enabled', 'list', 'settings', 'migrated', 'defaultDoc']) assert.equal(typeof c[fn], 'function', `kit.cycles.${fn}`);
+  for (const fn of ['get', 'intakeTarget', 'list', 'settings', 'migrated', 'defaultDoc']) assert.equal(typeof c[fn], 'function', `kit.cycles.${fn}`);
   const a = applications.provide({ ...fakeKit, cycles: c }).apps;
   for (const fn of ['get', 'list', 'commitIntake', 'move', 'setDecision', 'patch', 'remove', 'toLegacyRow', 'people', 'allByEmail', 'ids', 'findByEmail', 'count']) assert.equal(typeof a[fn], 'function', `kit.apps.${fn}`);
 });

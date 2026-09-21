@@ -231,7 +231,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
 
   /* ---- after migration: the fixed POST lands in the intake cycle ---- */
   const target = await bridge.target();
-  assert.deepEqual(target, { cycleId: 'cy-interest', section: 'interest', closed: false, formVersion: 0, perIpHour: 5, perDay: 2000, capacity: 0, notify: true, confirmUpdate: true });
+  assert.deepEqual(target, { cycleId: 'cy-interest', section: 'interest', closed: false, formVersion: 0, perIpHour: 5, perDay: 2000, capacity: 0, notify: false, notifyTo: [], confirmUpdate: true }, 'the old route follows the interest form: no recipients named, so no email');
   const fresh = await interest('POST', '/interest', { name: 'Fresh Face', email: 'FRESH@example.com', subteam: 'Software', year: 'Grad', project: 'A robot' });
   assert.equal(fresh.status, 200);
   assert.equal(await legacyBytes(), legacyFrozen, 'the legacy inbox no longer grows');
@@ -291,14 +291,13 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   /* ---- capacity, the queue and placing held entries ---- */
   const interestCycle = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle;
   const before = (await appsIn('cy-interest')).length;
-  assert.equal((await recruit('PATCH', '/recruit/cycles/cy-interest', { version: interestCycle.version, capacity: before }, lead)).status, 403, 'capacity is admin-only');
-  const capped = await recruit('PATCH', '/recruit/cycles/cy-interest', { version: interestCycle.version, capacity: before });
-  assert.equal(capped.status, 200);
-  assert.equal((await bridge.target()).capacity, before);
+  const capped = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: interestCycle.version, settings: { sections: { interest: { capacity: before } } } });
+  assert.equal(capped.status, 200, capped.text);
+  assert.equal((await bridge.target()).capacity, before, 'the old route takes the interest form\'s own cap');
   const full = await interest('POST', '/interest', { name: 'Late', email: 'late@example.com' });
   assert.deepEqual([full.status, full.data.error], [429, 'The interest list is full. Email cuphysint@cornell.edu instead']);
   assert.equal((await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, project: 'Revised answer', subteam: 'Software' })).status, 200, 'existing applicants still update at capacity');
-  const uncapped = await recruit('PATCH', '/recruit/cycles/cy-interest', { version: capped.data.cycle.version, capacity: 0 });
+  const uncapped = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: capped.data.cycle.version, settings: { sections: { interest: { capacity: 0 } } } });
   assert.equal(uncapped.status, 200);
   // Journal entries that never reached storage replay into their cycle.
   clock += 10;
@@ -359,23 +358,40 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.equal((await recruit('GET', '/recruit/cycles')).data.intakeCycleId, null, 'closing the receiving cycle clears the pointer');
   assert.equal(await bridge.target(), null);
   const orphan = await interest('POST', '/interest', { name: 'Orphan', email: 'orphan@example.com', year: 'Senior' });
-  assert.equal(orphan.status, 200, 'with no receiving cycle the form still works');
-  assert.equal(journal.records.get(orphan.data.receipt).cycleId, null);
-  assert.ok(JSON.parse(await legacyRaw()).rows.some((r) => r.email === 'orphan@example.com'), 'it lands in the legacy inbox');
+  assert.equal(orphan.status, 409, 'once cycles hold the list, the old route is closed while no cycle receives the website');
+  assert.match(orphan.data.error, /closed right now/);
+  assert.ok(!JSON.parse(await legacyRaw()).rows.some((r) => r.email === 'orphan@example.com'), 'nothing lands in the legacy inbox');
   const cyclesView = (await recruit('GET', '/recruit/cycles')).data;
-  assert.equal(cyclesView.migration.orphans, 1);
+  assert.equal(cyclesView.migration.orphans, 0);
   assert.equal(cyclesView.migration.done, true);
   const fallback = await interest('GET', '/interest');
   assert.ok(fallback.data.rows.some((r) => r.id === 'in-legacy'), 'without an intake cycle the legacy panel shows the interest list cycle');
   const reopened = await recruit('POST', `/recruit/cycles/${fall.id}/status`, { version: closedByLead.data.cycle.version, status: 'open' });
   assert.equal(reopened.status, 200);
-  const adopt = await recruit('POST', '/recruit/migrate/adopt', { requestId: requestId(), cycleId: fall.id });
-  assert.deepEqual([adopt.status, adopt.data.adopted], [200, 1]);
-  const adopted = (await appsIn(fall.id)).find((r) => r.email === 'orphan@example.com');
-  assert.deepEqual([adopted.source, adopted.year, adopted.stage], ['orphan', 'Senior', 'applied']);
-  assert.equal((await recruit('POST', '/recruit/migrate/adopt', { requestId: requestId(), cycleId: fall.id })).data.adopted, 0, 'adopt is idempotent');
-  assert.equal((await recruit('GET', '/recruit/cycles')).data.migration.orphans, 0);
-  console.log('PASS: no intake cycle → legacy inbox, orphan count and Adopt into…');
+  assert.equal((await recruit('POST', '/recruit/migrate/adopt', { requestId: requestId(), cycleId: fall.id })).data.adopted, 0, 'nothing to adopt');
+  console.log('PASS: no intake cycle → the old route is closed, no orphans, nothing to adopt');
+
+  /* ---- a cycle without an interest form: the old route closes, a plain form may take the key ---- */
+  const spring = (await recruit('POST', '/recruit/cycles', { requestId: requestId(), name: 'Spring 2027', term: 'Spring 2027' })).data.cycle;
+  const springOpen = await recruit('POST', `/recruit/cycles/${spring.id}/status`, { version: spring.version, status: 'open' });
+  assert.equal(springOpen.status, 200, springOpen.text);
+  const dropInterest = await recruit('PUT', `/recruit/cycles/${spring.id}/settings/site`, { version: springOpen.data.cycle.version, settings: { remove: ['interest'] } });
+  assert.equal(dropInterest.status, 200, dropInterest.text);
+  assert.equal((await recruit('GET', `/recruit/cycles/${spring.id}`)).data.sections.interest, undefined, 'the interest form goes like any other');
+  assert.deepEqual(await recruit('POST', `/recruit/cycles/${spring.id}/intake`, { on: true, version: await settingsVersion() }).then((r) => r.status), 200);
+  assert.equal((await bridge.target()).closed, true, 'without an interest form the old route is closed');
+  assert.equal((await interest('POST', '/interest', { name: 'Nobody', email: 'nobody@example.com' })).status, 409);
+  const vPlain = (await recruit('GET', `/recruit/cycles/${spring.id}`)).data.cycle.version;
+  const plainInterest = await recruit('PUT', `/recruit/cycles/${spring.id}/settings/site`, { version: vPlain, settings: { sections: { interest: { title: 'Interest', open: true, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }, { key: 'year', type: 'short', label: 'Year (free text)' }] } } } } });
+  assert.equal(plainInterest.status, 200, plainInterest.text);
+  const plainSections = (await recruit('GET', `/recruit/cycles/${spring.id}`)).data.sections;
+  assert.deepEqual(plainSections.interest.required, ['name', 'email'], 'a form recreated under the interest key keeps only a name and an email');
+  assert.equal(plainSections.interest.form.questions.find((q) => q.key === 'year').type, 'short', 'a fixed key may change type on a form that is not the fixed one');
+  assert.equal((await bridge.target()).closed, true, 'the old route stays closed without the six fixed questions');
+  assert.equal((await interest('POST', '/interest', { name: 'Nobody', email: 'nobody@example.com' })).status, 409);
+  assert.equal((await recruit('PUT', `/recruit/cycles/${spring.id}/settings/site`, { version: plainInterest.data.cycle.version, settings: { remove: ['interest'] } })).status, 200);
+  assert.equal((await recruit('POST', `/recruit/cycles/${spring.id}/intake`, { on: false, version: await settingsVersion() })).status, 200);
+  console.log('PASS: without an interest form the old route is closed; a plain form may reuse the key');
 
   /* ---- legacy projection, CSV header, archive writes refused ---- */
   await recruit('POST', `/recruit/cycles/${fall.id}/intake`, { on: false, version: await settingsVersion() });
