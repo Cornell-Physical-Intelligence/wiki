@@ -43,5 +43,6 @@ jobs:
           node scripts/test-hardening.mjs
           npm run test:recruit
           node --test scripts/test-recruit-contract.mjs
+          node --test scripts/test-recruit-storage.mjs
       - name: Verify the committed preview build is current
         run: git diff --exit-code -- docs

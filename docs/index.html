@@ -9239,7 +9239,7 @@ function recruitOpenCycleTools(anchor) {
 async function recruitCheckStorage() {
   try {
     await RECRUIT.api('/recruit/storage-check', { method: 'POST', body: '{}' });
-    toast('Submission backup storage is working');
+    toast('Database and submission backup storage are working');
   } catch (e) { toast(`Storage check failed: ${recruitError(e)}`); }
 }
 
