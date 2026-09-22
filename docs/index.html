@@ -2013,39 +2013,10 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
 /* Sheet columns by name, so a module column never shifts the fixed ones. */
-.sheet.sheet--recruit table { min-width: 960px; }
 .sheet.sheet--recruit th[data-col] { width: 110px; }
-.sheet.sheet--recruit th[data-col="check"] { width: 52px; }
 .sheet.sheet--recruit th[data-col="person"] { width: auto; }
-.sheet.sheet--recruit th[data-col="year"] { width: 84px; }
-.sheet.sheet--recruit th[data-col="subteam"] { width: 118px; }
-.sheet.sheet--recruit th[data-col="received"] { width: 88px; }
-.sheet.sheet--recruit th[data-col="review"] { width: 104px; }
 .sheet.sheet--recruit .sheet__foot .linklike { margin-left: 4px; }
-@container (max-width: 36em) {
-  .sheet.sheet--recruit th[data-col], .sheet.sheet--recruit td[data-col] { display: none; }
-  .sheet.sheet--recruit th[data-col="check"], .sheet.sheet--recruit td[data-col="check"],
-  .sheet.sheet--recruit th[data-col="person"], .sheet.sheet--recruit td[data-col="person"],
-  .sheet.sheet--recruit th[data-col="review"], .sheet.sheet--recruit td[data-col="review"] { display: table-cell; }
-}
-/* People: one column per form. A sent form is its date, set like Received
-   and Latest; it opens that form. Nothing sent is the same dash as an empty
-   year. */
-.sheet.sheet--people th[data-col="last"] { width: 88px; }
-.sheet.sheet--people th.rc-people__form { width: 100px; }
-.rc-sent {
-  display: inline-block; max-width: 100%; padding: 2px 0; background: none; border: 0; border-radius: 4px; cursor: pointer;
-  font: inherit; font-size: 12.5px; text-align: left;
-  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px;
-  transition: color 0.12s ease, text-decoration-color 0.12s ease;
-}
-.rc-sent:hover { color: var(--fg); text-decoration-color: var(--rule); }
-.rc-sent:focus-visible { color: var(--fg); outline: 2px solid var(--fg); outline-offset: 2px; }
-@container (max-width: 36em) {
-  .sheet.sheet--people th.rc-people__form, .sheet.sheet--people td.rc-people__form { display: table-cell; }
-  .sheet.sheet--people th.rc-people__form { width: 92px; }
-  .sheet.sheet--people th[data-col="review"], .sheet.sheet--people td[data-col="review"] { display: table-cell; }
-}
+
 /* Settings forms: one column of labelled fields, actions on a footer rail. */
 .rc-form { display: flex; flex-direction: column; gap: 12px; }
 .rc-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
@@ -2283,6 +2254,102 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .sheet__heading .count { font-size: 12px; font-weight: 400; color: var(--faint); font-variant-numeric: tabular-nums; }
 .rc-pending { height: auto; min-height: 60px; flex-wrap: wrap; padding-top: 4px; padding-bottom: 4px; }
 .rc-pending > .interest-person, .rc-pending > .sheet__archivemeta { flex: 1 1 180px; }
+
+/* Review stays beside identity in every list, at every viewport. */
+.sheet.sheet--recruit table { min-width: 720px; }
+.sheet.sheet--recruit th[data-col="person"] { width: auto; }
+.sheet.sheet--recruit th[data-col="check"] { width: 44px; }
+.sheet.sheet--recruit .sheet__check-cell { padding: 0 2px; }
+.sheet.sheet--recruit th[data-col="review"] { width: 108px; }
+.sheet.sheet--recruit th[data-col="forms"] { width: 180px; }
+.sheet.sheet--recruit th[data-col="subteam"] { width: 140px; }
+.sheet.sheet--recruit th[data-col="year"] { width: 95px; }
+.sheet.sheet--recruit th[data-col="last"], .sheet.sheet--recruit th[data-col="received"] { width: 100px; }
+.sheet--recruit .interest-row-actions { justify-content: flex-start; gap: 2px; }
+.sheet--recruit .interest-row-actions .icon-btn { min-width: 40px; min-height: 40px; opacity: 1; }
+.rc-mobile-meta { display: none; }
+.rc-participation { display: flex; flex-wrap: wrap; gap: 5px; }
+.rc-participation button { padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--page); color: var(--muted); font: inherit; font-size: 11.5px; text-align: left; cursor: pointer; }
+.rc-participation button:hover { color: var(--fg); border-color: var(--rule); }
+.rc-participation.rc-mobile-meta { display: none; }
+.fe-settings { margin: 0 0 20px; border: 1px solid var(--hairline); border-radius: 10px; }
+.fe-settings > summary { padding: 12px 16px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.fe-settings .fe-options { border: 0; margin: 0; padding: 0 16px 8px; }
+.fe-settings .fe-options__title { display: none; }
+.fe__list-label { margin: 24px 0 10px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.fe-ans--edit { border: 1px dashed var(--rule); padding: 8px 10px; background: var(--page); }
+.fe-q:focus-within { border-color: var(--rule); }
+@media (max-width: 760px) {
+  .sheet.sheet--recruit table { min-width: 0; width: 100%; }
+  .sheet.sheet--recruit table th, .sheet.sheet--recruit table td { display: none; }
+  .sheet.sheet--recruit table [data-col="person"],
+  .sheet.sheet--recruit table [data-col="review"],
+  .sheet.sheet--recruit table [data-col="check"],
+  .sheet.sheet--recruit .sheet__empty td { display: table-cell; }
+  .sheet.sheet--recruit th[data-col="review"] { width: 90px; }
+  .sheet.sheet--recruit th[data-col="check"] { width: 44px; }
+  .sheet.sheet--recruit td { padding: 12px 6px; vertical-align: top; height: auto; }
+  .sheet.sheet--recruit td[data-col="person"] { padding-left: 10px; }
+  .sheet--recruit .interest-person { max-width: 100%; padding: 0; }
+  .sheet--recruit .interest-person b, .sheet--recruit .interest-person .mail { white-space: normal; overflow-wrap: anywhere; }
+  .sheet--recruit .interest-row-actions { gap: 0; }
+  .sheet--recruit .interest-row-actions .icon-btn { width: 42px; height: 44px; }
+  .rc-mobile-meta { display: block; font-size: 11.5px; line-height: 1.5; color: var(--muted); margin-top: 5px; overflow-wrap: anywhere; }
+  .rc-participation.rc-mobile-meta { display: flex; }
+  .rc-participation button { min-height: 32px; }
+  .sheet--recruit .sheet__bar { gap: 8px; padding: 10px; }
+  .sheet--recruit .sheet__search-wrap { flex-basis: 100%; }
+  .sheet--recruit .sheet__actions { width: 100%; flex-wrap: wrap; gap: 6px; }
+  .sheet--recruit .sheet__actions .dd { flex: 1; min-width: 0; }
+  .rc-mode { align-items: flex-start; gap: 8px; }
+  .rc-mode__addr { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+  .rc-mode .rc-seg { margin-left: 0; }
+  .fe__head { padding: 0; }
+  .fe-q { padding: 12px; }
+  .fe-q__tools .icon-btn, .fe-opt .icon-btn { width: 40px; height: 40px; opacity: 1; }
+  .fe-switch { min-height: 40px; }
+  .fe-q__foot { flex-wrap: wrap; }
+  .fe-options__cap { flex-wrap: wrap; }
+  .fe__foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .rc-person .interest-comment__delete { width: 40px; height: 40px; }
+}
+@media (hover: none) {
+  .fe-opt .icon-btn { opacity: 1; }
+}
+.fe__view { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; color: var(--muted); font-size: 13px; }
+.fe-preview { border: 1px solid var(--hairline); border-radius: 12px; padding: 24px; background: var(--page); }
+.fe-preview h2 { font-size: 24px; margin: 0 0 8px; }
+.fe-preview > p { color: var(--muted); font-size: 14px; }
+.fe-preview__question { margin: 24px 0; }
+.fe-preview__question h3 { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+.fe-preview .text-input { width: 100%; opacity: 1; }
+.fe-preview__choices { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.fe-preview__choices li { padding: 8px 0; }
+.fe-preview__file { border: 1px dashed var(--rule); border-radius: 8px; padding: 22px; font-size: 13px; color: var(--muted); }
+.rc-form-chooser { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.rc-form-chooser .dd { flex: 1; max-width: 420px; }
+.rc-form-chooser .dd__label { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) { .fe-preview { padding: 16px; } }
+@media (max-width: 760px) {
+  .fe-q__grip { min-width: 40px; min-height: 40px; }
+  .fe-q .dd { min-height: 40px; }
+}
+.sheet.sheet--recruit th[data-col="preview"] { width: 240px; }
+.rc-answer-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; line-height: 1.45; color: var(--muted); }
+
+@container (max-width: 900px) {
+  .sheet.sheet--recruit table { min-width: 0; width: 100%; }
+  .sheet.sheet--recruit table th, .sheet.sheet--recruit table td { display: none; }
+  .sheet.sheet--recruit table [data-col="person"],
+  .sheet.sheet--recruit table [data-col="review"],
+  .sheet.sheet--recruit table [data-col="check"],
+  .sheet.sheet--recruit .sheet__empty td { display: table-cell; }
+  .sheet--recruit .interest-person b, .sheet--recruit .interest-person .mail { white-space: normal; overflow-wrap: anywhere; }
+  .sheet.sheet--recruit th[data-col="review"] { width: 90px; }
+  .sheet.sheet--recruit th[data-col="check"] { width: 44px; }
+  .rc-mobile-meta { display: block; margin-top: 5px; font-size: 11.5px; color: var(--muted); white-space: normal; }
+  .rc-participation.rc-mobile-meta { display: flex; }
+}
 
 </style>
 </head>
@@ -8626,7 +8693,7 @@ function recruitSectionTitle(key, cycle = recruitCycleRow()) {
   return merged?.title || listed?.title || RECRUIT_SECTION_LABELS[key] || key;
 }
 // The form a cycle URL points at; the first form when it names none.
-function recruitSection() { const sub = UI.route?.params?.sub; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
+function recruitSection() { const raw = UI.route?.params?.sub; const sub = raw === 'form:people' ? 'people' : raw; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
 
 const RECRUIT_TIMEOUT_MS = 20000;
 const RECRUIT_SYNC_MS = 30000;
@@ -8701,7 +8768,6 @@ function recruitDate(ts) {
 const recruitPlural = (n, one, many = one + 's') => `${Number(n || 0).toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
 const recruitSubteams = (cycle) => (Array.isArray(cycle?.doc?.subteams) ? cycle.doc.subteams : []);
-const RECRUIT_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'];
 
 function recruitPanelHref(cycleId, panel, params) {
   const qs = params ? Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&') : '';
@@ -8819,6 +8885,16 @@ async function recruitSyncTick() {
       const out = await RECRUIT.api('/recruit/cycles?all=1');
       if (st.key === key && UI.route?.name === 'recruit') { recruitAdoptCycles(out); recruitPaintCounts(); }
     } catch { /* the next tick tries again */ }
+    if (st.cycle?.data && !recruitFormsDirty()) {
+      try {
+        const latest = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(st.cycle.data.id)}`);
+        if (st.key === key) {
+          const changed = st.cycle.data.version !== latest.cycle?.version;
+          st.cycle = { ...st.cycle, data: latest.cycle, sections: latest.sections, counts: latest.counts, role: latest.role || st.cycle.role };
+          if (changed) { st.forms = {}; renderBackground('recruit'); }
+        }
+      } catch { /* keep the last readable state */ }
+    }
     const panel = recruitActivePanel();
     const m = panel?.module;
     if (m?.refresh?.load && st.cycle?.data && st.key === key && Date.now() - (m._refreshedAt || 0) >= (m.refresh.every || RECRUIT_SYNC_MS)) {
@@ -8929,7 +9005,7 @@ function recruitCycleShellHtml(id) {
   const panels = RECRUIT.panels(cycle, role);
   const active = recruitActivePanel();
   const addTab = recruitCan('lead') && cycle.status !== 'archived' ? `<button type="button" class="rc-tabs__add" data-action="recruit-form-new" aria-label="Add a form" title="Add a form">${I.plus}</button>` : '';
-  const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}${addTab}</nav>` : '';
+  const tabs = panels.length > 5 ? `<div class="rc-form-chooser">${dd('recruit-panel-switch', panels.map((p) => ({ value: p.id, label: p.label })), active?.id)}${addTab}</div>` : panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}${addTab}</nav>` : '';
   const list = st.cycles?.list || [];
   const switchOptions = (list.length ? list : [{ id: cycle.id, name: cycle.name, term: cycle.term, status: cycle.status }])
     .map((x) => ({ value: x.id, label: recruitCycleChoiceLabel(x) }));
@@ -9508,7 +9584,7 @@ async function recruitPutSettings(cycle, module, settings) {
 
 function recruitAdoptCycle(row) {
   const st = recruitState();
-  if (row && st.cycle?.data?.id === row.id) st.cycle.data = row;
+  if (row && st.cycle?.data?.id === row.id) { st.cycle.data = row; if (row.doc?.site?.sections) st.cycle.sections = Object.fromEntries(Object.entries(row.doc.site.sections).filter(([, s]) => s)); }
   st.cycles = undefined;
 }
 
@@ -9568,6 +9644,7 @@ RECRUIT.register({
     },
   },
   dd: {
+    'recruit-panel-switch': (host, value) => { if (value !== undefined) nav(recruitPanelHref(recruitCycleRow().id, value)); },
     'recruit-cycle-switch': (host, value) => { if (value !== undefined && value !== recruitCycleRow()?.id) nav(recruitPanelHref(value, UI.route?.params?.sub || '')); },
   },
   modals: { 'recruit-cycle': recruitCycleModalHtml, 'recruit-settings': recruitSettingsModalHtml, 'recruit-roles': recruitRolesModalHtml },
@@ -9637,14 +9714,14 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   const landing = recruitLandingKey(cycle);
   const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(key)}/`;
   // The address is its own group so a phone can drop it under the switch.
-  const link = `<span class="rc-mode__addr"><span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}</span>`;
+  const link = `<span class="rc-mode__addr"><span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(RECRUIT_SITE_URL, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}</span>`;
   const responses = `Responses <span class="count" data-rc-count="${MD.esc(key)}">${count.toLocaleString('en-US')}</span>`;
   // The thumb slides from where the view was last time this tab was drawn.
   const was = st.modeWas?.[key];
   const from = was === undefined || was === editing ? '' : ` data-seg-from="${was ? 1 : 0}"`;
   if (recruitCan('lead')) { st.modeWas ||= {}; st.modeWas[key] = editing; }
   const seg = recruitCan('lead')
-    ? `<nav class="rc-seg rc-seg--mode" aria-label="View"${from}><span class="rc-seg__thumb" aria-hidden="true"></span><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Edit form</a></nav>`
+    ? `<nav class="rc-seg rc-seg--mode" aria-label="View"${from}><span class="rc-seg__thumb" aria-hidden="true"></span><a href="${recruitPanelHref(cycle.id, key === 'people' ? 'form:people' : key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key === 'people' ? 'form:people' : key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Edit form</a></nav>`
     : `<span class="rc-mode__plain">${responses}</span>`;
   return `<span class="rc-mode__status" data-rc="mode-status">${status}${link}</span>${seg}`;
 }
@@ -9667,7 +9744,7 @@ async function recruitToggleFormOpen(el) {
     if (st.cycle?.data?.id === cycle.id) st.cycle.sections = { ...sections, [key]: { ...(sections[key] || {}), open: want } };
     // The editor's draft, if any, learns the saved state without turning dirty.
     const fe = st.forms?.[`${cycle.id}:${key}`];
-    if (fe) { fe.model.open = want; const saved = JSON.parse(fe.saved); saved.open = want; fe.saved = JSON.stringify(saved); }
+    if (fe) { fe.version = recruitCycleRow()?.version ?? fe.version; fe.model.open = want; const saved = JSON.parse(fe.saved); saved.open = want; fe.saved = JSON.stringify(saved); }
     toast(want ? `${recruitSectionTitle(key)} is open on the website` : `${recruitSectionTitle(key)} is closed on the website`);
   } catch (e) { toast(`Could not change it: ${recruitError(e)}`); }
   finally {
@@ -9703,7 +9780,7 @@ const recruitQuestionId = () => `q${++recruitQuestionSeq}`;
 
 function recruitFormModel(sec, key, landing = null) {
   // The server says which questions this form must keep (name and email,
-  // plus the fixed six on the interest form the old route posts to).
+  // which are the identity fields used to group a person across forms).
   const fixed = new Set(Array.isArray(sec?.required) ? sec.required : ['name', 'email']);
   const questions = (Array.isArray(sec?.form?.questions) ? sec.form.questions : []).map((q) => {
     const out = {
@@ -9718,7 +9795,7 @@ function recruitFormModel(sec, key, landing = null) {
     return out;
   });
   return {
-    title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', thanks: sec?.thanks || '', open: sec?.open === true, atApply: landing === key,
+    submitLabel: sec?.submitLabel || 'Send', successLabel: sec?.successLabel || 'Sent', title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', thanks: sec?.thanks || '', open: sec?.open === true, atApply: landing === key,
     notify: sec?.notify !== false, notifyTo: Array.isArray(sec?.notifyTo) ? sec.notifyTo.map(String) : [], replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
   };
 }
@@ -9731,7 +9808,7 @@ function recruitFormEditor(cycle, key) {
   const id = `${cycle.id}:${key}`;
   if (!st.forms[id]) {
     const model = recruitFormModel(recruitSections(cycle)[key], key, cycle.doc?.site?.landing || null);
-    st.forms[id] = { id, key, cycleId: cycle.id, model, saved: JSON.stringify(model), saving: false, error: '', savedAt: 0 };
+    st.forms[id] = { id, key, cycleId: cycle.id, version: cycle.version, model, saved: JSON.stringify(model), saving: false, error: '', savedAt: 0 };
   }
   return st.forms[id];
 }
@@ -9743,17 +9820,35 @@ const recruitFormsDirty = () => Object.values(recruitState().forms || {}).some(r
 function recruitFormEditorHtml(cycle, key) {
   const fe = recruitFormEditor(cycle, key);
   const m = fe.model;
+  if (fe.preview) return recruitFormPreviewHtml(fe);
   return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(recruitSectionTitle(key, cycle))} editor">
+    <div class="fe__view"><span>Edit form</span><button class="btn" type="button" data-action="recruit-fe-preview">Preview</button></div>
     <div class="fe__head">
       <label class="fe__field"><span class="fe__field-label">Title</span><input class="text-input fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" autocomplete="off" spellcheck="false"></label>
       <label class="fe__field"><span class="fe__field-label">Description</span><textarea class="text-input fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600">${MD.esc(m.description)}</textarea></label>
       <label class="fe__field"><span class="fe__field-label">After they send it</span><input class="text-input fe__thanks-input" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." autocomplete="off"></label>
     </div>
+    <details class="fe-settings"><summary>Form settings</summary><section class="fe-options" data-rc="fe-options" aria-label="How this form behaves">${recruitFormOptionsHtml(fe)}</section></details>
+    <h3 class="fe__list-label">Questions · edit labels, hints, and choices</h3>
     <ol class="fe__list" data-rc="fe-list">${recruitQuestionCardsHtml(fe, cycle)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-fe-add">${I.plus} Add question</button></div>
-    <section class="fe-options" data-rc="fe-options" aria-label="How this form behaves">${recruitFormOptionsHtml(fe)}</section>
     <div class="fe__foot" data-rc="fe-foot">${recruitFormFootHtml(fe)}</div>
   </div>`;
+}
+
+// Read-only schema preview is distinct from editing labels and placeholders.
+function recruitFormPreviewHtml(fe) {
+  const m = fe.model;
+  const questions = m.questions.map((q) => {
+    const label = `${MD.esc(q.label)}${q.required ? ' <span aria-label="required">*</span>' : ''}`;
+    let field;
+    if (recruitIsChoice(q.type)) field = `<ul class="fe-preview__choices">${(q.options || []).map((v) => `<li><span aria-hidden="true">${q.type === 'single' ? '○' : '□'}</span> ${MD.esc(v)}</li>`).join('')}</ul>`;
+    else if (q.type === 'checkbox') field = `<p>□ ${MD.esc(q.help || q.label)}</p>`;
+    else if (q.type === 'file') field = '<div class="fe-preview__file">Attach an image or PDF</div>';
+    else field = `<${['long', 'longfile'].includes(q.type) ? 'textarea rows="3"' : 'input'} class="text-input" disabled aria-label="${MD.esc(q.label)}" placeholder="${MD.esc(q.help || '')}">${['long', 'longfile'].includes(q.type) ? '</textarea>' : ''}${q.type === 'longfile' ? '<div class="fe-preview__file">Or attach an image or PDF</div>' : ''}`;
+    return `<div class="fe-preview__question"><h3>${label}</h3>${field}</div>`;
+  }).join('');
+  return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(fe.key)}"><div class="fe__view"><span>Preview · current draft</span><button class="btn" type="button" data-action="recruit-fe-preview">Back to editing</button></div><div class="fe-preview"><h2>${MD.esc(m.title)}</h2>${m.description ? `<p>${MD.esc(m.description)}</p>` : ''}${questions}<button class="btn" disabled>${MD.esc(m.submitLabel)}</button></div></div>`;
 }
 
 // What happens around the form: whether the site shows it, whether it is
@@ -9762,6 +9857,8 @@ function recruitFormOptionsHtml(fe) {
   const m = fe.model;
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
   return `<h3 class="fe-options__title">Form settings</h3>
+    <label class="fe__field"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-fe-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80"></label>
+    <label class="fe__field"><span class="fe__field-label">Success heading</span><input class="text-input" data-m="recruit-fe-success-label" value="${MD.esc(m.successLabel)}" maxlength="80"></label>
     ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${recruitFormNotifyHtml(fe)}
@@ -9815,7 +9912,7 @@ async function recruitCreateForm() {
   if (!title) { form.elements.title.focus(); toast('Give the form a name'); return; }
   const sections = recruitSections(cycle);
   let key = recruitFormKey(title);
-  for (let n = 2; sections[key] !== undefined; n += 1) key = `${recruitFormKey(title).slice(0, 37)}-${n}`;
+  for (let n = 2; sections[key] !== undefined || key === 'people'; n += 1) key = `${recruitFormKey(title).slice(0, 37)}-${n}`;
   const fromKey = $('[data-m="recruit-form-from"]', form)?.dataset.value || '';
   const questions = fromKey && sections[fromKey] ? JSON.parse(JSON.stringify(sections[fromKey].form.questions)) : [
     { key: 'name', type: 'short', label: 'Name', required: true, max: 100 }, { key: 'email', type: 'email', label: 'Email', required: true, max: 200 },
@@ -9824,7 +9921,7 @@ async function recruitCreateForm() {
   try {
     await recruitPutSettings(cycle, 'site', { sections: { [key]: { title, description: fromKey && sections[fromKey] ? sections[fromKey].description : '', open: false, form: { questions } } } });
     toast(`${title} added`);
-    closeModal(() => { RECRUIT.reset(cycle.id); nav(recruitPanelHref(cycle.id, key, { edit: 1 })); });
+    closeModal(() => { RECRUIT.reset(cycle.id); nav(recruitPanelHref(cycle.id, key === 'people' ? 'form:people' : key, { edit: 1 })); });
   } catch (e) { toast(`Could not add: ${recruitError(e)}`); }
   finally { st.busy.delete('form-new'); }
 }
@@ -9875,7 +9972,7 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
     ${recruitIsText(q.type) ? '' : `<input class="fe-q__help" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">`}
     <div class="fe-q__answer" data-rc="fe-answer">${recruitAnswerPreviewHtml(q, i)}</div>
     <div class="fe-q__foot">
-      <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
+      <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''} ${['name', 'email'].includes(q.key) ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
       <span class="fe-q__tools">
         ${q.fixed ? '<span class="fe-q__fixed" title="The website needs this question">Fixed</span>' : `<button type="button" class="icon-btn" data-action="recruit-fe-remove" data-i="${i}" aria-label="Remove ${MD.esc(name)}">${I.x}</button>`}
       </span>
@@ -9902,10 +9999,7 @@ function recruitAnswerPreviewHtml(q, i) {
 function recruitOptionsHtml(q, i) {
   const mark = q.type === 'single' ? 'fe-mark fe-mark--radio' : 'fe-mark';
   const options = q.options || [];
-  if (q.fixed) {
-    const note = q.key === 'subteam' ? "Options follow this cycle's subteams, under Settings." : '';
-    return `<ul class="fe-opts">${options.map((o) => `<li class="fe-opt fe-opt--fixed"><span class="${mark}"></span><span class="fe-opt__text">${MD.esc(o)}</span></li>`).join('')}</ul>${note ? `<p class="fe-q__note">${note}</p>` : ''}`;
-  }
+
   return `<ul class="fe-opts">${options.map((o, j) => `<li class="fe-opt"><span class="${mark}"></span><input class="fe-opt__text" data-m="recruit-fe-option" data-i="${i}" data-j="${j}" value="${MD.esc(o)}" placeholder="Option ${j + 1}" maxlength="80" aria-label="Option ${j + 1}" autocomplete="off"><button type="button" class="icon-btn" data-action="recruit-fe-option-remove" data-i="${i}" data-j="${j}" aria-label="Remove option ${j + 1}">${I.x}</button></li>`).join('')}
     <li class="fe-opt fe-opt--add"><span class="${mark} fe-mark--ghost"></span><button type="button" class="linklike" data-action="recruit-fe-option-add" data-i="${i}">Add option</button></li></ul>`;
 }
@@ -10087,7 +10181,7 @@ function recruitFormPayload(fe) {
   });
   if (notifyTo.length > RECRUIT_NOTIFY_MAX) throw Object.assign(new Error(`Up to ${RECRUIT_NOTIFY_MAX} addresses.`), { focus: '[data-action="recruit-fe-recipient-add"]' });
   return {
-    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), thanks: String(fe.model.thanks || '').trim().slice(0, 300), open: fe.model.open === true,
+    submitLabel: fe.model.submitLabel, successLabel: fe.model.successLabel, title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), thanks: String(fe.model.thanks || '').trim().slice(0, 300), open: fe.model.open === true,
     notify: fe.model.notify !== false, notifyTo, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
   };
 }
@@ -10105,7 +10199,8 @@ async function recruitSaveForm(el) {
     // The /apply choice is one per cycle: this form takes it, gives it up, or leaves it.
     const current = cycle.doc?.site?.landing || null;
     const landing = fe.model.atApply ? key : (current === key ? null : current);
-    await recruitPutSettings(cycle, 'site', { sections: { [key]: payload }, landing });
+    const saved = await recruitPutSettings({ ...cycle, version: fe.version ?? cycle.version }, 'site', { sections: { [key]: payload }, landing });
+    fe.version = saved.cycle.version;
     const st = recruitState();
     if (st.cycle?.data?.id === cycle.id) st.cycle.sections = { ...recruitSections(cycle), [key]: payload };
     fe.model = recruitFormModel(payload, key, landing);
@@ -10132,6 +10227,7 @@ RECRUIT.register({
   order: 12,
   kernel: true,
   actions: {
+    'recruit-fe-preview': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.preview = !c.fe.preview; c.host.outerHTML = recruitFormEditorHtml(c.cycle, c.key); $('[data-action="recruit-fe-preview"]')?.focus(); },
     'recruit-fe-add': (el) => {
       const c = recruitFeCtx(el);
       if (!c) return;
@@ -10147,7 +10243,7 @@ RECRUIT.register({
       ($$('[data-m="recruit-fe-label"]', c.host)[Math.min(c.i, c.fe.model.questions.length - 1)] || $('[data-action="recruit-fe-add"]', c.host))?.focus({ preventScroll: true });
     },
     'recruit-fe-grip': () => {},   // a click on the grip does nothing; dragging and the arrow keys move the card
-    'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q || ['name', 'email'].includes(c.q.key)) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-open': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.open = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-landing': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.atApply = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-notify': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.notify = Boolean(el.checked); recruitPaintOptions(c); },
@@ -10201,6 +10297,8 @@ RECRUIT.register({
     },
   },
   inputs: {
+    'recruit-fe-submit-label': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.submitLabel = el.value; recruitPaintForm(c, { list: false }); },
+    'recruit-fe-success-label': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.successLabel = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-title': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.title = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-desc': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.description = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-thanks': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.thanks = el.value; recruitPaintForm(c, { list: false }); },
@@ -10263,40 +10361,48 @@ const RECRUIT_PEOPLE_FILTERS = [
   { value: '', label: 'All people' }, { value: 'flagged', label: 'Flagged' }, { value: 'comments', label: 'Has comments' },
 ];
 
-// Everyone in the cycle, one row per email, loaded whole (the server caps
-// it) and searched and filtered in place.
-function recruitLoadPeople() {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
+let recruitPeopleSearchTimer;
+async function recruitLoadPeople(more = false, quiet = false) {
+  const st = recruitState(), cycle = recruitCycleRow();
   if (!cycle) return;
-  st.people = { key: st.key + ':' + cycle.id, rows: [], byEmail: {}, counts: null, total: 0, loading: true, error: null, q: st.people?.q || '', filter: st.people?.filter || '' };
-  const people = st.people, key = st.key;
-  RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people`)
-    .then((out) => {
-      if (st.key !== key || st.people !== people) return;
-      people.rows = Array.isArray(out.rows) ? out.rows : [];
-      people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
-      people.counts = out.counts || null;
-      people.total = Number(out.total ?? people.rows.length);
-      people.loading = false;
-      if (!recruitPaintPeople()) renderBackground('recruit');
-    })
-    .catch((e) => {
-      if (st.key !== key || st.people !== people) return;
-      people.loading = false;
-      people.error = recruitError(e);
-      if (!recruitPaintPeople()) renderBackground('recruit');
-    });
+  const prior = st.people;
+  if (prior?.loading && (quiet || more)) return;
+  const cursor = more ? prior?.next : null;
+  if (more && !cursor) return;
+  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? prior?.rows || [] : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '' };
+  st.people = people;
+  const key = st.key;
+  const params = new URLSearchParams({ q: people.q, limit: '100' });
+  if (people.filter) params.set(people.filter, '1');
+  if (cursor) params.set('cursor', cursor);
+  try {
+    let out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people?${params}`);
+    if (quiet) {
+      while (out.next && out.rows.length < (prior?.rows.length || 0) && st.key === key && st.people === people) {
+        params.set('cursor', out.next);
+        const page = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people?${params}`);
+        out = { ...page, rows: [...out.rows, ...page.rows] };
+      }
+    }
+    if (st.key !== key || st.people !== people) return;
+    const incoming = Array.isArray(out.rows) ? out.rows : [];
+    people.rows = more ? people.rows.concat(incoming) : incoming;
+    people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
+    people.counts = out.counts || null;
+    people.total = Number(out.total ?? people.rows.length);
+    people.next = out.next || null;
+  } catch (e) {
+    if (st.key !== key || st.people !== people) return;
+    people.error = recruitError(e);
+  }
+  people.loading = false;
+  if (!recruitPaintPeople()) renderBackground('recruit');
 }
 
 function recruitPeopleVisible() {
   const p = recruitState().people;
   if (!p) return [];
-  const q = String(p.q || '').trim().toLowerCase();
-  let rows = q ? p.rows.filter((x) => String(x.name || '').toLowerCase().includes(q) || String(x.email || '').includes(q)) : p.rows;
-  if (p.filter === 'flagged') rows = rows.filter((x) => x.flagged);
-  if (p.filter === 'comments') rows = rows.filter((x) => Number(x.comments || 0) > 0);
-  return rows;
+  return p.rows;
 }
 
 function recruitPeopleCountsLine() {
@@ -10311,14 +10417,7 @@ function recruitPeopleFootText() {
   const p = recruitState().people;
   if (!p || p.loading || p.error) return '';
   const shown = recruitPeopleVisible().length;
-  return shown === p.rows.length ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.rows.length, 'person', 'people')}`;
-}
-
-// A form the person sent: its date, set like every other date in the sheet,
-// opening that form in their dialog.
-function recruitSentCell(r, p) {
-  if (!r) return '<span class="faint">—</span>';
-  return `<button class="rc-sent interest-when" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionTitle(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${MD.esc(recruitDate(Number(r.ts)))}</button>`;
+  return shown === p.total ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.total, 'person', 'people')}`;
 }
 
 // The row's flag: the same control the list always had, on the person.
@@ -10342,17 +10441,17 @@ function recruitPersonReviewCellHtml(p) {
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
   const keys = recruitSectionKeys();
-  const span = 5 + keys.length;
+  const span = 6;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No one matches.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
-    ${keys.map((key) => `<td data-col="${MD.esc(key)}" class="rc-people__form">${recruitSentCell(x.sections?.[key], x)}</td>`).join('')}
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${keys.filter((k) => x.sections?.[k]).map((k) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(k)}">${MD.esc(recruitSectionTitle(k))}</button>`).join('')}</div></td>
+    ${recruitPersonReviewCellHtml(x)}
+    <td data-col="forms"><div class="rc-participation">${keys.filter((key) => x.sections?.[key]).map((key) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(key)}">${MD.esc(recruitSectionTitle(key))}</button>`).join('')}</div></td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
-    ${recruitPersonReviewCellHtml(x)}
   </tr>`).join('');
 }
 
@@ -10365,25 +10464,27 @@ function recruitPeopleHtml(cycle) {
     <div class="sheet__bar">
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions">
+        <button class="icon-btn" data-action="recruit-people-refresh" aria-label="Refresh people" title="Refresh people">${I.refresh || '↻'}</button>
         ${dd('recruit-people-filter', RECRUIT_PEOPLE_FILTERS, p?.filter || '')}
         ${lead ? `<a class="btn" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${recruitSectionKeys(cycle).map((key) => `<th data-col="${MD.esc(key)}" class="rc-people__form"><span class="sheet__sort sheet__sort--static">${MD.esc(recruitSectionTitle(key, cycle))}</span></th>`).join('')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
-        <th class="sheet__review-cell" data-col="review"><span class="sheet__sort sheet__sort--static">Review</span></th></tr></thead>
+      <thead><tr>${th('person', 'Person')}${th('review', 'Review')}${th('forms', 'Forms sent')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}</tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
-    <div class="sheet__foot" role="status" data-rc="people-foot">${MD.esc(recruitPeopleFootText())}</div>
+    <div class="sheet__foot" role="status" data-rc="people-foot">${recruitPeopleFootHtml()}</div>
   </div>`;
 }
+
+function recruitPeopleFootHtml() { return `${MD.esc(recruitPeopleFootText())}${recruitState().people?.next ? ' · <button class="linklike" data-action="recruit-people-more">Load more</button>' : ''}`; }
 
 function recruitPaintPeople() {
   const body = $('[data-rc="people-rows"]');
   if (!body) return false;
   recruitRepaint(body, recruitPeopleRowsHtml(recruitPeopleVisible()));
   const foot = $('[data-rc="people-foot"]');
-  if (foot) foot.textContent = recruitPeopleFootText();
+  if (foot) foot.innerHTML = recruitPeopleFootHtml();
   const counts = $('[data-rc="people-counts"]');
   if (counts) counts.textContent = recruitPeopleCountsLine();
   return true;
@@ -10396,13 +10497,13 @@ function recruitAnswersHtml(d) {
   const a = d.application;
   const questions = Array.isArray(d.form?.questions) ? d.form.questions : [];
   const answers = a.answers || {};
-  const system = new Set(['name', 'email', 'subteam', 'year', 'file']);
+  const system = new Set(['name', 'email']);
   const shown = new Set();
   const blocks = [];
   for (const q of questions) {
     if (system.has(q.key) || q.type === 'file') continue;
     shown.add(q.key);
-    const v = answers[q.key];
+    const v = answers[q.key] ?? (['subteam', 'year'].includes(q.key) ? a[q.key] : null);
     const text = Array.isArray(v) ? v.join(', ') : v == null ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v);
     blocks.push(`<h4 class="interest-subhead">${MD.esc(q.label || q.key)}</h4><p class="interest-project">${text ? (q.type === 'link' && /^https?:\/\//.test(text) ? `<a href="${MD.esc(text)}" target="_blank" rel="noopener noreferrer">${MD.esc(text)}</a>` : MD.esc(text)) : '<span class="faint">Left blank.</span>'}</p>`);
   }
@@ -10413,7 +10514,7 @@ function recruitAnswersHtml(d) {
     blocks.push(`<h4 class="interest-subhead">${MD.esc(label)}</h4><p class="interest-project">${text ? MD.esc(text) : '<span class="faint">Left blank.</span>'}</p>`);
   }
   if (!blocks.length) blocks.push('<p class="interest-project"><span class="faint">No answers beyond the basics.</span></p>');
-  const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" download="${MD.esc(f.name || 'file')}">${RC_ICONS.download}<span>${MD.esc(f.name || 'Attachment')}<small>${Math.max(1, Math.round(Number(f.size || 0) / 1024))} KB</small></span></a>`).join('');
+  const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" download="${MD.esc(f.name || 'file')}">${RC_ICONS.download}<span>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'Attachment')}: ${MD.esc(f.name || 'Attachment')}<small>${Math.max(1, Math.round(Number(f.size || 0) / 1024))} KB</small></span></a>`).join('');
   return blocks.join('') + files;
 }
 
@@ -10444,11 +10545,12 @@ function recruitLoadPerson(email, { quiet = false } = {}) {
 
 // The People row learns what the dialog learned: flag, thread size, name.
 function recruitAdoptPersonRow(email, person) {
-  const p = recruitState().people;
-  if (!p?.byEmail?.[email] || !person) return;
-  const row = p.byEmail[email];
-  Object.assign(row, { flagged: person.flagged === true, comments: (person.review?.comments || []).length, reviewVersion: person.reviewVersion ?? row.reviewVersion, name: person.name || row.name });
+  if (!person) return;
+  const st = recruitState();
+  const rows = [st.people?.byEmail?.[email], ...(st.apps?.rows || []).filter((r) => r.email === email)].filter(Boolean);
+  for (const row of rows) Object.assign(row, { flagged: person.flagged === true, comments: (person.review?.comments || []).length, reviewVersion: person.reviewVersion ?? row.reviewVersion, name: person.name || row.name });
   recruitPaintPeople();
+  recruitPaintRows();
 }
 
 // What the dialog knows about a person before their detail arrives: the
@@ -10458,7 +10560,7 @@ function recruitPersonRow(email) {
   const known = st.people?.byEmail?.[email];
   if (known) return known;
   const row = (st.apps?.rows || []).find((r) => r.email === email);
-  return row ? { email, name: row.name, cornell: row.cornell, subteam: row.subteam, year: row.year, flagged: false, comments: 0 } : null;
+  return row ? { email, name: row.name, cornell: row.cornell, subteam: row.subteam, year: row.year, flagged: row.flagged || false, comments: row.comments || 0 } : null;
 }
 
 // Which of their forms the dialog shows: the one asked for if they sent it,
@@ -10495,14 +10597,14 @@ function recruitPersonMainHtml(email, want) {
   const was = d.shown;
   d.shown = a.section;
   const from = was && was !== a.section ? subs.findIndex((s) => s.application.section === was) : -1;
-  const switcher = subs.length > 1
+  const switcher = subs.length > 4 ? `<div class="rc-form-chooser">${dd('recruit-person-form-select', subs.map((s) => ({value:s.application.section,label:recruitSectionTitle(s.application.section)})), a.section)}</div>` : subs.length > 1
     ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent"${from >= 0 ? ` data-seg-from="${from}"` : ''}><span class="rc-seg__thumb" aria-hidden="true"></span>${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionTitle(s.application.section))}</button>`).join('')}</nav>`
     : `<h4 class="interest-subhead">${MD.esc(recruitSectionTitle(a.section))}</h4>`;
   // Subteam and Year rows only where this form asked, or the answer exists.
   const asks = (key) => (sub.form?.questions || []).some((q) => q.key === key);
   const basics = `<dl class="interest-detail">
-    ${asks('subteam') || a.subteam ? `<dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>` : ''}
-    ${asks('year') || a.year ? `<dt>Year</dt><dd>${MD.esc(a.year || 'Not provided')}</dd>` : ''}
+    ${!asks('subteam') && a.subteam ? `<dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>` : ''}
+    ${!asks('year') && a.year ? `<dt>Year</dt><dd>${MD.esc(a.year || 'Not provided')}</dd>` : ''}
     <dt>Received</dt><dd>${MD.esc(recruitDate(Number(a.ts)))}${a.updated && a.updated !== a.ts ? ` <span class="faint">updated ${MD.esc(recruitDate(Number(a.updated)))}</span>` : ''}</dd>
     ${a.cornell === false ? '<dt>Address</dt><dd><span class="interest-outside">Outside cornell.edu</span></dd>' : ''}
   </dl>`;
@@ -10579,18 +10681,29 @@ function recruitPaintPerson(email) {
   const flag = $('[data-rc="person-flag"]', dialog);
   if (flag) recruitRepaint(flag, recruitPersonFlagHtml(email));
   recruitPaintPersonDiscussion(email);
+  recruitFocusComments();
   return true;
 }
 
 function recruitOpenPerson(email, { form = null, comments = false } = {}) {
   if (!email) return;
-  recruitShowModal({ kind: 'recruit-person', email, form, inPlace: true });
+  recruitShowModal({ kind: 'recruit-person', email, form, focusComments: comments, inPlace: true });
   recruitSegSlide($('.rc-person .rc-seg--forms'));
   const d = recruitPerson(email);
   if (d === undefined || d?.error) recruitLoadPerson(email);
   recruitPrefetchPeople(email);
-  if (comments) $('.rc-person .interest-compose textarea')?.focus();
+  if (comments) { $('.rc-person .interest-compose textarea')?.focus(); recruitFocusComments(); }
   else $('.rc-person [data-action="modal-close"]')?.focus();
+}
+
+// Loading answers can move the discussion after its initial focus. Honor the
+// comment-button intent once the full layout is present, including read-only cycles.
+function recruitFocusComments() {
+  if (!UI.modal?.focusComments || !recruitPerson(UI.modal.email)?.person) return;
+  const target = $('.rc-person .interest-compose textarea') || $('.rc-person [data-rc="person-comments"]');
+  target?.scrollIntoView?.({block: 'center'});
+  target?.focus?.({preventScroll: true});
+  UI.modal.focusComments = false;
 }
 
 // The neighbours load while this one is read, so a step shows at once.
@@ -10848,8 +10961,10 @@ RECRUIT.register({
     if (panel === 'people' && (st.people === undefined || st.people.key !== st.key + ':' + cycle.id)) recruitLoadPeople();
   },
   modals: { 'recruit-person': recruitPersonModalHtml },
+  refresh: { load: () => recruitLoadPeople(false, true), every: RECRUIT_SYNC_MS },
   actions: {
-    'recruit-people-refresh': () => { recruitLoadPeople(); },
+    'recruit-people-more': () => recruitLoadPeople(true),
+    'recruit-people-refresh': () => { recruitLoadPeople(false, true); },
     'recruit-person-open': (el) => recruitOpenPerson(el.dataset.email, { form: el.dataset.form || null, comments: Boolean(el.dataset.comments) }),
     'recruit-person-form': (el) => {
       if (UI.modal?.kind !== 'recruit-person' || UI.modal.email !== el.dataset.email) return;
@@ -10867,7 +10982,7 @@ RECRUIT.register({
     'recruit-person-comment-delete-confirm': (el) => recruitDeletePersonComment(el.dataset.email, el.dataset.cid),
   },
   inputs: {
-    'recruit-people-q': (el) => { const p = recruitState().people; if (!p) return; p.q = el.value; recruitPaintPeople(); },
+    'recruit-people-q': (el) => { const p = recruitState().people; if (!p) return; p.q = el.value; clearTimeout(recruitPeopleSearchTimer); recruitPeopleSearchTimer = setTimeout(() => recruitLoadPeople(), 220); },
     'recruit-person-comment': (el) => {
       const draft = recruitPersonDraft(el.dataset.email);
       draft.text = el.value;
@@ -10877,12 +10992,13 @@ RECRUIT.register({
     },
   },
   dd: {
+    'recruit-person-form-select': (host, value) => { if (value === undefined || UI.modal?.kind !== 'recruit-person') return; UI.modal.form = value; recruitPaintPerson(UI.modal.email); $('.rc-person [data-m="recruit-person-form-select"]')?.focus(); },
     'recruit-people-filter': (host, value) => {
       if (value === undefined) return undefined;
       const p = recruitState().people;
       if (!p) return;
       p.filter = value;
-      recruitPaintPeople();
+      recruitLoadPeople();
     },
   },
   reset() { const st = recruitState(); st.people = undefined; st.persons = {}; },
@@ -10907,7 +11023,7 @@ const RECRUIT_FILTER_DEFAULTS = { q: '', subteam: '', year: '', sort: 'ts', dir:
 
 function recruitFilters(cycleId = recruitCycleRow()?.id) {
   const st = recruitState();
-  return st.filters[cycleId] ||= { ...RECRUIT_FILTER_DEFAULTS };
+  return st.filters[`${cycleId}:${recruitSection()}`] ||= { ...RECRUIT_FILTER_DEFAULTS };
 }
 
 // Every filter entry: group (one pick per group), value, label, and either a
@@ -10915,17 +11031,22 @@ function recruitFilters(cycleId = recruitCycleRow()?.id) {
 function recruitCoreFilters(cycle) {
   const st = recruitState();
   const rows = st.apps?.rows || [];
-  const teams = recruitSubteams(cycle).map((t) => t.name).filter(Boolean);
+  const questions = recruitSections(cycle)[recruitSection()]?.form?.questions || [];
+  const teams = questions.find((q) => q.key === 'subteam')?.options || [];
+  const years = [...new Set([...(questions.find((q) => q.key === 'year')?.options || []), ...(st.apps?.facets?.year || []), ...rows.map((r) => r.year).filter(Boolean)])];
   const rowTeams = [...new Set(rows.map((r) => String(r.subteam || '').trim()).filter((t) => t && !teams.includes(t)))].sort();
   return [
+    { group: 'review', value: '', label: 'Any review status' },
+    { group: 'review', value: 'flagged', label: 'Flagged', query: { flagged: '1' } },
+    { group: 'review', value: 'comments', label: 'Has comments', query: { comments: '1' } },
     ...(recruitFormAsks(cycle, 'subteam') ? [
       { group: 'subteam', value: '', label: 'All subteams' },
-      ...[...teams, ...rowTeams].map((name) => ({ group: 'subteam', value: name, label: name, query: { subteam: name } })),
-      { group: 'subteam', value: '__undecided', label: 'Undecided', test: (r) => !String(r.subteam || '').trim() },
+      ...[...new Set([...teams, ...(st.apps?.facets?.subteam || []), ...rowTeams])].map((name) => ({ group: 'subteam', value: name, label: name, query: { subteam: name } })),
+      { group: 'subteam', value: '__undecided', label: 'Undecided', query: { subteam: 'none' } },
     ] : []),
     ...(recruitFormAsks(cycle, 'year') ? [
       { group: 'year', value: '', label: 'All years' },
-      ...RECRUIT_YEARS.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
+      ...years.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
     ] : []),
   ];
 }
@@ -10997,26 +11118,35 @@ function recruitVisibleRows(cycle = recruitCycleRow()) {
 let recruitListSeq = 0;
 let recruitSearchTimer = null;
 
-async function recruitLoadApps(more = false) {
+async function recruitLoadApps(more = false, quiet = false) {
   const st = recruitState();
   const cycle = recruitCycleRow();
   if (!cycle) return;
   const f = recruitFilters(cycle.id);
   const cursor = more ? st.apps?.next : null;
   if (more && (!st.apps || st.apps.loading || !cursor)) return;
-  if (!more) st.apps = { key: st.key + ':' + cycle.id + ':' + recruitSection(), rows: [], byId: {}, next: null, total: 0, counts: st.apps?.counts || null, loading: true, error: null };
+  if (!more && !quiet) st.apps = { key: st.key + ':' + cycle.id + ':' + recruitSection(), rows: [], byId: {}, next: null, total: 0, counts: st.apps?.counts || null, loading: true, error: null };
   const apps = st.apps;
+  if (!apps || apps.loading && quiet) return;
   apps.loading = true;
   apps.error = null;
   const seq = ++recruitListSeq;
   const key = st.key;
   try {
-    const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications?${recruitListParams(cycle, f, cursor)}`);
+    let out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications?${recruitListParams(cycle, f, cursor)}`);
+    if (quiet) {
+      const desired = apps.rows.length;
+      while (out.next && out.rows.length < desired && st.key === key && st.apps === apps && seq === recruitListSeq) {
+        const page = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications?${recruitListParams(cycle, f, out.next)}`);
+        out = { ...page, rows: [...out.rows, ...page.rows] };
+      }
+    }
     if (st.key !== key || st.apps !== apps || seq !== recruitListSeq) return;   // a later request or another cycle owns the sheet now
     const rows = Array.isArray(out.rows) ? out.rows : [];
     apps.rows = more ? apps.rows.concat(rows) : rows;
     apps.byId = Object.fromEntries(apps.rows.map((r) => [r.id, r]));
     apps.next = out.next || null;
+    apps.facets = out.facets || {};
     apps.total = Number(out.total ?? apps.rows.length);
     if (out.counts) { apps.counts = out.counts; if (st.cycle) st.cycle.counts = { ...(st.cycle.counts || {}), bySection: out.counts.bySection || st.cycle.counts?.bySection || {} }; }
     apps.loading = false;
@@ -11085,7 +11215,10 @@ function recruitPaintSelection() {
 // Year and Subteam are columns only when this form asks for them.
 const recruitFormAsks = (cycle, key) => (recruitSections(cycle)[recruitSection()]?.form?.questions || []).some((q) => q.key === key);
 function recruitBaseColumns(cycle) {
+  const questions = recruitSections(cycle)[recruitSection()]?.form?.questions || [];
+  const preview = questions.find((q) => ['long', 'longfile'].includes(q.type)) || questions.find((q) => q.type === 'short' && !['name', 'email', 'year', 'subteam'].includes(q.key));
   return [
+    ...(preview ? [{id: 'preview', label: preview.label || 'Answer', cell: (r) => `<span class="rc-answer-preview">${MD.esc(r.preview || '—')}</span>`}] : []),
     ...(recruitFormAsks(cycle, 'year') ? [{ id: 'year', label: 'Year', sortKey: null, cell: (r) => (r.year ? MD.esc(r.year) : '<span class="faint">—</span>') }] : []),
     ...(recruitFormAsks(cycle, 'subteam') ? [{ id: 'subteam', label: 'Subteam', sortKey: null, cell: (r) => MD.esc(r.subteam || 'Undecided') }] : []),
   ];
@@ -11100,7 +11233,8 @@ function recruitAllColumns(cycle, role) {
 function recruitRowHtml(r, cycle, cols, selected) {
   return `<tr data-id="${MD.esc(r.id)}" class="${selected.has(r.id) ? 'is-selected' : ''}">
     <td class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select" data-id="${MD.esc(r.id)}" aria-label="Select ${MD.esc(r.name)} (${MD.esc(r.email)})" ${selected.has(r.id) ? 'checked' : ''}></label></td>
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(r.email)}" data-form="${MD.esc(r.section || recruitSection())}" aria-label="Open ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(r.email)}" data-form="${MD.esc(r.section || recruitSection())}" aria-label="Open ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button><span class="rc-mobile-meta">${MD.esc([r.subteam, r.year, recruitDate(Number(r.ts))].filter(Boolean).join(' · '))}</span></td>
+    ${recruitPersonReviewCellHtml(r)}
     ${cols.map((c) => { let cell = ''; try { cell = String(c.cell?.(r, cycle) ?? ''); } catch (e) { cell = ''; } return `<td data-col="${MD.esc(c.id)}">${cell}</td>`; }).join('')}
     <td class="interest-when" data-col="received" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${recruitDate(Number(r.ts))}</td>
   </tr>`;
@@ -11109,7 +11243,7 @@ function recruitRowHtml(r, cycle, cols, selected) {
 function recruitRowsHtml(rows, cycle) {
   const st = recruitState();
   const cols = recruitAllColumns(cycle, recruitRole());
-  const span = cols.length + 3;
+  const span = cols.length + 4;
   if (!st.apps || (st.apps.loading && !st.apps.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (st.apps?.error && !st.apps.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(st.apps.error)}. <button class="linklike" data-action="recruit-apps-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No one matches.' : 'No one yet.'}</td></tr>`;
@@ -11140,7 +11274,7 @@ function recruitFootHtml() {
 
 // Rows and the footer repaint alone, so the search box keeps its caret.
 function recruitPaintRows(updatedId) {
-  const body = $('.sheet--recruit tbody');
+  const body = $('.sheet--recruit:not(.sheet--people) tbody');
   if (!body) return false;
   const cycle = recruitCycleRow();
   const rows = recruitVisibleRows(cycle);
@@ -11187,6 +11321,7 @@ function recruitSheetHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-q" type="search" placeholder="Search people…" value="${MD.esc(f.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions" data-recruit-tools ${selected.size ? 'hidden' : ''}>
         ${dd('recruit-filter', [{ value: 'combined', label: recruitFilterLabel(cycle) }], 'combined')}
+        <button class="icon-btn" data-action="recruit-apps-refresh" aria-label="Refresh responses" title="Refresh responses">${I.refresh || '↻'}</button>
         ${lead ? `<a class="btn" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
@@ -11194,7 +11329,7 @@ function recruitSheetHtml(cycle) {
     <div class="sheet__scroll"><table aria-label="${MD.esc(recruitSectionTitle(section, cycle))} in ${MD.esc(cycle.name)}">
       <thead><tr>
         <th class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select-visible" aria-label="Select all visible people" ${rows.length && visibleSelected === rows.length ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label></th>
-        ${th('name', 'Person', 'person')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
+        ${th('name', 'Person', 'person')}${th(null, 'Review', 'review')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
       </tr></thead>
       <tbody>${recruitRowsHtml(rows, cycle)}</tbody>
     </table></div>
@@ -11204,6 +11339,7 @@ function recruitSheetHtml(cycle) {
 
 // A section tab: Responses (the sheet) or Form (the editor), behind one bar.
 function recruitApplicationsView(cycle, role, panel) {
+  if (panel === 'form:people') panel = 'people';
   const st = recruitState();
   const editing = recruitEditingForm();
   const bar = recruitModeBarHtml(cycle, panel, editing);
@@ -11263,6 +11399,7 @@ function recruitQueueModalHtml(m) {
         ${has('year') || r.year ? `<dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>` : ''}
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
+        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" download="${MD.esc(f.name)}">${MD.esc(f.name)}</a></dd>`).join('')}
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
       ${recruitAnswersHtml({ application: { answers: r.answers || {}, files: [], section: r.section }, form: { questions } })}
@@ -11316,7 +11453,7 @@ function recruitConfirmRemoval(ids) {
   const hidden = rows.filter((r) => !visible.has(r.id)).length;
   UI.modal = {
     kind: 'confirm', title: rows.length === 1 ? `Delete ${rows[0].name}?` : `Delete ${rows.length} responses?`,
-    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including comments and attachments. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
+    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including their form answers and attachments. Shared flags and comments stay with the person. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
     confirm: rows.length === 1 ? 'Delete response' : `Delete ${rows.length} responses`, danger: true, typed: rows.length > 1 ? 'delete responses' : undefined,
     onGo: async () => {
       const pending = rows.filter((r) => !st.busy.has('delete:' + r.id));
@@ -11342,7 +11479,7 @@ RECRUIT.register({
   name: 'applications',
   order: 10,
   kernel: true,
-  panels: (cycle) => recruitSectionKeys(cycle).map((key, i) => ({ id: key, label: recruitSectionTitle(key, cycle), order: 10 + i, when: () => true })),
+  panels: (cycle) => recruitSectionKeys(cycle).map((key, i) => ({ id: key === 'people' ? 'form:people' : key, label: recruitSectionTitle(key, cycle), order: 10 + i, when: () => true })),
   view: recruitApplicationsView,
   mount(cycle) {
     const st = recruitState();
@@ -11353,8 +11490,9 @@ RECRUIT.register({
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },
   filters: (cycle) => recruitCoreFilters(cycle),
+  refresh: { load: () => recruitEditingForm() ? null : recruitLoadApps(false, true), every: RECRUIT_SYNC_MS },
   actions: {
-    'recruit-apps-refresh': () => { recruitLoadApps(); },
+    'recruit-apps-refresh': () => recruitLoadApps(false, true),
     'recruit-load-more': () => { recruitLoadApps(true); },
     'recruit-sort': (el) => {
       const cycle = recruitCycleRow();

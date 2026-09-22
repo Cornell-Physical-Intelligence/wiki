@@ -556,7 +556,7 @@ async function recruitPutSettings(cycle, module, settings) {
 
 function recruitAdoptCycle(row) {
   const st = recruitState();
-  if (row && st.cycle?.data?.id === row.id) st.cycle.data = row;
+  if (row && st.cycle?.data?.id === row.id) { st.cycle.data = row; if (row.doc?.site?.sections) st.cycle.sections = Object.fromEntries(Object.entries(row.doc.site.sections).filter(([, s]) => s)); }
   st.cycles = undefined;
 }
 
@@ -616,6 +616,7 @@ RECRUIT.register({
     },
   },
   dd: {
+    'recruit-panel-switch': (host, value) => { if (value !== undefined) nav(recruitPanelHref(recruitCycleRow().id, value)); },
     'recruit-cycle-switch': (host, value) => { if (value !== undefined && value !== recruitCycleRow()?.id) nav(recruitPanelHref(value, UI.route?.params?.sub || '')); },
   },
   modals: { 'recruit-cycle': recruitCycleModalHtml, 'recruit-settings': recruitSettingsModalHtml, 'recruit-roles': recruitRolesModalHtml },

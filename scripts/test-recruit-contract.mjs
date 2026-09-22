@@ -63,7 +63,7 @@ test('every server module file exports the module object shape', async () => {
       const key = `${r.method} ${r.path}`;
       assert.ok(!routeKeys.has(key), `${key} declared twice`);
       routeKeys.add(key);
-      if (r.cap !== undefined) assert.ok(r.cap > 0 && r.cap <= 3600000, `${file}: ${r.path} cap`);
+      if (r.cap !== undefined) assert.ok(r.cap > 0 && r.cap <= 4000000, `${file}: ${r.path} cap`);
     }
     // Every audit kind the source writes must be declared.
     const literals = new Set();

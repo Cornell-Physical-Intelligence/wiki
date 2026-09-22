@@ -283,7 +283,7 @@ function recruitSectionTitle(key, cycle = recruitCycleRow()) {
   return merged?.title || listed?.title || RECRUIT_SECTION_LABELS[key] || key;
 }
 // The form a cycle URL points at; the first form when it names none.
-function recruitSection() { const sub = UI.route?.params?.sub; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
+function recruitSection() { const raw = UI.route?.params?.sub; const sub = raw === 'form:people' ? 'people' : raw; const keys = recruitSectionKeys(); return keys.includes(sub) ? sub : keys[0]; }
 
 const RECRUIT_TIMEOUT_MS = 20000;
 const RECRUIT_SYNC_MS = 30000;
@@ -358,7 +358,6 @@ function recruitDate(ts) {
 const recruitPlural = (n, one, many = one + 's') => `${Number(n || 0).toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
 const recruitSubteams = (cycle) => (Array.isArray(cycle?.doc?.subteams) ? cycle.doc.subteams : []);
-const RECRUIT_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'];
 
 function recruitPanelHref(cycleId, panel, params) {
   const qs = params ? Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&') : '';
@@ -476,6 +475,16 @@ async function recruitSyncTick() {
       const out = await RECRUIT.api('/recruit/cycles?all=1');
       if (st.key === key && UI.route?.name === 'recruit') { recruitAdoptCycles(out); recruitPaintCounts(); }
     } catch { /* the next tick tries again */ }
+    if (st.cycle?.data && !recruitFormsDirty()) {
+      try {
+        const latest = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(st.cycle.data.id)}`);
+        if (st.key === key) {
+          const changed = st.cycle.data.version !== latest.cycle?.version;
+          st.cycle = { ...st.cycle, data: latest.cycle, sections: latest.sections, counts: latest.counts, role: latest.role || st.cycle.role };
+          if (changed) { st.forms = {}; renderBackground('recruit'); }
+        }
+      } catch { /* keep the last readable state */ }
+    }
     const panel = recruitActivePanel();
     const m = panel?.module;
     if (m?.refresh?.load && st.cycle?.data && st.key === key && Date.now() - (m._refreshedAt || 0) >= (m.refresh.every || RECRUIT_SYNC_MS)) {
@@ -586,7 +595,7 @@ function recruitCycleShellHtml(id) {
   const panels = RECRUIT.panels(cycle, role);
   const active = recruitActivePanel();
   const addTab = recruitCan('lead') && cycle.status !== 'archived' ? `<button type="button" class="rc-tabs__add" data-action="recruit-form-new" aria-label="Add a form" title="Add a form">${I.plus}</button>` : '';
-  const tabs = panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}${addTab}</nav>` : '';
+  const tabs = panels.length > 5 ? `<div class="rc-form-chooser">${dd('recruit-panel-switch', panels.map((p) => ({ value: p.id, label: p.label })), active?.id)}${addTab}</div>` : panels.length ? `<nav class="rc-tabs" role="tablist" aria-label="Cycle sections">${panels.map((p) => `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${p.id === active?.id}" ${p.id === active?.id ? 'aria-current="page"' : ''} tabindex="${p.id === active?.id ? 0 : -1}">${MD.esc(p.label)}</a>`).join('')}${addTab}</nav>` : '';
   const list = st.cycles?.list || [];
   const switchOptions = (list.length ? list : [{ id: cycle.id, name: cycle.name, term: cycle.term, status: cycle.status }])
     .map((x) => ({ value: x.id, label: recruitCycleChoiceLabel(x) }));

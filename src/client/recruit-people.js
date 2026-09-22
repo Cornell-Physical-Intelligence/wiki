@@ -15,40 +15,48 @@ const RECRUIT_PEOPLE_FILTERS = [
   { value: '', label: 'All people' }, { value: 'flagged', label: 'Flagged' }, { value: 'comments', label: 'Has comments' },
 ];
 
-// Everyone in the cycle, one row per email, loaded whole (the server caps
-// it) and searched and filtered in place.
-function recruitLoadPeople() {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
+let recruitPeopleSearchTimer;
+async function recruitLoadPeople(more = false, quiet = false) {
+  const st = recruitState(), cycle = recruitCycleRow();
   if (!cycle) return;
-  st.people = { key: st.key + ':' + cycle.id, rows: [], byEmail: {}, counts: null, total: 0, loading: true, error: null, q: st.people?.q || '', filter: st.people?.filter || '' };
-  const people = st.people, key = st.key;
-  RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people`)
-    .then((out) => {
-      if (st.key !== key || st.people !== people) return;
-      people.rows = Array.isArray(out.rows) ? out.rows : [];
-      people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
-      people.counts = out.counts || null;
-      people.total = Number(out.total ?? people.rows.length);
-      people.loading = false;
-      if (!recruitPaintPeople()) renderBackground('recruit');
-    })
-    .catch((e) => {
-      if (st.key !== key || st.people !== people) return;
-      people.loading = false;
-      people.error = recruitError(e);
-      if (!recruitPaintPeople()) renderBackground('recruit');
-    });
+  const prior = st.people;
+  if (prior?.loading && (quiet || more)) return;
+  const cursor = more ? prior?.next : null;
+  if (more && !cursor) return;
+  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? prior?.rows || [] : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '' };
+  st.people = people;
+  const key = st.key;
+  const params = new URLSearchParams({ q: people.q, limit: '100' });
+  if (people.filter) params.set(people.filter, '1');
+  if (cursor) params.set('cursor', cursor);
+  try {
+    let out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people?${params}`);
+    if (quiet) {
+      while (out.next && out.rows.length < (prior?.rows.length || 0) && st.key === key && st.people === people) {
+        params.set('cursor', out.next);
+        const page = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people?${params}`);
+        out = { ...page, rows: [...out.rows, ...page.rows] };
+      }
+    }
+    if (st.key !== key || st.people !== people) return;
+    const incoming = Array.isArray(out.rows) ? out.rows : [];
+    people.rows = more ? people.rows.concat(incoming) : incoming;
+    people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
+    people.counts = out.counts || null;
+    people.total = Number(out.total ?? people.rows.length);
+    people.next = out.next || null;
+  } catch (e) {
+    if (st.key !== key || st.people !== people) return;
+    people.error = recruitError(e);
+  }
+  people.loading = false;
+  if (!recruitPaintPeople()) renderBackground('recruit');
 }
 
 function recruitPeopleVisible() {
   const p = recruitState().people;
   if (!p) return [];
-  const q = String(p.q || '').trim().toLowerCase();
-  let rows = q ? p.rows.filter((x) => String(x.name || '').toLowerCase().includes(q) || String(x.email || '').includes(q)) : p.rows;
-  if (p.filter === 'flagged') rows = rows.filter((x) => x.flagged);
-  if (p.filter === 'comments') rows = rows.filter((x) => Number(x.comments || 0) > 0);
-  return rows;
+  return p.rows;
 }
 
 function recruitPeopleCountsLine() {
@@ -63,14 +71,7 @@ function recruitPeopleFootText() {
   const p = recruitState().people;
   if (!p || p.loading || p.error) return '';
   const shown = recruitPeopleVisible().length;
-  return shown === p.rows.length ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.rows.length, 'person', 'people')}`;
-}
-
-// A form the person sent: its date, set like every other date in the sheet,
-// opening that form in their dialog.
-function recruitSentCell(r, p) {
-  if (!r) return '<span class="faint">—</span>';
-  return `<button class="rc-sent interest-when" data-action="recruit-person-open" data-email="${MD.esc(p.email)}" data-form="${MD.esc(r.section)}" aria-label="Open the ${MD.esc(recruitSectionTitle(r.section).toLowerCase())} from ${MD.esc(p.name)}" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${MD.esc(recruitDate(Number(r.ts)))}</button>`;
+  return shown === p.total ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.total, 'person', 'people')}`;
 }
 
 // The row's flag: the same control the list always had, on the person.
@@ -94,17 +95,17 @@ function recruitPersonReviewCellHtml(p) {
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
   const keys = recruitSectionKeys();
-  const span = 5 + keys.length;
+  const span = 6;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No one matches.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button></td>
-    ${keys.map((key) => `<td data-col="${MD.esc(key)}" class="rc-people__form">${recruitSentCell(x.sections?.[key], x)}</td>`).join('')}
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${keys.filter((k) => x.sections?.[k]).map((k) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(k)}">${MD.esc(recruitSectionTitle(k))}</button>`).join('')}</div></td>
+    ${recruitPersonReviewCellHtml(x)}
+    <td data-col="forms"><div class="rc-participation">${keys.filter((key) => x.sections?.[key]).map((key) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(key)}">${MD.esc(recruitSectionTitle(key))}</button>`).join('')}</div></td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
-    ${recruitPersonReviewCellHtml(x)}
   </tr>`).join('');
 }
 
@@ -117,25 +118,27 @@ function recruitPeopleHtml(cycle) {
     <div class="sheet__bar">
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions">
+        <button class="icon-btn" data-action="recruit-people-refresh" aria-label="Refresh people" title="Refresh people">${I.refresh || '↻'}</button>
         ${dd('recruit-people-filter', RECRUIT_PEOPLE_FILTERS, p?.filter || '')}
         ${lead ? `<a class="btn" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${recruitSectionKeys(cycle).map((key) => `<th data-col="${MD.esc(key)}" class="rc-people__form"><span class="sheet__sort sheet__sort--static">${MD.esc(recruitSectionTitle(key, cycle))}</span></th>`).join('')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}
-        <th class="sheet__review-cell" data-col="review"><span class="sheet__sort sheet__sort--static">Review</span></th></tr></thead>
+      <thead><tr>${th('person', 'Person')}${th('review', 'Review')}${th('forms', 'Forms sent')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}</tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
-    <div class="sheet__foot" role="status" data-rc="people-foot">${MD.esc(recruitPeopleFootText())}</div>
+    <div class="sheet__foot" role="status" data-rc="people-foot">${recruitPeopleFootHtml()}</div>
   </div>`;
 }
+
+function recruitPeopleFootHtml() { return `${MD.esc(recruitPeopleFootText())}${recruitState().people?.next ? ' · <button class="linklike" data-action="recruit-people-more">Load more</button>' : ''}`; }
 
 function recruitPaintPeople() {
   const body = $('[data-rc="people-rows"]');
   if (!body) return false;
   recruitRepaint(body, recruitPeopleRowsHtml(recruitPeopleVisible()));
   const foot = $('[data-rc="people-foot"]');
-  if (foot) foot.textContent = recruitPeopleFootText();
+  if (foot) foot.innerHTML = recruitPeopleFootHtml();
   const counts = $('[data-rc="people-counts"]');
   if (counts) counts.textContent = recruitPeopleCountsLine();
   return true;
@@ -148,13 +151,13 @@ function recruitAnswersHtml(d) {
   const a = d.application;
   const questions = Array.isArray(d.form?.questions) ? d.form.questions : [];
   const answers = a.answers || {};
-  const system = new Set(['name', 'email', 'subteam', 'year', 'file']);
+  const system = new Set(['name', 'email']);
   const shown = new Set();
   const blocks = [];
   for (const q of questions) {
     if (system.has(q.key) || q.type === 'file') continue;
     shown.add(q.key);
-    const v = answers[q.key];
+    const v = answers[q.key] ?? (['subteam', 'year'].includes(q.key) ? a[q.key] : null);
     const text = Array.isArray(v) ? v.join(', ') : v == null ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v);
     blocks.push(`<h4 class="interest-subhead">${MD.esc(q.label || q.key)}</h4><p class="interest-project">${text ? (q.type === 'link' && /^https?:\/\//.test(text) ? `<a href="${MD.esc(text)}" target="_blank" rel="noopener noreferrer">${MD.esc(text)}</a>` : MD.esc(text)) : '<span class="faint">Left blank.</span>'}</p>`);
   }
@@ -165,7 +168,7 @@ function recruitAnswersHtml(d) {
     blocks.push(`<h4 class="interest-subhead">${MD.esc(label)}</h4><p class="interest-project">${text ? MD.esc(text) : '<span class="faint">Left blank.</span>'}</p>`);
   }
   if (!blocks.length) blocks.push('<p class="interest-project"><span class="faint">No answers beyond the basics.</span></p>');
-  const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" download="${MD.esc(f.name || 'file')}">${RC_ICONS.download}<span>${MD.esc(f.name || 'Attachment')}<small>${Math.max(1, Math.round(Number(f.size || 0) / 1024))} KB</small></span></a>`).join('');
+  const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" download="${MD.esc(f.name || 'file')}">${RC_ICONS.download}<span>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'Attachment')}: ${MD.esc(f.name || 'Attachment')}<small>${Math.max(1, Math.round(Number(f.size || 0) / 1024))} KB</small></span></a>`).join('');
   return blocks.join('') + files;
 }
 
@@ -196,11 +199,12 @@ function recruitLoadPerson(email, { quiet = false } = {}) {
 
 // The People row learns what the dialog learned: flag, thread size, name.
 function recruitAdoptPersonRow(email, person) {
-  const p = recruitState().people;
-  if (!p?.byEmail?.[email] || !person) return;
-  const row = p.byEmail[email];
-  Object.assign(row, { flagged: person.flagged === true, comments: (person.review?.comments || []).length, reviewVersion: person.reviewVersion ?? row.reviewVersion, name: person.name || row.name });
+  if (!person) return;
+  const st = recruitState();
+  const rows = [st.people?.byEmail?.[email], ...(st.apps?.rows || []).filter((r) => r.email === email)].filter(Boolean);
+  for (const row of rows) Object.assign(row, { flagged: person.flagged === true, comments: (person.review?.comments || []).length, reviewVersion: person.reviewVersion ?? row.reviewVersion, name: person.name || row.name });
   recruitPaintPeople();
+  recruitPaintRows();
 }
 
 // What the dialog knows about a person before their detail arrives: the
@@ -210,7 +214,7 @@ function recruitPersonRow(email) {
   const known = st.people?.byEmail?.[email];
   if (known) return known;
   const row = (st.apps?.rows || []).find((r) => r.email === email);
-  return row ? { email, name: row.name, cornell: row.cornell, subteam: row.subteam, year: row.year, flagged: false, comments: 0 } : null;
+  return row ? { email, name: row.name, cornell: row.cornell, subteam: row.subteam, year: row.year, flagged: row.flagged || false, comments: row.comments || 0 } : null;
 }
 
 // Which of their forms the dialog shows: the one asked for if they sent it,
@@ -247,14 +251,14 @@ function recruitPersonMainHtml(email, want) {
   const was = d.shown;
   d.shown = a.section;
   const from = was && was !== a.section ? subs.findIndex((s) => s.application.section === was) : -1;
-  const switcher = subs.length > 1
+  const switcher = subs.length > 4 ? `<div class="rc-form-chooser">${dd('recruit-person-form-select', subs.map((s) => ({value:s.application.section,label:recruitSectionTitle(s.application.section)})), a.section)}</div>` : subs.length > 1
     ? `<nav class="rc-seg rc-seg--forms" aria-label="Forms sent"${from >= 0 ? ` data-seg-from="${from}"` : ''}><span class="rc-seg__thumb" aria-hidden="true"></span>${subs.map((s) => `<button type="button" data-action="recruit-person-form" data-email="${MD.esc(email)}" data-form="${MD.esc(s.application.section)}" aria-current="${s.application.section === a.section ? 'page' : 'false'}">${MD.esc(recruitSectionTitle(s.application.section))}</button>`).join('')}</nav>`
     : `<h4 class="interest-subhead">${MD.esc(recruitSectionTitle(a.section))}</h4>`;
   // Subteam and Year rows only where this form asked, or the answer exists.
   const asks = (key) => (sub.form?.questions || []).some((q) => q.key === key);
   const basics = `<dl class="interest-detail">
-    ${asks('subteam') || a.subteam ? `<dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>` : ''}
-    ${asks('year') || a.year ? `<dt>Year</dt><dd>${MD.esc(a.year || 'Not provided')}</dd>` : ''}
+    ${!asks('subteam') && a.subteam ? `<dt>Subteam</dt><dd>${MD.esc(a.subteam || 'Undecided')}</dd>` : ''}
+    ${!asks('year') && a.year ? `<dt>Year</dt><dd>${MD.esc(a.year || 'Not provided')}</dd>` : ''}
     <dt>Received</dt><dd>${MD.esc(recruitDate(Number(a.ts)))}${a.updated && a.updated !== a.ts ? ` <span class="faint">updated ${MD.esc(recruitDate(Number(a.updated)))}</span>` : ''}</dd>
     ${a.cornell === false ? '<dt>Address</dt><dd><span class="interest-outside">Outside cornell.edu</span></dd>' : ''}
   </dl>`;
@@ -331,18 +335,29 @@ function recruitPaintPerson(email) {
   const flag = $('[data-rc="person-flag"]', dialog);
   if (flag) recruitRepaint(flag, recruitPersonFlagHtml(email));
   recruitPaintPersonDiscussion(email);
+  recruitFocusComments();
   return true;
 }
 
 function recruitOpenPerson(email, { form = null, comments = false } = {}) {
   if (!email) return;
-  recruitShowModal({ kind: 'recruit-person', email, form, inPlace: true });
+  recruitShowModal({ kind: 'recruit-person', email, form, focusComments: comments, inPlace: true });
   recruitSegSlide($('.rc-person .rc-seg--forms'));
   const d = recruitPerson(email);
   if (d === undefined || d?.error) recruitLoadPerson(email);
   recruitPrefetchPeople(email);
-  if (comments) $('.rc-person .interest-compose textarea')?.focus();
+  if (comments) { $('.rc-person .interest-compose textarea')?.focus(); recruitFocusComments(); }
   else $('.rc-person [data-action="modal-close"]')?.focus();
+}
+
+// Loading answers can move the discussion after its initial focus. Honor the
+// comment-button intent once the full layout is present, including read-only cycles.
+function recruitFocusComments() {
+  if (!UI.modal?.focusComments || !recruitPerson(UI.modal.email)?.person) return;
+  const target = $('.rc-person .interest-compose textarea') || $('.rc-person [data-rc="person-comments"]');
+  target?.scrollIntoView?.({block: 'center'});
+  target?.focus?.({preventScroll: true});
+  UI.modal.focusComments = false;
 }
 
 // The neighbours load while this one is read, so a step shows at once.
@@ -600,8 +615,10 @@ RECRUIT.register({
     if (panel === 'people' && (st.people === undefined || st.people.key !== st.key + ':' + cycle.id)) recruitLoadPeople();
   },
   modals: { 'recruit-person': recruitPersonModalHtml },
+  refresh: { load: () => recruitLoadPeople(false, true), every: RECRUIT_SYNC_MS },
   actions: {
-    'recruit-people-refresh': () => { recruitLoadPeople(); },
+    'recruit-people-more': () => recruitLoadPeople(true),
+    'recruit-people-refresh': () => { recruitLoadPeople(false, true); },
     'recruit-person-open': (el) => recruitOpenPerson(el.dataset.email, { form: el.dataset.form || null, comments: Boolean(el.dataset.comments) }),
     'recruit-person-form': (el) => {
       if (UI.modal?.kind !== 'recruit-person' || UI.modal.email !== el.dataset.email) return;
@@ -619,7 +636,7 @@ RECRUIT.register({
     'recruit-person-comment-delete-confirm': (el) => recruitDeletePersonComment(el.dataset.email, el.dataset.cid),
   },
   inputs: {
-    'recruit-people-q': (el) => { const p = recruitState().people; if (!p) return; p.q = el.value; recruitPaintPeople(); },
+    'recruit-people-q': (el) => { const p = recruitState().people; if (!p) return; p.q = el.value; clearTimeout(recruitPeopleSearchTimer); recruitPeopleSearchTimer = setTimeout(() => recruitLoadPeople(), 220); },
     'recruit-person-comment': (el) => {
       const draft = recruitPersonDraft(el.dataset.email);
       draft.text = el.value;
@@ -629,12 +646,13 @@ RECRUIT.register({
     },
   },
   dd: {
+    'recruit-person-form-select': (host, value) => { if (value === undefined || UI.modal?.kind !== 'recruit-person') return; UI.modal.form = value; recruitPaintPerson(UI.modal.email); $('.rc-person [data-m="recruit-person-form-select"]')?.focus(); },
     'recruit-people-filter': (host, value) => {
       if (value === undefined) return undefined;
       const p = recruitState().people;
       if (!p) return;
       p.filter = value;
-      recruitPaintPeople();
+      recruitLoadPeople();
     },
   },
   reset() { const st = recruitState(); st.people = undefined; st.persons = {}; },

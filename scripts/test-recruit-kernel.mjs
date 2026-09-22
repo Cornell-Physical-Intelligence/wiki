@@ -54,7 +54,7 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   assert.equal(v.columns.cornell, true);
   assert.equal(v.answers.project.length, 1000);
   assert.equal(v.answers.extra, undefined);
-  assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', year: 'Unknown' }).error, 'Choose Freshman, Sophomore, Junior, Senior, or Grad for year');
+  assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', year: 'Unknown' }).error, 'Choose one of the options for Year');
   assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', subteam: 'Robots' }).columns.subteam, '', 'unknown subteam becomes blank like today');
   assert.equal(validateAnswers(FIXED_FORM_V1, { name: '', email: 'a@b.co' }).error, 'Tell us your name');
   assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'nope' }).error, 'That email does not look right');
@@ -238,9 +238,9 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   const probeRev = await request('GET', `/api/recruit/cycles/${cycle.id}/probe`, {}, rev);
   assert.deepEqual(probeRev.data, { role: 'reviewer', scope: [] }, 'grant subteams narrow the collected scope (no Electrical applications yet)');
   // Add two applications so the subteam narrowing has something to keep.
-  const addA = await request('POST', `/api/recruit/cycles/${cycle.id}/applications`, { requestId: 'rq-app-000a', name: 'Amy', email: 'amy@example.com', subteam: 'Electrical' }, lead);
+  const addA = await request('POST', `/api/recruit/cycles/${cycle.id}/applications`, { requestId: 'rq-app-000a', name: 'Amy', email: 'amy@example.com', subteam: 'Electrical', year: 'Junior' }, lead);
   assert.equal(addA.status, 201);
-  const addB = await request('POST', `/api/recruit/cycles/${cycle.id}/applications`, { requestId: 'rq-app-000b', name: 'Bo', email: 'bo@example.com', subteam: 'Software' }, lead);
+  const addB = await request('POST', `/api/recruit/cycles/${cycle.id}/applications`, { requestId: 'rq-app-000b', name: 'Bo', email: 'bo@example.com', subteam: 'Software', year: 'Junior' }, lead);
   assert.equal(addB.status, 201);
   probe.collect['scope.applications'] = async ({ me }) => new Set(me.email === 'rev@example.com' ? [addA.data.application.id, addB.data.application.id] : []);
   assert.deepEqual((await request('GET', `/api/recruit/cycles/${cycle.id}/probe`, {}, rev)).data.scope, [addA.data.application.id], 'scope = collector ids ∩ grant subteams');

@@ -58,14 +58,14 @@ function recruitModeBarInnerHtml(cycle, key, editing) {
   const landing = recruitLandingKey(cycle);
   const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(key)}/`;
   // The address is its own group so a phone can drop it under the switch.
-  const link = `<span class="rc-mode__addr"><span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}</span>`;
+  const link = `<span class="rc-mode__addr"><span class="rc-mode__sep">·</span><a class="rc-mode__link" href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(RECRUIT_SITE_URL, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn rc-mode__copy" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${open && landing === key ? `<span class="rc-mode__also">and at <a class="rc-mode__link" href="${RECRUIT_SITE_URL}/apply/" target="_blank" rel="noopener">/apply</a></span>` : ''}</span>`;
   const responses = `Responses <span class="count" data-rc-count="${MD.esc(key)}">${count.toLocaleString('en-US')}</span>`;
   // The thumb slides from where the view was last time this tab was drawn.
   const was = st.modeWas?.[key];
   const from = was === undefined || was === editing ? '' : ` data-seg-from="${was ? 1 : 0}"`;
   if (recruitCan('lead')) { st.modeWas ||= {}; st.modeWas[key] = editing; }
   const seg = recruitCan('lead')
-    ? `<nav class="rc-seg rc-seg--mode" aria-label="View"${from}><span class="rc-seg__thumb" aria-hidden="true"></span><a href="${recruitPanelHref(cycle.id, key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Edit form</a></nav>`
+    ? `<nav class="rc-seg rc-seg--mode" aria-label="View"${from}><span class="rc-seg__thumb" aria-hidden="true"></span><a href="${recruitPanelHref(cycle.id, key === 'people' ? 'form:people' : key)}" ${editing ? '' : 'aria-current="page"'}>${responses}</a><a href="${recruitPanelHref(cycle.id, key === 'people' ? 'form:people' : key, { edit: 1 })}" ${editing ? 'aria-current="page"' : ''}>Edit form</a></nav>`
     : `<span class="rc-mode__plain">${responses}</span>`;
   return `<span class="rc-mode__status" data-rc="mode-status">${status}${link}</span>${seg}`;
 }
@@ -88,7 +88,7 @@ async function recruitToggleFormOpen(el) {
     if (st.cycle?.data?.id === cycle.id) st.cycle.sections = { ...sections, [key]: { ...(sections[key] || {}), open: want } };
     // The editor's draft, if any, learns the saved state without turning dirty.
     const fe = st.forms?.[`${cycle.id}:${key}`];
-    if (fe) { fe.model.open = want; const saved = JSON.parse(fe.saved); saved.open = want; fe.saved = JSON.stringify(saved); }
+    if (fe) { fe.version = recruitCycleRow()?.version ?? fe.version; fe.model.open = want; const saved = JSON.parse(fe.saved); saved.open = want; fe.saved = JSON.stringify(saved); }
     toast(want ? `${recruitSectionTitle(key)} is open on the website` : `${recruitSectionTitle(key)} is closed on the website`);
   } catch (e) { toast(`Could not change it: ${recruitError(e)}`); }
   finally {
@@ -124,7 +124,7 @@ const recruitQuestionId = () => `q${++recruitQuestionSeq}`;
 
 function recruitFormModel(sec, key, landing = null) {
   // The server says which questions this form must keep (name and email,
-  // plus the fixed six on the interest form the old route posts to).
+  // which are the identity fields used to group a person across forms).
   const fixed = new Set(Array.isArray(sec?.required) ? sec.required : ['name', 'email']);
   const questions = (Array.isArray(sec?.form?.questions) ? sec.form.questions : []).map((q) => {
     const out = {
@@ -139,7 +139,7 @@ function recruitFormModel(sec, key, landing = null) {
     return out;
   });
   return {
-    title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', thanks: sec?.thanks || '', open: sec?.open === true, atApply: landing === key,
+    submitLabel: sec?.submitLabel || 'Send', successLabel: sec?.successLabel || 'Sent', title: sec?.title || RECRUIT_SECTION_LABELS[key] || key, description: sec?.description || '', thanks: sec?.thanks || '', open: sec?.open === true, atApply: landing === key,
     notify: sec?.notify !== false, notifyTo: Array.isArray(sec?.notifyTo) ? sec.notifyTo.map(String) : [], replace: sec?.replace !== false, capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0, questions,
   };
 }
@@ -152,7 +152,7 @@ function recruitFormEditor(cycle, key) {
   const id = `${cycle.id}:${key}`;
   if (!st.forms[id]) {
     const model = recruitFormModel(recruitSections(cycle)[key], key, cycle.doc?.site?.landing || null);
-    st.forms[id] = { id, key, cycleId: cycle.id, model, saved: JSON.stringify(model), saving: false, error: '', savedAt: 0 };
+    st.forms[id] = { id, key, cycleId: cycle.id, version: cycle.version, model, saved: JSON.stringify(model), saving: false, error: '', savedAt: 0 };
   }
   return st.forms[id];
 }
@@ -164,17 +164,35 @@ const recruitFormsDirty = () => Object.values(recruitState().forms || {}).some(r
 function recruitFormEditorHtml(cycle, key) {
   const fe = recruitFormEditor(cycle, key);
   const m = fe.model;
+  if (fe.preview) return recruitFormPreviewHtml(fe);
   return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(key)}" role="region" aria-label="${MD.esc(recruitSectionTitle(key, cycle))} editor">
+    <div class="fe__view"><span>Edit form</span><button class="btn" type="button" data-action="recruit-fe-preview">Preview</button></div>
     <div class="fe__head">
       <label class="fe__field"><span class="fe__field-label">Title</span><input class="text-input fe__title" data-m="recruit-fe-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" autocomplete="off" spellcheck="false"></label>
       <label class="fe__field"><span class="fe__field-label">Description</span><textarea class="text-input fe__desc" data-m="recruit-fe-desc" rows="2" placeholder="A line or two shown above the form on the website" maxlength="600">${MD.esc(m.description)}</textarea></label>
       <label class="fe__field"><span class="fe__field-label">After they send it</span><input class="text-input fe__thanks-input" data-m="recruit-fe-thanks" value="${MD.esc(m.thanks || '')}" maxlength="300" placeholder="Thanks. We read every one of these." autocomplete="off"></label>
     </div>
+    <details class="fe-settings"><summary>Form settings</summary><section class="fe-options" data-rc="fe-options" aria-label="How this form behaves">${recruitFormOptionsHtml(fe)}</section></details>
+    <h3 class="fe__list-label">Questions · edit labels, hints, and choices</h3>
     <ol class="fe__list" data-rc="fe-list">${recruitQuestionCardsHtml(fe, cycle)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-fe-add">${I.plus} Add question</button></div>
-    <section class="fe-options" data-rc="fe-options" aria-label="How this form behaves">${recruitFormOptionsHtml(fe)}</section>
     <div class="fe__foot" data-rc="fe-foot">${recruitFormFootHtml(fe)}</div>
   </div>`;
+}
+
+// Read-only schema preview is distinct from editing labels and placeholders.
+function recruitFormPreviewHtml(fe) {
+  const m = fe.model;
+  const questions = m.questions.map((q) => {
+    const label = `${MD.esc(q.label)}${q.required ? ' <span aria-label="required">*</span>' : ''}`;
+    let field;
+    if (recruitIsChoice(q.type)) field = `<ul class="fe-preview__choices">${(q.options || []).map((v) => `<li><span aria-hidden="true">${q.type === 'single' ? '○' : '□'}</span> ${MD.esc(v)}</li>`).join('')}</ul>`;
+    else if (q.type === 'checkbox') field = `<p>□ ${MD.esc(q.help || q.label)}</p>`;
+    else if (q.type === 'file') field = '<div class="fe-preview__file">Attach an image or PDF</div>';
+    else field = `<${['long', 'longfile'].includes(q.type) ? 'textarea rows="3"' : 'input'} class="text-input" disabled aria-label="${MD.esc(q.label)}" placeholder="${MD.esc(q.help || '')}">${['long', 'longfile'].includes(q.type) ? '</textarea>' : ''}${q.type === 'longfile' ? '<div class="fe-preview__file">Or attach an image or PDF</div>' : ''}`;
+    return `<div class="fe-preview__question"><h3>${label}</h3>${field}</div>`;
+  }).join('');
+  return `<div class="fe" data-rc="form-editor" data-section="${MD.esc(fe.key)}"><div class="fe__view"><span>Preview · current draft</span><button class="btn" type="button" data-action="recruit-fe-preview">Back to editing</button></div><div class="fe-preview"><h2>${MD.esc(m.title)}</h2>${m.description ? `<p>${MD.esc(m.description)}</p>` : ''}${questions}<button class="btn" disabled>${MD.esc(m.submitLabel)}</button></div></div>`;
 }
 
 // What happens around the form: whether the site shows it, whether it is
@@ -183,6 +201,8 @@ function recruitFormOptionsHtml(fe) {
   const m = fe.model;
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
   return `<h3 class="fe-options__title">Form settings</h3>
+    <label class="fe__field"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-fe-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80"></label>
+    <label class="fe__field"><span class="fe__field-label">Success heading</span><input class="text-input" data-m="recruit-fe-success-label" value="${MD.esc(m.successLabel)}" maxlength="80"></label>
     ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${recruitFormNotifyHtml(fe)}
@@ -236,7 +256,7 @@ async function recruitCreateForm() {
   if (!title) { form.elements.title.focus(); toast('Give the form a name'); return; }
   const sections = recruitSections(cycle);
   let key = recruitFormKey(title);
-  for (let n = 2; sections[key] !== undefined; n += 1) key = `${recruitFormKey(title).slice(0, 37)}-${n}`;
+  for (let n = 2; sections[key] !== undefined || key === 'people'; n += 1) key = `${recruitFormKey(title).slice(0, 37)}-${n}`;
   const fromKey = $('[data-m="recruit-form-from"]', form)?.dataset.value || '';
   const questions = fromKey && sections[fromKey] ? JSON.parse(JSON.stringify(sections[fromKey].form.questions)) : [
     { key: 'name', type: 'short', label: 'Name', required: true, max: 100 }, { key: 'email', type: 'email', label: 'Email', required: true, max: 200 },
@@ -245,7 +265,7 @@ async function recruitCreateForm() {
   try {
     await recruitPutSettings(cycle, 'site', { sections: { [key]: { title, description: fromKey && sections[fromKey] ? sections[fromKey].description : '', open: false, form: { questions } } } });
     toast(`${title} added`);
-    closeModal(() => { RECRUIT.reset(cycle.id); nav(recruitPanelHref(cycle.id, key, { edit: 1 })); });
+    closeModal(() => { RECRUIT.reset(cycle.id); nav(recruitPanelHref(cycle.id, key === 'people' ? 'form:people' : key, { edit: 1 })); });
   } catch (e) { toast(`Could not add: ${recruitError(e)}`); }
   finally { st.busy.delete('form-new'); }
 }
@@ -296,7 +316,7 @@ function recruitQuestionCardHtml(q, i, total, cycle) {
     ${recruitIsText(q.type) ? '' : `<input class="fe-q__help" data-m="recruit-fe-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">`}
     <div class="fe-q__answer" data-rc="fe-answer">${recruitAnswerPreviewHtml(q, i)}</div>
     <div class="fe-q__foot">
-      <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
+      <label class="fe-switch"><input type="checkbox" data-action="recruit-fe-required" data-i="${i}" ${q.required ? 'checked' : ''} ${['name', 'email'].includes(q.key) ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
       <span class="fe-q__tools">
         ${q.fixed ? '<span class="fe-q__fixed" title="The website needs this question">Fixed</span>' : `<button type="button" class="icon-btn" data-action="recruit-fe-remove" data-i="${i}" aria-label="Remove ${MD.esc(name)}">${I.x}</button>`}
       </span>
@@ -323,10 +343,7 @@ function recruitAnswerPreviewHtml(q, i) {
 function recruitOptionsHtml(q, i) {
   const mark = q.type === 'single' ? 'fe-mark fe-mark--radio' : 'fe-mark';
   const options = q.options || [];
-  if (q.fixed) {
-    const note = q.key === 'subteam' ? "Options follow this cycle's subteams, under Settings." : '';
-    return `<ul class="fe-opts">${options.map((o) => `<li class="fe-opt fe-opt--fixed"><span class="${mark}"></span><span class="fe-opt__text">${MD.esc(o)}</span></li>`).join('')}</ul>${note ? `<p class="fe-q__note">${note}</p>` : ''}`;
-  }
+
   return `<ul class="fe-opts">${options.map((o, j) => `<li class="fe-opt"><span class="${mark}"></span><input class="fe-opt__text" data-m="recruit-fe-option" data-i="${i}" data-j="${j}" value="${MD.esc(o)}" placeholder="Option ${j + 1}" maxlength="80" aria-label="Option ${j + 1}" autocomplete="off"><button type="button" class="icon-btn" data-action="recruit-fe-option-remove" data-i="${i}" data-j="${j}" aria-label="Remove option ${j + 1}">${I.x}</button></li>`).join('')}
     <li class="fe-opt fe-opt--add"><span class="${mark} fe-mark--ghost"></span><button type="button" class="linklike" data-action="recruit-fe-option-add" data-i="${i}">Add option</button></li></ul>`;
 }
@@ -508,7 +525,7 @@ function recruitFormPayload(fe) {
   });
   if (notifyTo.length > RECRUIT_NOTIFY_MAX) throw Object.assign(new Error(`Up to ${RECRUIT_NOTIFY_MAX} addresses.`), { focus: '[data-action="recruit-fe-recipient-add"]' });
   return {
-    title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), thanks: String(fe.model.thanks || '').trim().slice(0, 300), open: fe.model.open === true,
+    submitLabel: fe.model.submitLabel, successLabel: fe.model.successLabel, title: String(fe.model.title || '').trim() || RECRUIT_SECTION_LABELS[fe.key] || fe.key, description: String(fe.model.description || '').trim(), thanks: String(fe.model.thanks || '').trim().slice(0, 300), open: fe.model.open === true,
     notify: fe.model.notify !== false, notifyTo, replace: fe.model.replace !== false, capacity: Number(fe.model.capacity) > 0 ? Number(fe.model.capacity) : 0, form: { questions },
   };
 }
@@ -526,7 +543,8 @@ async function recruitSaveForm(el) {
     // The /apply choice is one per cycle: this form takes it, gives it up, or leaves it.
     const current = cycle.doc?.site?.landing || null;
     const landing = fe.model.atApply ? key : (current === key ? null : current);
-    await recruitPutSettings(cycle, 'site', { sections: { [key]: payload }, landing });
+    const saved = await recruitPutSettings({ ...cycle, version: fe.version ?? cycle.version }, 'site', { sections: { [key]: payload }, landing });
+    fe.version = saved.cycle.version;
     const st = recruitState();
     if (st.cycle?.data?.id === cycle.id) st.cycle.sections = { ...recruitSections(cycle), [key]: payload };
     fe.model = recruitFormModel(payload, key, landing);
@@ -553,6 +571,7 @@ RECRUIT.register({
   order: 12,
   kernel: true,
   actions: {
+    'recruit-fe-preview': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.preview = !c.fe.preview; c.host.outerHTML = recruitFormEditorHtml(c.cycle, c.key); $('[data-action="recruit-fe-preview"]')?.focus(); },
     'recruit-fe-add': (el) => {
       const c = recruitFeCtx(el);
       if (!c) return;
@@ -568,7 +587,7 @@ RECRUIT.register({
       ($$('[data-m="recruit-fe-label"]', c.host)[Math.min(c.i, c.fe.model.questions.length - 1)] || $('[data-action="recruit-fe-add"]', c.host))?.focus({ preventScroll: true });
     },
     'recruit-fe-grip': () => {},   // a click on the grip does nothing; dragging and the arrow keys move the card
-    'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
+    'recruit-fe-required': (el) => { const c = recruitFeCtx(el); if (!c?.q || ['name', 'email'].includes(c.q.key)) return; c.q.required = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-open': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.open = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-landing': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.atApply = Boolean(el.checked); recruitPaintForm(c, { list: false }); },
     'recruit-fe-notify': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.notify = Boolean(el.checked); recruitPaintOptions(c); },
@@ -622,6 +641,8 @@ RECRUIT.register({
     },
   },
   inputs: {
+    'recruit-fe-submit-label': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.submitLabel = el.value; recruitPaintForm(c, { list: false }); },
+    'recruit-fe-success-label': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.successLabel = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-title': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.title = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-desc': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.description = el.value; recruitPaintForm(c, { list: false }); },
     'recruit-fe-thanks': (el) => { const c = recruitFeCtx(el); if (!c) return; c.fe.model.thanks = el.value; recruitPaintForm(c, { list: false }); },

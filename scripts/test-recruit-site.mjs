@@ -13,10 +13,10 @@ function fakeJournal() {
     records, files, done, appendOptions: null,
     enabled: () => true,
     async check() { return { ok: true }; },
-    async append(entry, file, options) { this.appendOptions = options || null; records.set(entry.id, structuredClone(entry)); if (file) files.set(entry.id, Buffer.from(file.data)); return true; },
+    async append(entry, file, options) { this.appendOptions = options || null; records.set(entry.id, structuredClone(entry)); if (Array.isArray(file)) file.forEach((f, i) => files.set(entry.id + ':' + i, Buffer.from(f.data))); else if (file) files.set(entry.id, Buffer.from(file.data)); return true; },
     async listPending() { return [...records.values()].filter((e) => !done.has(e.id)).sort((a, b) => a.ts - b.ts); },
     async getEntry(id) { return records.get(id) ? structuredClone(records.get(id)) : null; },
-    async getFile(id) { return files.get(id) || null; },
+    async getFile(id, index = null) { return files.get(index === null ? id : id + ':' + index) || null; },
     async complete(id, outcome) { done.set(id, outcome); },
     async forget(id) { records.delete(id); files.delete(id); },
   };
@@ -131,7 +131,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(chose.data.cycle.doc.site.landing, 'coffee');
   assert.equal((await anon('GET', '/recruit/site')).data.landing, 'coffee', 'the chosen form is what /apply shows');
   assert.deepEqual((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack'], 'choosing the /apply form leaves the sections alone');
-  assert.deepEqual(coffee.form.questions.find((q) => q.key === 'subteam').options, ['Mechanical', 'Electrical', 'Software', 'Creative', 'Business & Marketing'], 'subteam options follow the cycle');
+  assert.deepEqual(coffee.form.questions.find((q) => q.key === 'subteam').options, ['Mechanical', 'Software'], 'saved subteam options belong to the form');
   console.log('PASS: the live cycle publishes its sections; Settings opens a section and shapes its form; members are refused');
 
   /* ---- submissions from the site ---- */
@@ -149,7 +149,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(list.rows.length, 1); assert.equal(list.rows[0].name, 'Cam Chat'); assert.equal(list.rows[0].email, 'cam@cornell.edu'); assert.equal(list.rows[0].section, 'coffee');
   assert.deepEqual(list.counts.bySection, { interest: 1, coffee: 1 });
   const row = (await recruit('GET', `/recruit/cycles/cy-interest/applications/${list.rows[0].id}`)).data;
-  assert.deepEqual(row.application.answers, { availability: 'Tue 3pm', snack: 'Tea' }, 'unknown keys are dropped, answers kept');
+  assert.deepEqual(row.application.answers, { subteam: 'Software', availability: 'Tue 3pm', snack: 'Tea' }, 'unknown keys are dropped, answers kept');
   assert.equal(row.application.subteam, 'Software');
   assert.deepEqual(row.form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack'], 'the detail carries the section form');
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/applications?section=interest')).data.rows.length, 1, 'sections do not mix');
@@ -184,7 +184,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const secsNow = (await recruit('GET', '/recruit/cycles/cy-interest')).data.sections;
   const coffeeNow = secsNow.coffee;
   assert.deepEqual([coffeeNow.capacity, coffeeNow.notify, coffeeNow.replace], [0, false, false]);
-  assert.deepEqual(secsNow.interest.required, ['name', 'email', 'subteam', 'year', 'project', 'file'], 'the interest form says which questions it keeps');
+  assert.deepEqual(secsNow.interest.required, ['name', 'email'], 'every form keeps only identity questions');
   assert.deepEqual(coffeeNow.required, ['name', 'email'], 'every other form keeps only a name and an email');
   /* ---- what applicants read after sending is the form's own line ---- */
   assert.equal(coffeeNow.thanks, 'A member will email you to find a time.', 'a default form starts with its stock line');
@@ -333,5 +333,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const auditKinds = (await recruit('GET', '/recruit/cycles/cy-interest/audit')).data.rows.map((a) => a.kind);
   for (const kind of ['person.flag', 'comment.post', 'comment.delete']) assert.ok(auditKinds.includes(kind), `people routes write ${kind} audit`);
   console.log('PASS: per-section CSV with formula-safe cells, a closed interest form refuses the website, capacity applies per section, people group across forms, and the flag and the thread belong to the person');
+  const { recruitmentRegressions } = await import('./recruit-regression-cases.mjs');
+  await recruitmentRegressions({ lib, recruit, anon, R, ctxFor, admin, plain, journal, now: () => clock });
   console.log('PASS: site module — public read, per-section submit, settings, csv');
 }

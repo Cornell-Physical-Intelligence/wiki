@@ -15,7 +15,7 @@ const RECRUIT_FILTER_DEFAULTS = { q: '', subteam: '', year: '', sort: 'ts', dir:
 
 function recruitFilters(cycleId = recruitCycleRow()?.id) {
   const st = recruitState();
-  return st.filters[cycleId] ||= { ...RECRUIT_FILTER_DEFAULTS };
+  return st.filters[`${cycleId}:${recruitSection()}`] ||= { ...RECRUIT_FILTER_DEFAULTS };
 }
 
 // Every filter entry: group (one pick per group), value, label, and either a
@@ -23,17 +23,22 @@ function recruitFilters(cycleId = recruitCycleRow()?.id) {
 function recruitCoreFilters(cycle) {
   const st = recruitState();
   const rows = st.apps?.rows || [];
-  const teams = recruitSubteams(cycle).map((t) => t.name).filter(Boolean);
+  const questions = recruitSections(cycle)[recruitSection()]?.form?.questions || [];
+  const teams = questions.find((q) => q.key === 'subteam')?.options || [];
+  const years = [...new Set([...(questions.find((q) => q.key === 'year')?.options || []), ...(st.apps?.facets?.year || []), ...rows.map((r) => r.year).filter(Boolean)])];
   const rowTeams = [...new Set(rows.map((r) => String(r.subteam || '').trim()).filter((t) => t && !teams.includes(t)))].sort();
   return [
+    { group: 'review', value: '', label: 'Any review status' },
+    { group: 'review', value: 'flagged', label: 'Flagged', query: { flagged: '1' } },
+    { group: 'review', value: 'comments', label: 'Has comments', query: { comments: '1' } },
     ...(recruitFormAsks(cycle, 'subteam') ? [
       { group: 'subteam', value: '', label: 'All subteams' },
-      ...[...teams, ...rowTeams].map((name) => ({ group: 'subteam', value: name, label: name, query: { subteam: name } })),
-      { group: 'subteam', value: '__undecided', label: 'Undecided', test: (r) => !String(r.subteam || '').trim() },
+      ...[...new Set([...teams, ...(st.apps?.facets?.subteam || []), ...rowTeams])].map((name) => ({ group: 'subteam', value: name, label: name, query: { subteam: name } })),
+      { group: 'subteam', value: '__undecided', label: 'Undecided', query: { subteam: 'none' } },
     ] : []),
     ...(recruitFormAsks(cycle, 'year') ? [
       { group: 'year', value: '', label: 'All years' },
-      ...RECRUIT_YEARS.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
+      ...years.map((y) => ({ group: 'year', value: y, label: y, query: { year: y } })),
     ] : []),
   ];
 }
@@ -105,26 +110,35 @@ function recruitVisibleRows(cycle = recruitCycleRow()) {
 let recruitListSeq = 0;
 let recruitSearchTimer = null;
 
-async function recruitLoadApps(more = false) {
+async function recruitLoadApps(more = false, quiet = false) {
   const st = recruitState();
   const cycle = recruitCycleRow();
   if (!cycle) return;
   const f = recruitFilters(cycle.id);
   const cursor = more ? st.apps?.next : null;
   if (more && (!st.apps || st.apps.loading || !cursor)) return;
-  if (!more) st.apps = { key: st.key + ':' + cycle.id + ':' + recruitSection(), rows: [], byId: {}, next: null, total: 0, counts: st.apps?.counts || null, loading: true, error: null };
+  if (!more && !quiet) st.apps = { key: st.key + ':' + cycle.id + ':' + recruitSection(), rows: [], byId: {}, next: null, total: 0, counts: st.apps?.counts || null, loading: true, error: null };
   const apps = st.apps;
+  if (!apps || apps.loading && quiet) return;
   apps.loading = true;
   apps.error = null;
   const seq = ++recruitListSeq;
   const key = st.key;
   try {
-    const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications?${recruitListParams(cycle, f, cursor)}`);
+    let out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications?${recruitListParams(cycle, f, cursor)}`);
+    if (quiet) {
+      const desired = apps.rows.length;
+      while (out.next && out.rows.length < desired && st.key === key && st.apps === apps && seq === recruitListSeq) {
+        const page = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/applications?${recruitListParams(cycle, f, out.next)}`);
+        out = { ...page, rows: [...out.rows, ...page.rows] };
+      }
+    }
     if (st.key !== key || st.apps !== apps || seq !== recruitListSeq) return;   // a later request or another cycle owns the sheet now
     const rows = Array.isArray(out.rows) ? out.rows : [];
     apps.rows = more ? apps.rows.concat(rows) : rows;
     apps.byId = Object.fromEntries(apps.rows.map((r) => [r.id, r]));
     apps.next = out.next || null;
+    apps.facets = out.facets || {};
     apps.total = Number(out.total ?? apps.rows.length);
     if (out.counts) { apps.counts = out.counts; if (st.cycle) st.cycle.counts = { ...(st.cycle.counts || {}), bySection: out.counts.bySection || st.cycle.counts?.bySection || {} }; }
     apps.loading = false;
@@ -193,7 +207,10 @@ function recruitPaintSelection() {
 // Year and Subteam are columns only when this form asks for them.
 const recruitFormAsks = (cycle, key) => (recruitSections(cycle)[recruitSection()]?.form?.questions || []).some((q) => q.key === key);
 function recruitBaseColumns(cycle) {
+  const questions = recruitSections(cycle)[recruitSection()]?.form?.questions || [];
+  const preview = questions.find((q) => ['long', 'longfile'].includes(q.type)) || questions.find((q) => q.type === 'short' && !['name', 'email', 'year', 'subteam'].includes(q.key));
   return [
+    ...(preview ? [{id: 'preview', label: preview.label || 'Answer', cell: (r) => `<span class="rc-answer-preview">${MD.esc(r.preview || '—')}</span>`}] : []),
     ...(recruitFormAsks(cycle, 'year') ? [{ id: 'year', label: 'Year', sortKey: null, cell: (r) => (r.year ? MD.esc(r.year) : '<span class="faint">—</span>') }] : []),
     ...(recruitFormAsks(cycle, 'subteam') ? [{ id: 'subteam', label: 'Subteam', sortKey: null, cell: (r) => MD.esc(r.subteam || 'Undecided') }] : []),
   ];
@@ -208,7 +225,8 @@ function recruitAllColumns(cycle, role) {
 function recruitRowHtml(r, cycle, cols, selected) {
   return `<tr data-id="${MD.esc(r.id)}" class="${selected.has(r.id) ? 'is-selected' : ''}">
     <td class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select" data-id="${MD.esc(r.id)}" aria-label="Select ${MD.esc(r.name)} (${MD.esc(r.email)})" ${selected.has(r.id) ? 'checked' : ''}></label></td>
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(r.email)}" data-form="${MD.esc(r.section || recruitSection())}" aria-label="Open ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(r.email)}" data-form="${MD.esc(r.section || recruitSection())}" aria-label="Open ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button><span class="rc-mobile-meta">${MD.esc([r.subteam, r.year, recruitDate(Number(r.ts))].filter(Boolean).join(' · '))}</span></td>
+    ${recruitPersonReviewCellHtml(r)}
     ${cols.map((c) => { let cell = ''; try { cell = String(c.cell?.(r, cycle) ?? ''); } catch (e) { cell = ''; } return `<td data-col="${MD.esc(c.id)}">${cell}</td>`; }).join('')}
     <td class="interest-when" data-col="received" title="${MD.esc(new Date(Number(r.ts)).toLocaleString())}">${recruitDate(Number(r.ts))}</td>
   </tr>`;
@@ -217,7 +235,7 @@ function recruitRowHtml(r, cycle, cols, selected) {
 function recruitRowsHtml(rows, cycle) {
   const st = recruitState();
   const cols = recruitAllColumns(cycle, recruitRole());
-  const span = cols.length + 3;
+  const span = cols.length + 4;
   if (!st.apps || (st.apps.loading && !st.apps.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (st.apps?.error && !st.apps.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(st.apps.error)}. <button class="linklike" data-action="recruit-apps-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${st.apps?.rows?.length || recruitHasFilter(cycle) ? 'No one matches.' : 'No one yet.'}</td></tr>`;
@@ -248,7 +266,7 @@ function recruitFootHtml() {
 
 // Rows and the footer repaint alone, so the search box keeps its caret.
 function recruitPaintRows(updatedId) {
-  const body = $('.sheet--recruit tbody');
+  const body = $('.sheet--recruit:not(.sheet--people) tbody');
   if (!body) return false;
   const cycle = recruitCycleRow();
   const rows = recruitVisibleRows(cycle);
@@ -295,6 +313,7 @@ function recruitSheetHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-q" type="search" placeholder="Search people…" value="${MD.esc(f.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions" data-recruit-tools ${selected.size ? 'hidden' : ''}>
         ${dd('recruit-filter', [{ value: 'combined', label: recruitFilterLabel(cycle) }], 'combined')}
+        <button class="icon-btn" data-action="recruit-apps-refresh" aria-label="Refresh responses" title="Refresh responses">${I.refresh || '↻'}</button>
         ${lead ? `<a class="btn" href="${MD.esc(exportHref)}" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
       <div class="sheet__actions sheet__selection" data-recruit-selection ${selected.size ? '' : 'hidden'}>${selected.size ? recruitSelectionBarHtml() : ''}</div>
@@ -302,7 +321,7 @@ function recruitSheetHtml(cycle) {
     <div class="sheet__scroll"><table aria-label="${MD.esc(recruitSectionTitle(section, cycle))} in ${MD.esc(cycle.name)}">
       <thead><tr>
         <th class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-select-visible" aria-label="Select all visible people" ${rows.length && visibleSelected === rows.length ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label></th>
-        ${th('name', 'Person', 'person')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
+        ${th('name', 'Person', 'person')}${th(null, 'Review', 'review')}${cols.map((c) => th(c.sortKey, c.label, c.id)).join('')}${th('ts', 'Received', 'received')}
       </tr></thead>
       <tbody>${recruitRowsHtml(rows, cycle)}</tbody>
     </table></div>
@@ -312,6 +331,7 @@ function recruitSheetHtml(cycle) {
 
 // A section tab: Responses (the sheet) or Form (the editor), behind one bar.
 function recruitApplicationsView(cycle, role, panel) {
+  if (panel === 'form:people') panel = 'people';
   const st = recruitState();
   const editing = recruitEditingForm();
   const bar = recruitModeBarHtml(cycle, panel, editing);
@@ -371,6 +391,7 @@ function recruitQueueModalHtml(m) {
         ${has('year') || r.year ? `<dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>` : ''}
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
+        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" download="${MD.esc(f.name)}">${MD.esc(f.name)}</a></dd>`).join('')}
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
       ${recruitAnswersHtml({ application: { answers: r.answers || {}, files: [], section: r.section }, form: { questions } })}
@@ -424,7 +445,7 @@ function recruitConfirmRemoval(ids) {
   const hidden = rows.filter((r) => !visible.has(r.id)).length;
   UI.modal = {
     kind: 'confirm', title: rows.length === 1 ? `Delete ${rows[0].name}?` : `Delete ${rows.length} responses?`,
-    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including comments and attachments. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
+    text: `${rows.slice(0, 5).map((r) => `<b>${MD.esc(r.name)}</b>`).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''} will be removed, including their form answers and attachments. Shared flags and comments stay with the person. This cannot be undone.${hidden ? ` <b>${hidden} selected ${hidden === 1 ? 'person is' : 'people are'} hidden by your filters.</b>` : ''}`,
     confirm: rows.length === 1 ? 'Delete response' : `Delete ${rows.length} responses`, danger: true, typed: rows.length > 1 ? 'delete responses' : undefined,
     onGo: async () => {
       const pending = rows.filter((r) => !st.busy.has('delete:' + r.id));
@@ -450,7 +471,7 @@ RECRUIT.register({
   name: 'applications',
   order: 10,
   kernel: true,
-  panels: (cycle) => recruitSectionKeys(cycle).map((key, i) => ({ id: key, label: recruitSectionTitle(key, cycle), order: 10 + i, when: () => true })),
+  panels: (cycle) => recruitSectionKeys(cycle).map((key, i) => ({ id: key === 'people' ? 'form:people' : key, label: recruitSectionTitle(key, cycle), order: 10 + i, when: () => true })),
   view: recruitApplicationsView,
   mount(cycle) {
     const st = recruitState();
@@ -461,8 +482,9 @@ RECRUIT.register({
     if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
   },
   filters: (cycle) => recruitCoreFilters(cycle),
+  refresh: { load: () => recruitEditingForm() ? null : recruitLoadApps(false, true), every: RECRUIT_SYNC_MS },
   actions: {
-    'recruit-apps-refresh': () => { recruitLoadApps(); },
+    'recruit-apps-refresh': () => recruitLoadApps(false, true),
     'recruit-load-more': () => { recruitLoadApps(true); },
     'recruit-sort': (el) => {
       const cycle = recruitCycleRow();

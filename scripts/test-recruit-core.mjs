@@ -461,8 +461,8 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   for (const r of list.data.rows) {
     assert.equal(r.answers, undefined, 'list rows carry no answers');
     assert.equal(r.review, undefined, 'list rows carry no review');
-    assert.equal(r.comments, undefined, 'flags and comments belong to the person, not the row');
-    assert.equal(r.flagged, undefined);
+    assert.equal(typeof r.comments, 'number', 'list summaries show the person comment count');
+    assert.equal(typeof r.flagged, 'boolean');
     assert.equal(typeof r.preview, 'string');
     assert.equal(typeof r.editVersion, 'number');
     assert.ok(r.extras && typeof r.extras === 'object');

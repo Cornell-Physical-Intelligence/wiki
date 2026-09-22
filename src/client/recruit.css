@@ -23,39 +23,10 @@
 .rc-panel--enter { animation: rc-fade 160ms ease-out; }
 @keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
 /* Sheet columns by name, so a module column never shifts the fixed ones. */
-.sheet.sheet--recruit table { min-width: 960px; }
 .sheet.sheet--recruit th[data-col] { width: 110px; }
-.sheet.sheet--recruit th[data-col="check"] { width: 52px; }
 .sheet.sheet--recruit th[data-col="person"] { width: auto; }
-.sheet.sheet--recruit th[data-col="year"] { width: 84px; }
-.sheet.sheet--recruit th[data-col="subteam"] { width: 118px; }
-.sheet.sheet--recruit th[data-col="received"] { width: 88px; }
-.sheet.sheet--recruit th[data-col="review"] { width: 104px; }
 .sheet.sheet--recruit .sheet__foot .linklike { margin-left: 4px; }
-@container (max-width: 36em) {
-  .sheet.sheet--recruit th[data-col], .sheet.sheet--recruit td[data-col] { display: none; }
-  .sheet.sheet--recruit th[data-col="check"], .sheet.sheet--recruit td[data-col="check"],
-  .sheet.sheet--recruit th[data-col="person"], .sheet.sheet--recruit td[data-col="person"],
-  .sheet.sheet--recruit th[data-col="review"], .sheet.sheet--recruit td[data-col="review"] { display: table-cell; }
-}
-/* People: one column per form. A sent form is its date, set like Received
-   and Latest; it opens that form. Nothing sent is the same dash as an empty
-   year. */
-.sheet.sheet--people th[data-col="last"] { width: 88px; }
-.sheet.sheet--people th.rc-people__form { width: 100px; }
-.rc-sent {
-  display: inline-block; max-width: 100%; padding: 2px 0; background: none; border: 0; border-radius: 4px; cursor: pointer;
-  font: inherit; font-size: 12.5px; text-align: left;
-  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px;
-  transition: color 0.12s ease, text-decoration-color 0.12s ease;
-}
-.rc-sent:hover { color: var(--fg); text-decoration-color: var(--rule); }
-.rc-sent:focus-visible { color: var(--fg); outline: 2px solid var(--fg); outline-offset: 2px; }
-@container (max-width: 36em) {
-  .sheet.sheet--people th.rc-people__form, .sheet.sheet--people td.rc-people__form { display: table-cell; }
-  .sheet.sheet--people th.rc-people__form { width: 92px; }
-  .sheet.sheet--people th[data-col="review"], .sheet.sheet--people td[data-col="review"] { display: table-cell; }
-}
+
 /* Settings forms: one column of labelled fields, actions on a footer rail. */
 .rc-form { display: flex; flex-direction: column; gap: 12px; }
 .rc-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
@@ -293,3 +264,99 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .sheet__heading .count { font-size: 12px; font-weight: 400; color: var(--faint); font-variant-numeric: tabular-nums; }
 .rc-pending { height: auto; min-height: 60px; flex-wrap: wrap; padding-top: 4px; padding-bottom: 4px; }
 .rc-pending > .interest-person, .rc-pending > .sheet__archivemeta { flex: 1 1 180px; }
+
+/* Review stays beside identity in every list, at every viewport. */
+.sheet.sheet--recruit table { min-width: 720px; }
+.sheet.sheet--recruit th[data-col="person"] { width: auto; }
+.sheet.sheet--recruit th[data-col="check"] { width: 44px; }
+.sheet.sheet--recruit .sheet__check-cell { padding: 0 2px; }
+.sheet.sheet--recruit th[data-col="review"] { width: 108px; }
+.sheet.sheet--recruit th[data-col="forms"] { width: 180px; }
+.sheet.sheet--recruit th[data-col="subteam"] { width: 140px; }
+.sheet.sheet--recruit th[data-col="year"] { width: 95px; }
+.sheet.sheet--recruit th[data-col="last"], .sheet.sheet--recruit th[data-col="received"] { width: 100px; }
+.sheet--recruit .interest-row-actions { justify-content: flex-start; gap: 2px; }
+.sheet--recruit .interest-row-actions .icon-btn { min-width: 40px; min-height: 40px; opacity: 1; }
+.rc-mobile-meta { display: none; }
+.rc-participation { display: flex; flex-wrap: wrap; gap: 5px; }
+.rc-participation button { padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--page); color: var(--muted); font: inherit; font-size: 11.5px; text-align: left; cursor: pointer; }
+.rc-participation button:hover { color: var(--fg); border-color: var(--rule); }
+.rc-participation.rc-mobile-meta { display: none; }
+.fe-settings { margin: 0 0 20px; border: 1px solid var(--hairline); border-radius: 10px; }
+.fe-settings > summary { padding: 12px 16px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.fe-settings .fe-options { border: 0; margin: 0; padding: 0 16px 8px; }
+.fe-settings .fe-options__title { display: none; }
+.fe__list-label { margin: 24px 0 10px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.fe-ans--edit { border: 1px dashed var(--rule); padding: 8px 10px; background: var(--page); }
+.fe-q:focus-within { border-color: var(--rule); }
+@media (max-width: 760px) {
+  .sheet.sheet--recruit table { min-width: 0; width: 100%; }
+  .sheet.sheet--recruit table th, .sheet.sheet--recruit table td { display: none; }
+  .sheet.sheet--recruit table [data-col="person"],
+  .sheet.sheet--recruit table [data-col="review"],
+  .sheet.sheet--recruit table [data-col="check"],
+  .sheet.sheet--recruit .sheet__empty td { display: table-cell; }
+  .sheet.sheet--recruit th[data-col="review"] { width: 90px; }
+  .sheet.sheet--recruit th[data-col="check"] { width: 44px; }
+  .sheet.sheet--recruit td { padding: 12px 6px; vertical-align: top; height: auto; }
+  .sheet.sheet--recruit td[data-col="person"] { padding-left: 10px; }
+  .sheet--recruit .interest-person { max-width: 100%; padding: 0; }
+  .sheet--recruit .interest-person b, .sheet--recruit .interest-person .mail { white-space: normal; overflow-wrap: anywhere; }
+  .sheet--recruit .interest-row-actions { gap: 0; }
+  .sheet--recruit .interest-row-actions .icon-btn { width: 42px; height: 44px; }
+  .rc-mobile-meta { display: block; font-size: 11.5px; line-height: 1.5; color: var(--muted); margin-top: 5px; overflow-wrap: anywhere; }
+  .rc-participation.rc-mobile-meta { display: flex; }
+  .rc-participation button { min-height: 32px; }
+  .sheet--recruit .sheet__bar { gap: 8px; padding: 10px; }
+  .sheet--recruit .sheet__search-wrap { flex-basis: 100%; }
+  .sheet--recruit .sheet__actions { width: 100%; flex-wrap: wrap; gap: 6px; }
+  .sheet--recruit .sheet__actions .dd { flex: 1; min-width: 0; }
+  .rc-mode { align-items: flex-start; gap: 8px; }
+  .rc-mode__addr { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+  .rc-mode .rc-seg { margin-left: 0; }
+  .fe__head { padding: 0; }
+  .fe-q { padding: 12px; }
+  .fe-q__tools .icon-btn, .fe-opt .icon-btn { width: 40px; height: 40px; opacity: 1; }
+  .fe-switch { min-height: 40px; }
+  .fe-q__foot { flex-wrap: wrap; }
+  .fe-options__cap { flex-wrap: wrap; }
+  .fe__foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .rc-person .interest-comment__delete { width: 40px; height: 40px; }
+}
+@media (hover: none) {
+  .fe-opt .icon-btn { opacity: 1; }
+}
+.fe__view { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; color: var(--muted); font-size: 13px; }
+.fe-preview { border: 1px solid var(--hairline); border-radius: 12px; padding: 24px; background: var(--page); }
+.fe-preview h2 { font-size: 24px; margin: 0 0 8px; }
+.fe-preview > p { color: var(--muted); font-size: 14px; }
+.fe-preview__question { margin: 24px 0; }
+.fe-preview__question h3 { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+.fe-preview .text-input { width: 100%; opacity: 1; }
+.fe-preview__choices { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.fe-preview__choices li { padding: 8px 0; }
+.fe-preview__file { border: 1px dashed var(--rule); border-radius: 8px; padding: 22px; font-size: 13px; color: var(--muted); }
+.rc-form-chooser { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.rc-form-chooser .dd { flex: 1; max-width: 420px; }
+.rc-form-chooser .dd__label { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) { .fe-preview { padding: 16px; } }
+@media (max-width: 760px) {
+  .fe-q__grip { min-width: 40px; min-height: 40px; }
+  .fe-q .dd { min-height: 40px; }
+}
+.sheet.sheet--recruit th[data-col="preview"] { width: 240px; }
+.rc-answer-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; line-height: 1.45; color: var(--muted); }
+
+@container (max-width: 900px) {
+  .sheet.sheet--recruit table { min-width: 0; width: 100%; }
+  .sheet.sheet--recruit table th, .sheet.sheet--recruit table td { display: none; }
+  .sheet.sheet--recruit table [data-col="person"],
+  .sheet.sheet--recruit table [data-col="review"],
+  .sheet.sheet--recruit table [data-col="check"],
+  .sheet.sheet--recruit .sheet__empty td { display: table-cell; }
+  .sheet--recruit .interest-person b, .sheet--recruit .interest-person .mail { white-space: normal; overflow-wrap: anywhere; }
+  .sheet.sheet--recruit th[data-col="review"] { width: 90px; }
+  .sheet.sheet--recruit th[data-col="check"] { width: 44px; }
+  .rc-mobile-meta { display: block; margin-top: 5px; font-size: 11.5px; color: var(--muted); white-space: normal; }
+  .rc-participation.rc-mobile-meta { display: flex; }
+}

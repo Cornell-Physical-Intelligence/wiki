@@ -53,6 +53,7 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
   try {
     await cp(new URL('../lib', import.meta.url), join(dir, 'lib'), { recursive: true });
     await cp(new URL('./recruit-rollback.mjs', import.meta.url), join(dir, 'recruit-rollback.mjs'));
+    await cp(new URL('./recruit-backup.mjs', import.meta.url), join(dir, 'recruit-backup.mjs'));
     await writeFile(join(dir, 'package.json'), '{"type":"module"}');
     await writeFile(join(dir, 'lib/interest.js'), patchInterest(await readFile(join(dir, 'lib/interest.js'), 'utf8')));
     await writeFile(join(dir, 'lib/db.js'), `
@@ -254,11 +255,14 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
         return result();
       }
 
+      if (text === 'SELECT doc FROM recruit_cycles WHERE id = $1 FOR UPDATE') return result(db.cycles.filter((c) => c.id === v[0]).map((c) => ({ doc: c.doc })));
+      if (text === 'SELECT email, review, review_version FROM recruit_people WHERE cycle_id = $1') return result([]);
+      if (text === 'SELECT count(*) AS n FROM recruit_applications WHERE cycle_id = $1') return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0]).length) }]);
       /* applications */
-      if (m(/^SELECT count\(\*\) AS n FROM recruit_applications WHERE cycle_id = \$1$/)) return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0]).length) }]);
-      if (m(/^SELECT count\(\*\) AS n FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2$/)) return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1]).length) }]);
+      if (m(/^SELECT count\(\*\) AS n FROM recruit_applications WHERE cycle_id = \$1 AND \(\$2::boolean OR erased_at IS NULL\)$/)) return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0] && (v[1] || a.erased_at == null)).length) }]);
+      if (m(/^SELECT count\(\*\) AS n FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2 AND \(\$3::boolean OR erased_at IS NULL\)$/)) return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1] && (v[2] || a.erased_at == null)).length) }]);
       if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2 AND email = \$3$/)) return result(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1] && a.email === v[2]));
-      if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2 ORDER BY ts DESC LIMIT 10000$/)) return result(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1]).sort((x, y) => y.ts - x.ts));
+      if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 AND section = \$2 ORDER BY ts DESC$/)) return result(db.applications.filter((a) => a.cycle_id === v[0] && (a.section || 'interest') === v[1]).sort((x, y) => y.ts - x.ts));
       if (m(/^SELECT \* FROM recruit_applications WHERE id = \$1 AND cycle_id = \$2$/)) return result(db.applications.filter((a) => a.id === v[0] && a.cycle_id === v[1]));
       if (m(/^SELECT \* FROM recruit_applications WHERE id = \$1$/)) return result(db.applications.filter((a) => a.id === v[0]));
       if (m(/^SELECT \* FROM recruit_applications WHERE cycle_id = \$1 ORDER BY ts DESC LIMIT \$2$/)) return result(db.applications.filter((a) => a.cycle_id === v[0]).sort((x, y) => y.ts - x.ts).slice(0, v[1]));
@@ -267,17 +271,17 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
       if (m(/^SELECT \* FROM recruit_applications WHERE email = \$1 ORDER BY ts DESC$/)) return result(db.applications.filter((a) => a.email === v[0]));
       if (/^WITH prior AS \( ?SELECT outcome FROM interest_receipts WHERE id = \$1 AND NOT \(\$2 AND outcome IN/.test(text)) {
         db.commitStatement = text;
-        assert.equal(v.length, 32, 'the commit CTE carries every value as a parameter');
+        assert.equal(v.length, 34, 'the commit CTE carries every value as a parameter');
         const [rid, override] = v;
         const prior = db.receipts.get(rid);
         if (prior && !(override && ['review', 'held'].includes(prior))) return result([{ outcome: prior, inserted: null }]);
         const incoming = { id: v[2], cycle_id: v[3], section: v[4], email: v[5], ts: v[6], updated: v[7], name: v[8], cornell: v[9], subteam: v[10], year: v[11], source: v[12], form_version: v[13], answers: JSON.parse(v[14]), files: JSON.parse(v[15]), stage: v[16], stage_at: v[17], stage_history: JSON.parse(v[18]), ip_hash: v[19], receipt_id: v[20], outcome: null, decision: {}, tags: [], review: {}, review_version: 0, edit_version: 0, onboarded_at: null, erased_at: null };
-        const hasYear = v[21], confirmUpdate = v[22];
+        const hasYear = v[21], modern = v[22], confirmUpdate = v[24];
         const current = db.applications.find((a) => a.cycle_id === incoming.cycle_id && (a.section || 'interest') === (incoming.section || 'interest') && a.email === incoming.email);
         let written = false, inserted = false;
         if (!current) { db.applications.push(incoming); written = inserted = true; }
         else if (confirmUpdate && current.updated <= incoming.updated) {
-          Object.assign(current, { name: incoming.name, subteam: incoming.subteam, updated: incoming.updated, ip_hash: incoming.ip_hash, year: hasYear ? incoming.year : current.year, answers: { ...current.answers, ...incoming.answers }, files: incoming.files.length ? incoming.files : current.files, form_version: incoming.form_version, receipt_id: incoming.receipt_id });
+          Object.assign(current, { name: incoming.name, subteam: incoming.subteam, updated: incoming.updated, ip_hash: incoming.ip_hash, year: hasYear ? incoming.year : current.year, answers: modern ? incoming.answers : { ...current.answers, ...incoming.answers }, files: modern || incoming.files.length ? incoming.files : current.files, form_version: incoming.form_version, receipt_id: incoming.receipt_id });
           written = true;
         }
         if (written) {
@@ -371,6 +375,8 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
       throw new Error('Unexpected synthetic SQL: ' + text);
     },
   };
+
+  db.sql.transaction = (run) => run(db.sql);
 
   /* ------------------------------ fixtures ------------------------------ */
 
@@ -492,7 +498,7 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
   assert.match(commit[0], /INSERT INTO interest_receipts/);
   assert.match(commit[0], /ON CONFLICT \(cycle_id, section, email\) DO UPDATE SET/);
   assert.match(commit[0], /INSERT INTO recruit_applicants/);
-  const setClause = /DO UPDATE SET (.*?) WHERE \$23 AND recruit_applications\.updated <= EXCLUDED\.updated/s.exec(commit[0])[1];
+  const setClause = /DO UPDATE SET (.*?) WHERE \$25 AND recruit_applications\.updated <= EXCLUDED\.updated/s.exec(commit[0])[1];
   for (const col of ['review', 'stage', 'tags', 'decision', 'edit_version', 'outcome']) assert.ok(!new RegExp(`\\b${col} =`).test(setClause), `${col} is never in the applicant SET list`);
   assert.ok(!tracedSince(mark).some((t) => t.startsWith('INSERT INTO interest_submissions')), 'nothing lands in the legacy table');
   const bridged = db.applications.find((a) => a.email === 'bridge@example.com');
