@@ -410,6 +410,11 @@ label > .dd { width: 100%; }
   padding: 8px 12px;
   display: flex; flex-direction: column; gap: 4px; flex: none;
 }
+.sidebar__agent-context { display: flex; align-items: center; gap: 2px; }
+.sidebar__agent-context a { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; min-height: 40px; padding: 6px; border-radius: var(--radius); color: var(--muted); font-size: 13px; text-decoration: none; }
+.sidebar__agent-context a:hover { background: var(--hover); color: var(--fg); }
+.sidebar__agent-context a svg { width: 18px; height: 18px; flex: none; }
+.sidebar__agent-context .icon-btn { width: 40px; height: 40px; flex: none; }
 .sidebar__user { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; min-height: 48px; border-radius: var(--radius); padding: 6px; text-align: left; }
 .sidebar__user:hover { background: var(--hover); }
 .sidebar__user-text { flex: 1; min-width: 0; }

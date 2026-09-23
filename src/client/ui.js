@@ -178,6 +178,14 @@ function route() {
 // overrides viewLogin with the live Google link and the ?denied notice).
 const SIGNIN_NOTE = 'The internal wiki of Cornell Physical Intelligence. Members sign in with a cornell.edu Google account.';
 
+function viewAgentContextLink() {
+  if (typeof REMOTE === 'undefined') return '';
+  return `<div class="sidebar__agent-context">
+    <a href="/context" title="All wiki pages, no login required">${I.page}<span>Agent context</span></a>
+    <button class="icon-btn" data-action="copy-agent-context" aria-label="Copy agent context link and instructions" title="Copy link and instructions">${I.copy}</button>
+  </div>`;
+}
+
 function viewSidebarLocked() {
   const folder = `<span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>`;
   return `<aside class="sidebar">
@@ -187,7 +195,7 @@ function viewSidebarLocked() {
     <div class="sidebar__scroll">
       ${SECTIONS.map((sec) => `<div class="tree-section tree-section--locked"><div class="tree-section__head tree-section__head--static">${folder}<span class="tree-section__label">${MD.esc(sec.name)}</span></div></div>`).join('')}
     </div>
-    <div class="sidebar__foot"><div class="sidebar__account">
+    <div class="sidebar__foot">${viewAgentContextLink()}<div class="sidebar__account">
       <div class="sidebar__user sidebar__user--anon">
         <span class="avatar avatar--anon" aria-hidden="true"></span>
         <span class="sidebar__user-text"><span class="sidebar__user-name">Not signed in</span><span class="sidebar__user-mail">Sign in to see pages</span></span>
@@ -297,7 +305,7 @@ function viewSidebar() {
       </div></div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
     </div>
-    <div class="sidebar__foot"><div class="sidebar__account">
+    <div class="sidebar__foot">${viewAgentContextLink()}<div class="sidebar__account">
       <button class="sidebar__user" data-action="user-menu" aria-label="Account menu">
         <span class="avatar">${Store.initials(me.email)}</span>
         <span class="sidebar__user-text"><span class="sidebar__user-name" title="${MD.esc(me.name)}">${MD.esc(me.name)}</span><span class="sidebar__user-mail" title="${MD.esc(me.email)}">${MD.esc(me.email)}</span></span>

@@ -287,6 +287,25 @@ function showModal(m) {
   } else render();
 }
 
+async function copyAgentContext() {
+  const contextUrl = new URL('/context', location.origin).href;
+  const text = `Read ${contextUrl} for the complete CUPI wiki context in one request.
+
+This is public, read-only wiki content. No login, session cookie, or sign-out is needed. Read this feed instead of opening each sidebar page. If your reader truncates the document, use its page index to read individual pages.
+
+Plain-text version: ${new URL('/llms-full.txt', location.origin).href}
+Applications/recruitment records are separate and not included. This link grants no editing rights.`;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Agent instructions copied');
+  } catch {
+    showModal({ kind: 'agent-context-copy', text });
+    const field = $('.modal [data-m="agent-context"]');
+    field?.focus();
+    field?.select();
+  }
+}
+
 function requestEditorClose() {
   const e = UI.editor;
   if (!e || e.saving) return;
@@ -670,6 +689,7 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- shell ---- */
+    case 'copy-agent-context': stop(); await copyAgentContext(); break;
     case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; if (Store.me()) { Store.prefs().navHidden = UI.navHidden; Store.persist(); } } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
     case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); break;
     case 'sec-toggle': {
@@ -1758,10 +1778,10 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
-  // Signed out: the frame is on screen but its shortcuts are not. Only the
-  // mobile drawer answers Escape.
+  // Signed out: only the public copy dialog and mobile drawer answer Escape.
   if (!Store.me()) {
-    if (ev.key === 'Escape' && UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); }
+    if (ev.key === 'Escape' && UI.modal) { ev.preventDefault(); closeModal(); }
+    else if (ev.key === 'Escape' && UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); }
     return;
   }
 

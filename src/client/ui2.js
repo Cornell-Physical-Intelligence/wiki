@@ -1579,6 +1579,13 @@ function viewModal() {
         <textarea class="text-input" rows="6" readonly aria-label="Selected emails as CSV">${MD.esc(m.csv)}</textarea>
       </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
     </div>`;
+  } else if (m.kind === 'agent-context-copy') {
+    inner = `<div class="modal" role="dialog" aria-label="Copy agent instructions">
+      <div class="modal__head"><h3>Agent instructions</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body"><p>Clipboard access was blocked. Select and copy these instructions.</p>
+        <textarea class="text-input" data-m="agent-context" rows="10" readonly aria-label="Agent context link and instructions">${MD.esc(m.text)}</textarea>
+      </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
+    </div>`;
   } else if (m.kind === 'confirm') {
     // Optional extras: a free-text field handed to onGo, and a GitHub-style
     // type-to-confirm phrase that keeps the danger button locked until it
@@ -1773,11 +1780,12 @@ function render() {
   UI._lastRouteKey = r.name + '/' + (r.params.id || '');
 
   if (!me) {
-    app.innerHTML = viewLogin();
+    app.innerHTML = viewLogin() + viewModal();
     stopMeaningSearch('home'); stopMeaningSearch('modal');
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
     syncSidebarInteraction();
+    if (UI.modal) mountModalFocus();
     return;
   }
   if (UI.editor) view = viewEditor();

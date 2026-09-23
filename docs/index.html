@@ -421,6 +421,11 @@ label > .dd { width: 100%; }
   padding: 8px 12px;
   display: flex; flex-direction: column; gap: 4px; flex: none;
 }
+.sidebar__agent-context { display: flex; align-items: center; gap: 2px; }
+.sidebar__agent-context a { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; min-height: 40px; padding: 6px; border-radius: var(--radius); color: var(--muted); font-size: 13px; text-decoration: none; }
+.sidebar__agent-context a:hover { background: var(--hover); color: var(--fg); }
+.sidebar__agent-context a svg { width: 18px; height: 18px; flex: none; }
+.sidebar__agent-context .icon-btn { width: 40px; height: 40px; flex: none; }
 .sidebar__user { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; min-height: 48px; border-radius: var(--radius); padding: 6px; text-align: left; }
 .sidebar__user:hover { background: var(--hover); }
 .sidebar__user-text { flex: 1; min-width: 0; }
@@ -4676,6 +4681,14 @@ function route() {
 // overrides viewLogin with the live Google link and the ?denied notice).
 const SIGNIN_NOTE = 'The internal wiki of Cornell Physical Intelligence. Members sign in with a cornell.edu Google account.';
 
+function viewAgentContextLink() {
+  if (typeof REMOTE === 'undefined') return '';
+  return `<div class="sidebar__agent-context">
+    <a href="/context" title="All wiki pages, no login required">${I.page}<span>Agent context</span></a>
+    <button class="icon-btn" data-action="copy-agent-context" aria-label="Copy agent context link and instructions" title="Copy link and instructions">${I.copy}</button>
+  </div>`;
+}
+
 function viewSidebarLocked() {
   const folder = `<span class="tree-section__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>`;
   return `<aside class="sidebar">
@@ -4685,7 +4698,7 @@ function viewSidebarLocked() {
     <div class="sidebar__scroll">
       ${SECTIONS.map((sec) => `<div class="tree-section tree-section--locked"><div class="tree-section__head tree-section__head--static">${folder}<span class="tree-section__label">${MD.esc(sec.name)}</span></div></div>`).join('')}
     </div>
-    <div class="sidebar__foot"><div class="sidebar__account">
+    <div class="sidebar__foot">${viewAgentContextLink()}<div class="sidebar__account">
       <div class="sidebar__user sidebar__user--anon">
         <span class="avatar avatar--anon" aria-hidden="true"></span>
         <span class="sidebar__user-text"><span class="sidebar__user-name">Not signed in</span><span class="sidebar__user-mail">Sign in to see pages</span></span>
@@ -4795,7 +4808,7 @@ function viewSidebar() {
       </div></div></div>` : ''}
       ${SECTIONS.map(sectionTree).join('')}
     </div>
-    <div class="sidebar__foot"><div class="sidebar__account">
+    <div class="sidebar__foot">${viewAgentContextLink()}<div class="sidebar__account">
       <button class="sidebar__user" data-action="user-menu" aria-label="Account menu">
         <span class="avatar">${Store.initials(me.email)}</span>
         <span class="sidebar__user-text"><span class="sidebar__user-name" title="${MD.esc(me.name)}">${MD.esc(me.name)}</span><span class="sidebar__user-mail" title="${MD.esc(me.email)}">${MD.esc(me.email)}</span></span>
@@ -6842,6 +6855,13 @@ function viewModal() {
         <textarea class="text-input" rows="6" readonly aria-label="Selected emails as CSV">${MD.esc(m.csv)}</textarea>
       </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
     </div>`;
+  } else if (m.kind === 'agent-context-copy') {
+    inner = `<div class="modal" role="dialog" aria-label="Copy agent instructions">
+      <div class="modal__head"><h3>Agent instructions</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body"><p>Clipboard access was blocked. Select and copy these instructions.</p>
+        <textarea class="text-input" data-m="agent-context" rows="10" readonly aria-label="Agent context link and instructions">${MD.esc(m.text)}</textarea>
+      </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
+    </div>`;
   } else if (m.kind === 'confirm') {
     // Optional extras: a free-text field handed to onGo, and a GitHub-style
     // type-to-confirm phrase that keeps the danger button locked until it
@@ -7036,11 +7056,12 @@ function render() {
   UI._lastRouteKey = r.name + '/' + (r.params.id || '');
 
   if (!me) {
-    app.innerHTML = viewLogin();
+    app.innerHTML = viewLogin() + viewModal();
     stopMeaningSearch('home'); stopMeaningSearch('modal');
     cancelPageReview(pageReviewEditor);
     cancelChangeSummary(summaryEditor);
     syncSidebarInteraction();
+    if (UI.modal) mountModalFocus();
     return;
   }
   if (UI.editor) view = viewEditor();
@@ -11855,6 +11876,25 @@ function showModal(m) {
   } else render();
 }
 
+async function copyAgentContext() {
+  const contextUrl = new URL('/context', location.origin).href;
+  const text = `Read ${contextUrl} for the complete CUPI wiki context in one request.
+
+This is public, read-only wiki content. No login, session cookie, or sign-out is needed. Read this feed instead of opening each sidebar page. If your reader truncates the document, use its page index to read individual pages.
+
+Plain-text version: ${new URL('/llms-full.txt', location.origin).href}
+Applications/recruitment records are separate and not included. This link grants no editing rights.`;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Agent instructions copied');
+  } catch {
+    showModal({ kind: 'agent-context-copy', text });
+    const field = $('.modal [data-m="agent-context"]');
+    field?.focus();
+    field?.select();
+  }
+}
+
 function requestEditorClose() {
   const e = UI.editor;
   if (!e || e.saving) return;
@@ -12238,6 +12278,7 @@ document.addEventListener('click', async (ev) => {
     }
 
     /* ---- shell ---- */
+    case 'copy-agent-context': stop(); await copyAgentContext(); break;
     case 'nav-toggle': stop(); { if (innerWidth <= 860) UI.navOpen = !UI.navOpen; else { UI.navHidden = !UI.navHidden; if (Store.me()) { Store.prefs().navHidden = UI.navHidden; Store.persist(); } } const sh = $('.shell'); if (sh) { sh.classList.toggle('nav-open', UI.navOpen); sh.classList.toggle('nav-hidden', UI.navHidden); } else render(); syncSidebarInteraction(true); } break;
     case 'nav-close': stop(); UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); break;
     case 'sec-toggle': {
@@ -13326,10 +13367,10 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
-  // Signed out: the frame is on screen but its shortcuts are not. Only the
-  // mobile drawer answers Escape.
+  // Signed out: only the public copy dialog and mobile drawer answer Escape.
   if (!Store.me()) {
-    if (ev.key === 'Escape' && UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); }
+    if (ev.key === 'Escape' && UI.modal) { ev.preventDefault(); closeModal(); }
+    else if (ev.key === 'Escape' && UI.navOpen) { UI.navOpen = false; $('.shell')?.classList.remove('nav-open'); syncSidebarInteraction(true); }
     return;
   }
 
