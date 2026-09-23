@@ -18,6 +18,7 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
+      - run: npm run test:context
       - run: npm run test:search
       - run: npm run test:assistance
       - run: node --test scripts/test-ai-usage.mjs scripts/test-ai-usage-ui.mjs

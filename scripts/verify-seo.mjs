@@ -16,7 +16,7 @@ const page = read('public/wiki-shell.html');
 assert(!existsSync(new URL('../public/index.html', import.meta.url)), 'static index.html would shadow the dynamic homepage');
 assert(page.includes('href="/llms-full.txt"') && page.includes('href="/llms.txt"'), 'shell must advertise public context');
 const config = JSON.parse(read('vercel.json'));
-for (const source of ['/', '/index.html', '/llms.txt', '/llms-full.txt']) {
+for (const source of ['/', '/index.html', '/context', '/llms.txt', '/llms-full.txt']) {
   assert(config.rewrites.find((r) => r.source === source)?.destination === '/api/index', `${source} must use live context`);
 }
 assert(config.functions['api/index.js'].includeFiles === 'public/wiki-shell.html', 'function must bundle the HTML shell');

@@ -30,6 +30,7 @@
   "rewrites": [
     { "source": "/", "destination": "/api/index" },
     { "source": "/index.html", "destination": "/api/index" },
+    { "source": "/context", "destination": "/api/index" },
     { "source": "/llms.txt", "destination": "/api/index" },
     { "source": "/llms-full.txt", "destination": "/api/index" },
     { "source": "/api/:path*", "destination": "/api/index" },

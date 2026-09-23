@@ -52,6 +52,14 @@ if (!process.env.CONTEXT_TEST_ROOT) {
     assert.match(homepage.headers.get('link'), /llms-full.txt/);
     assert.match(homepage.headers.get('cache-control'), /no-store/);
     const html = await homepage.text();
+    const discovery = html.match(/<aside id="agent-context-discovery"[\s\S]*?<\/aside>/)?.[0];
+    assert.ok(discovery, 'browser-agent discovery is present');
+    assert.ok(html.indexOf(discovery) < html.indexOf('<div id="app">'), 'discovery survives replacement of the app root');
+    assert.match(discovery, /ALL wiki pages in ONE request/);
+    assert.match(discovery, /href="\/context"/);
+    assert.match(discovery, /no login required/);
+    assert.match(discovery, /applicant records are NOT included/);
+    assert.doesNotMatch(discovery, /aria-hidden|\shidden(?:\s|>)/, 'discovery remains in the accessibility tree');
     const publicText = html.match(/<main class="public-context">([\s\S]*?)<\/main>/)[1];
     assert.match(publicText, /PROJECT_CONTEXT/); assert.match(publicText, /Child context/); assert.match(publicText, /ODD_PAGE_CONTEXT/);
     assert.match(publicText, /End of context/); assert.match(publicText, /href="\/llms-full.txt"/);
@@ -61,9 +69,21 @@ if (!process.env.CONTEXT_TEST_ROOT) {
     const bot = await fetch(base + '/', { headers: { 'user-agent': 'Googlebot' } });
     assert.equal(await bot.text(), html, 'unchanged content is identical for browser and agent requests');
     assert.match(await (await request('/index.html')).text(), /PROJECT_CONTEXT/);
+    const browserContext = await request('/context');
+    assert.equal(browserContext.status, 200);
+    assert.match(browserContext.headers.get('content-type'), /text\/html/);
+    const browserHtml = await browserContext.text();
+    assert.match(browserHtml, /PROJECT_CONTEXT/); assert.match(browserHtml, /Child context/);
+    assert.match(browserHtml, /Access: PUBLIC/); assert.match(browserHtml, /End of context/);
+    assert.doesNotMatch(browserHtml, /<script>|id="app"|id="boot"/);
+    noSecrets(browserHtml);
+    assert.match(browserHtml, /href="\/context\?page=child"/);
+    const browserPage = await (await request('/context?page=child')).text();
+    assert.match(browserPage, /Child context/); assert.doesNotMatch(browserPage, /PROJECT_CONTEXT/);
     const full = await request('/llms-full.txt');
     assert.equal(full.status, 200); assert.match(full.headers.get('content-type'), /text\/plain/);
     const text = await full.text(); noSecrets(text);
+    assert.match(text, /Access: PUBLIC\. No login, session cookie, or account is required/);
     assert.match(text, /PROJECT_CONTEXT/); assert.match(text, /Child context/);
     assert.match(text, /Pages in this response: 3/); assert.match(text, /End of context/);
     assert.match(text, /\/api\/context\/files\/current-file/);
@@ -78,7 +98,7 @@ if (!process.env.CONTEXT_TEST_ROOT) {
     assert.equal((await request('/llms-full.txt?page=')).status, 404);
     assert.match(await (await request('/api/context')).text(), /PROJECT_CONTEXT/);
     assert.equal((await request('/api/context/links')).status, 404, 'old token management is removed');
-    for (const path of ['/', '/llms.txt', '/llms-full.txt', '/api/context/files/current-file']) {
+    for (const path of ['/', '/context', '/llms.txt', '/llms-full.txt', '/api/context/files/current-file']) {
       assert.equal((await request(path, 'POST')).status, 405);
     }
     const file = await request('/api/context/files/current-file');

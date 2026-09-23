@@ -31,6 +31,18 @@ export function bootSplash() {
 // and the artifact build stay noindexed so they can never be indexed in place
 // of — or in competition with — the real deployment.
 export const WIKI_URL = 'https://wiki.cornellphysicalintelligence.com';
+
+// Lives outside #app so browser agents still discover the public feed after
+// client rendering, navigation, and sign-in. Visually clipped, not aria-hidden:
+// accessibility snapshots must expose the link and its explicit access scope.
+export function agentContextDiscovery() {
+  return `<aside id="agent-context-discovery" class="agent-context-discovery" role="note" aria-label="Public wiki context — no login required">
+<a href="/context">Read ALL wiki pages in ONE request — public, no login required: /context</a>
+<p>Open ${WIKI_URL}/context directly for every current wiki page and links to its attachments, instead of opening each sidebar page. This is an ordinary read-only HTML page for browser tools. No sign-in, cookie, logout, or incognito session is needed, even if this browser is already signed in.</p>
+<p>The Applications recruitment tracker is separate: applicant records are NOT included in the public wiki feed and still require their existing permissions. A signed-in account in the sidebar does not mean the public wiki feed requires login. The public feed is read-only and grants no editing rights.</p>
+<p>For HTTP/text tools, <a href="/llms-full.txt">plain-text Markdown is at /llms-full.txt</a>. If the full response is truncated, use <a href="/llms.txt">the public page index at /llms.txt</a> to fetch individual pages.</p>
+</aside>`;
+}
 const MAIN_SITE = 'https://cornellphysicalintelligence.com';
 const WIKI_TITLE = 'CUPI Wiki | Cornell Physical Intelligence';
 const WIKI_DESCRIPTION =
@@ -124,6 +136,7 @@ function headFor(remote) {
 <title>${WIKI_TITLE}</title>
 <meta name="description" content="${WIKI_DESCRIPTION}">
 <link rel="canonical" href="${WIKI_URL}/">
+<link rel="alternate" type="text/html" title="Public wiki context — no login required" href="/context">
 <link rel="alternate" type="text/plain" title="Full wiki context" href="/llms-full.txt">
 <link rel="describedby" type="text/plain" title="Wiki page index" href="/llms.txt">
 <meta property="og:type" content="website">
@@ -156,6 +169,7 @@ ${styles()}
 <body>
 ${bootSplash()}
 <noscript><style>#boot{display:none}</style></noscript>
+${remote ? agentContextDiscovery() : ''}
 <div id="app"></div>
 <script>
 ${scripts({ remote })}
