@@ -1724,3 +1724,6 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .integration-card > .email-adv { margin: 0; padding: 12px 18px 14px; }
 .integration-card__editor { margin: 0; padding: 16px 18px 18px; background: var(--hover); border-radius: 0 0 var(--radius) var(--radius); }
 .integration-card .ai-settings { max-width: none; }
+/* Initial public document remains readable when JavaScript is disabled. */
+.public-context { max-width:960px; margin:40px auto; padding:0 24px; }
+.public-context pre { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }

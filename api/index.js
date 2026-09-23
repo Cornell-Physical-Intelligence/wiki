@@ -15,6 +15,7 @@ import { getAiSettings } from '../lib/db.js';
 import { aiUsageLedger } from '../lib/ai-usage.js';
 import { AI_MODELS, aiPublicSettings, validateAiSettings, sealAiKey, resolveAiConnection } from '../lib/ai-settings.js';
 import { attachmentHeaders } from '../lib/attachment-headers.js';
+import { handleAgentContext } from '../lib/agent-context.js';
 
 // Best-effort per-instance spacing so one member cannot firehose PRs.
 const bugLast = new Map();
@@ -98,6 +99,11 @@ export default async function handler(req, res) {
   const q = Object.fromEntries(url.searchParams);
 
   try {
+    if (['/', '/index.html', '/llms.txt', '/llms-full.txt', '/context'].includes(path) || path.startsWith('/context/')) {
+      return await handleAgentContext(req, res, path, {
+        origin: process.env.DEV_FAKE_AUTH ? `http://${req.headers.host}` : WIKI_URL,
+      });
+    }
     /* ------------------------------ auth ---------------------------------- */
 
     if (path === '/auth/login') {

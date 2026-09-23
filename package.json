@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test:context": "node scripts/test-agent-context.mjs",
     "test:interest": "node scripts/test-interest.mjs",
     "test:search": "node scripts/test-search.mjs",
     "test:assistance": "node scripts/test-ai-assistance.mjs",

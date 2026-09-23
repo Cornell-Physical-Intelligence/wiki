@@ -1,7 +1,7 @@
 // Verifies the built SEO surface: the production shell is indexable with the
 // right metadata, the preview builds can never be, and the crawl files are
 // exactly what we intend. Run after build.mjs and build-preview.mjs.
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { WIKI_URL } from './assemble.mjs';
 
 const MAIN_SITE = 'https://cornellphysicalintelligence.com';
@@ -12,7 +12,14 @@ const assert = (condition, message) => {
 };
 
 /* ------------------------- production shell (public/) --------------------- */
-const page = read('public/index.html');
+const page = read('public/wiki-shell.html');
+assert(!existsSync(new URL('../public/index.html', import.meta.url)), 'static index.html would shadow the dynamic homepage');
+assert(page.includes('href="/llms-full.txt"') && page.includes('href="/llms.txt"'), 'shell must advertise public context');
+const config = JSON.parse(read('vercel.json'));
+for (const source of ['/', '/index.html', '/llms.txt', '/llms-full.txt']) {
+  assert(config.rewrites.find((r) => r.source === source)?.destination === '/api/index', `${source} must use live context`);
+}
+assert(config.functions['api/index.js'].includeFiles === 'public/wiki-shell.html', 'function must bundle the HTML shell');
 
 assert(
   page.includes('<meta name="robots" content="index, follow, max-image-preview:large">'),
@@ -109,6 +116,7 @@ assert(
 const robots = read('public/robots.txt');
 assert(/(^|\n)Allow: \/(\n|$)/.test(robots), 'robots.txt does not allow the site');
 assert(robots.includes('Disallow: /api/'), 'robots.txt does not shield the API');
+assert(robots.includes('Allow: /api/context'), 'robots.txt must allow public context and referenced attachments');
 assert(robots.includes(`Sitemap: ${WIKI_URL}/sitemap.xml`), 'robots.txt does not advertise the sitemap');
 
 const sitemap = read('public/sitemap.xml');

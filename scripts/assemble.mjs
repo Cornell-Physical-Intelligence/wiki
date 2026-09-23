@@ -124,6 +124,8 @@ function headFor(remote) {
 <title>${WIKI_TITLE}</title>
 <meta name="description" content="${WIKI_DESCRIPTION}">
 <link rel="canonical" href="${WIKI_URL}/">
+<link rel="alternate" type="text/plain" title="Full wiki context" href="/llms-full.txt">
+<link rel="describedby" type="text/plain" title="Wiki page index" href="/llms.txt">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CUPI Wiki">
 <meta property="og:title" content="${WIKI_TITLE}">
@@ -153,6 +155,7 @@ ${styles()}
 </head>
 <body>
 ${bootSplash()}
+<noscript><style>#boot{display:none}</style></noscript>
 <div id="app"></div>
 <script>
 ${scripts({ remote })}

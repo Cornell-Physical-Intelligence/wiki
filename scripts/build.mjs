@@ -1,7 +1,7 @@
 // Builds public/ — the Vercel (multi-user) client plus its crawl surface:
 // robots.txt, sitemap.xml, and the fetchable circular favicon. Static files
 // in public/ are served ahead of the SPA rewrite, so these win over the shell.
-import { writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
 import { fullPage, WIKI_URL } from './assemble.mjs';
 
 // IndexNow key: the file at this exact URL must serve the key verbatim.
@@ -11,7 +11,9 @@ const out = (f) => new URL(`../public/${f}`, import.meta.url);
 mkdirSync(new URL('../public', import.meta.url), { recursive: true });
 
 const html = fullPage({ remote: true });
-writeFileSync(out('index.html'), html);
+// Existing static files take precedence over rewrites. Keep the root dynamic.
+rmSync(out('index.html'), { force: true });
+writeFileSync(out('wiki-shell.html'), html);
 
 copyFileSync(new URL('../src/client/favicon-cupi-192.png', import.meta.url), out('favicon-cupi.png'));
 // The link-preview card, the same one the main site shares. Its source lives in
@@ -37,7 +39,7 @@ writeFileSync(out('oauth/client.json'), JSON.stringify({
 
 writeFileSync(
   out('robots.txt'),
-  `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${WIKI_URL}/sitemap.xml\n`,
+  `User-agent: *\nAllow: /\nDisallow: /api/\nAllow: /api/context\n\nSitemap: ${WIKI_URL}/sitemap.xml\n`,
 );
 
 writeFileSync(
@@ -47,4 +49,4 @@ writeFileSync(
 
 writeFileSync(out(`${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
 
-console.log('public/index.html', html.length, 'bytes (+ robots.txt, sitemap.xml, favicon-cupi.png)');
+console.log('public/wiki-shell.html', html.length, 'bytes (+ robots.txt, sitemap.xml, favicon-cupi.png)');
