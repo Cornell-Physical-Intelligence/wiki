@@ -58,6 +58,8 @@ if (!process.env.CONTEXT_TEST_ROOT) {
     assert.match(publicText, /&lt;script&gt;window.INJECTED=1&lt;\/script&gt; \$&amp;/);
     assert.doesNotMatch(publicText, /<script>/); noSecrets(html);
     assert.match(html, /<noscript><style>#boot\{display:none\}/);
+    const bot = await fetch(base + '/', { headers: { 'user-agent': 'Googlebot' } });
+    assert.equal(await bot.text(), html, 'unchanged content is identical for browser and agent requests');
     assert.match(await (await request('/index.html')).text(), /PROJECT_CONTEXT/);
     const full = await request('/llms-full.txt');
     assert.equal(full.status, 200); assert.match(full.headers.get('content-type'), /text\/plain/);
