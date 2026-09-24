@@ -180,10 +180,9 @@ const SIGNIN_NOTE = 'The internal wiki of Cornell Physical Intelligence. Members
 
 function viewAgentContextLink() {
   if (typeof REMOTE === 'undefined') return '';
-  return `<div class="sidebar__agent-context">
-    <a href="/context" title="All wiki pages, no login required">${I.page}<span>Agent context</span></a>
-    <button class="icon-btn" data-action="copy-agent-context" aria-label="Copy agent context link and instructions" title="Copy link and instructions">${I.copy}</button>
-  </div>`;
+  return `<button class="sidebar__agent-context" data-action="copy-agent-context" aria-label="Copy agent context link and instructions" title="Copy link and instructions">
+    ${I.page}<span>Agent context</span>${I.copy}
+  </button>`;
 }
 
 function viewSidebarLocked() {
