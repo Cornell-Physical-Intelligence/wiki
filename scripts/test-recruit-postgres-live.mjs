@@ -12,9 +12,11 @@ const { default: pg } = await import(pathToFileURL(join(runtime, 'node_modules/p
 const root = await mkdtemp(join(tmpdir(), 'cupi-live-pg-'));
 const server = new EmbeddedPostgres({ databaseDir: join(root, 'database'), user: 'postgres', password: 'synthetic', port: 54987, persistent: false, onLog() {}, onError() {} });
 let pool;
+const closedConnections = [];
 try {
   await server.initialise(); await server.start();
   pool = new pg.Pool({ host: '127.0.0.1', port: 54987, user: 'postgres', password: 'synthetic', database: 'postgres', max: 12 });
+  pool.on('connect', (client) => closedConnections.push(new Promise((resolve) => client.once('end', resolve))));
   const tag = (connection) => (strings, ...values) => connection.query(strings.reduce((text, part, i) => text + (i ? '$' + i : '') + part, ''), values);
   const sql = tag(pool);
   sql.transaction = async (run) => { const c = await pool.connect(); try { await c.query('BEGIN'); const out = await run(tag(c)); await c.query('COMMIT'); return out; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } };
@@ -98,5 +100,8 @@ try {
   assert.equal(await kit.apps.count(cycle.id,'round'),1,'erased rows still prevent destructive form removal');
   console.log('PASS: real Postgres — 8 concurrent admissions at capacity 1, replacement while full, receipt replay, removal rollback, list and people queries');
 } finally {
-  await pool?.end(); await server.stop().catch(()=>{}); await rm(root,{recursive:true,force:true});
+  // pg-pool can resolve end() as soon as clients leave its list, before their
+  // sockets close. Wait for those end events before stopping the test server.
+  await pool?.end(); await Promise.all(closedConnections);
+  await server.stop().catch(()=>{}); await rm(root,{recursive:true,force:true});
 }
