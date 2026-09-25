@@ -20,6 +20,50 @@ export async function recruitmentRegressions({lib,recruit,anon,R,ctxFor,admin,pl
   const row=filesPerson.submissions[0].application;
   assert.deepEqual(row.files.map(f=>f.question),['resume','portfolio']);
   for(const f of row.files) assert.equal((await recruit('GET',`/recruit/files/${f.id}`)).status,200);
+  // A real PNG travels through both file question types, the receipt journal,
+  // the person-review payload, and the authenticated download route unchanged.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  await settings({ sections: { images: { title: 'Image test', open: true, notify: false, form: { questions: [
+    ...basic, { key: 'photo', type: 'file' }, { key: 'project', type: 'longfile', required: true },
+  ] } } } });
+  const imageAnswers = { name: 'Synthetic Image Test', email: 'image@example.test', project: 'Test picture' };
+  const imageFiles = Object.fromEntries(['photo', 'project'].map((key) => [key, { name: key + '.png', type: 'image/png', data: png.toString('base64') }]));
+  const imageSent = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: imageFiles });
+  assert.equal(imageSent.status, 200, imageSent.text);
+  assert.deepEqual(await journal.getFile(imageSent.data.receipt, 0), png);
+  assert.deepEqual(await journal.getFile(imageSent.data.receipt, 1), png);
+  const imagePerson = (await recruit('GET', '/recruit/cycles/cy-interest/people/image%40example.test')).data;
+  const imageRow = imagePerson.submissions[0].application;
+  assert.deepEqual(imageRow.files.map((f) => [f.question, f.name, f.type, f.size]), ['photo', 'project'].map((key) => [key, key + '.png', 'image/png', png.length]));
+  for (const f of imageRow.files) {
+    const download = await recruit('GET', `/recruit/files/${f.id}`);
+    assert.equal(download.status, 200);
+    assert.equal(download.headers['content-type'], 'image/png');
+    assert.deepEqual(download.text, png, 'reviewer receives the original image bytes');
+    assert.equal((await anon('GET', `/recruit/files/${f.id}`)).status, 401, 'applicant images stay private');
+  }
+  // A rejected duplicate keeps its files recoverable in the queue. Text-only
+  // updates preserve uploads; replacing one question preserves all the others.
+  const imageDuplicate = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: imageFiles });
+  assert.equal(imageDuplicate.status, 409);
+  const queuedImage = await recruit('GET', `/recruit/queue/${imageDuplicate.data.receipt}/file?index=1`);
+  assert.equal(queuedImage.status, 200);
+  assert.deepEqual(queuedImage.text, png);
+  const imageReplaced = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: {}, confirmUpdate: true });
+  assert.equal(imageReplaced.status, 200);
+  const replacement = (await recruit('GET', '/recruit/cycles/cy-interest/people/image%40example.test')).data;
+  assert.deepEqual(replacement.submissions[0].application.files, imageRow.files);
+  const oneReplaced = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: { photo: { ...imageFiles.photo, name: 'new.png' } }, confirmUpdate: true });
+  assert.equal(oneReplaced.status, 200);
+  const afterOne = (await recruit('GET', '/recruit/cycles/cy-interest/people/image%40example.test')).data.submissions[0].application;
+  assert.equal(afterOne.files.length, 2);
+  assert.equal(afterOne.files.find((f) => f.question === 'project').id, imageRow.files.find((f) => f.question === 'project').id);
+  assert.equal(afterOne.files.find((f) => f.question === 'photo').name, 'new.png');
+  for (const badFiles of [{ photo: { name: 'empty.png', type: 'image/png', data: '' } }, { removed_question: imageFiles.photo }, { photo: { ...imageFiles.photo, data: 'a' } }, []]) {
+    const rejected = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: badFiles, confirmUpdate: true });
+    assert.equal(rejected.status, 400, 'unreadable or obsolete attachments cannot silently become a successful submission');
+  }
+  console.log('PASS: PNG uploads — file and longfile fields, journal bytes, reviewer payload/download, private access, queued duplicate, replacement semantics');
   const duplicate = await anon('POST','/recruit/site/attachments',{answers:{name:'Files again',email:'files@example.com'},files:uploads});
   assert.equal(duplicate.status,409);
   const pending = (await recruit('GET','/recruit/queue')).data.pending.find((p) => p.id === duplicate.data.receipt);

@@ -281,7 +281,8 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
         let written = false, inserted = false;
         if (!current) { db.applications.push(incoming); written = inserted = true; }
         else if (confirmUpdate && current.updated <= incoming.updated) {
-          Object.assign(current, { name: incoming.name, subteam: incoming.subteam, updated: incoming.updated, ip_hash: incoming.ip_hash, year: hasYear ? incoming.year : current.year, answers: modern ? incoming.answers : { ...current.answers, ...incoming.answers }, files: modern || incoming.files.length ? incoming.files : current.files, form_version: incoming.form_version, receipt_id: incoming.receipt_id });
+          const files = modern ? [...current.files.filter((f) => !incoming.files.some((next) => (next.question || 'file') === (f.question || 'file'))), ...incoming.files] : incoming.files.length ? incoming.files : current.files;
+          Object.assign(current, { name: incoming.name, subteam: incoming.subteam, updated: incoming.updated, ip_hash: incoming.ip_hash, year: hasYear ? incoming.year : current.year, answers: modern ? incoming.answers : { ...current.answers, ...incoming.answers }, files, form_version: incoming.form_version, receipt_id: incoming.receipt_id });
           written = true;
         }
         if (written) {

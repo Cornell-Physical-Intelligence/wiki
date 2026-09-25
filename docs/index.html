@@ -10534,7 +10534,8 @@ function recruitAnswersHtml(d) {
     shown.add(q.key);
     const v = answers[q.key] ?? (['subteam', 'year'].includes(q.key) ? a[q.key] : null);
     const text = Array.isArray(v) ? v.join(', ') : v == null ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v);
-    blocks.push(`<h4 class="interest-subhead">${MD.esc(q.label || q.key)}</h4><p class="interest-project">${text ? (q.type === 'link' && /^https?:\/\//.test(text) ? `<a href="${MD.esc(text)}" target="_blank" rel="noopener noreferrer">${MD.esc(text)}</a>` : MD.esc(text)) : '<span class="faint">Left blank.</span>'}</p>`);
+    const hasFile = (a.files || []).some((f) => f.question === q.key);
+    blocks.push(`<h4 class="interest-subhead">${MD.esc(q.label || q.key)}</h4><p class="interest-project">${text ? (q.type === 'link' && /^https?:\/\//.test(text) ? `<a href="${MD.esc(text)}" target="_blank" rel="noopener noreferrer">${MD.esc(text)}</a>` : MD.esc(text)) : hasFile ? '<span class="faint">File attached below.</span>' : '<span class="faint">Left blank.</span>'}</p>`);
   }
   for (const [k, v] of Object.entries(answers)) {
     if (shown.has(k) || system.has(k)) continue;

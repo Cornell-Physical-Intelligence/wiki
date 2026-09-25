@@ -70,6 +70,8 @@ The [September 2026 recruitment repair overview](audits/recruitment-repairs-2026
 
 **Backups** must include every `recruit_*` table above. Submissions pass through a separate private Blob receipt journal before database processing; its recovery path and browser draft protections are independent of wiki preference synchronization.
 
+**Applicant attachments.** Confirmed resubmissions replace written answers but retain saved attachments unless a new file replaces the same question's attachment. Omitted files never request deletion. The website blocks sending when a selected file was rejected or a restored draft still needs a file reattached; the applicant must choose a valid file or explicitly remove the pending attachment. Invalid, empty, and obsolete upload fields are rejected before a receipt is saved. Browser drafts retain filenames, not file bytes.
+
 ## Deploy (≈10 minutes, one time)
 
 1. **Import to Vercel** — vercel.com → *Add New → Project* → import `Cornell-Physical-Intelligence/wiki`. The defaults work (`vercel.json` carries the build command).

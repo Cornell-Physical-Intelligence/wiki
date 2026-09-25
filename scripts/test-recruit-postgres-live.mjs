@@ -63,7 +63,15 @@ try {
   assert.equal(backup.files.length,2);
   assert.equal(Buffer.from(backup.files[0].data_base64,'base64').toString(),bytes.toString());
   const withoutFiles = await kit.apps.commitIntake(cycle,receipt(300,{email:saved[0].email,files:[],confirmUpdate:true}),journal);
-  assert.equal(withoutFiles.row.files.length,0,'modern replacements can remove old attachments');
+  assert.deepEqual(withoutFiles.row.files,withFiles.row.files,'text-only replacements preserve every attachment');
+  const newPhoto = Buffer.from('new image bytes');
+  const changedFile = { question: 'portfolio', name: 'new.png', type: 'image/png', size: newPhoto.length };
+  const changed = await kit.apps.commitIntake(cycle,receipt(400,{email:saved[0].email,files:[changedFile],confirmUpdate:true}),journal,[{...changedFile,data:newPhoto}]);
+  assert.equal(changed.row.files.length,2,'replacing one upload keeps the other question');
+  assert.equal(changed.row.files.find(f=>f.question==='resume').id,withFiles.row.files.find(f=>f.question==='resume').id);
+  assert.equal(changed.row.files.find(f=>f.question==='portfolio').name,'new.png');
+  const persistedFile = (await sql`SELECT data FROM wiki_files WHERE id=${changed.row.files.find(f=>f.question==='portfolio').id}`).rows[0];
+  assert.deepEqual(persistedFile.data,newPhoto);
   await assert.rejects(() => backupCycle(sql, cycle.id, backupPath), /EEXIST/);
   const people=await kit.people.result({cycle,query:{},scope:null});
   assert.equal(people.total,1);

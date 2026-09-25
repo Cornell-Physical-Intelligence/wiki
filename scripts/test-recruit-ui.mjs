@@ -754,6 +754,14 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/); assert.doesNotMatch(html, /<img src=x/);
   assert.match(html, /A &lt;robot&gt;/); assert.match(html, /Existing &lt;comment&gt;/);
   assert.match(html, /href="\/api\/recruit\/files\/int-1" download="cv\.pdf"/, 'files link only the authenticated route');
+  const imageHtml = f.run('recruitAnswersHtml')({
+    application: { answers: { portfolio: '' }, files: [{ id: 'int-image', question: 'portfolio', name: 'robot.png', type: 'image/png', size: 68 }] },
+    form: { questions: [{ key: 'portfolio', type: 'longfile', label: 'Portfolio' }] },
+  });
+  assert.match(imageHtml, /href="\/api\/recruit\/files\/int-image" download="robot\.png"/, 'an image-only answer exposes its download even when its text is empty');
+  assert.match(imageHtml, /Portfolio: robot\.png/);
+  assert.match(imageHtml, /File attached below\./);
+  assert.doesNotMatch(imageHtml, /Left blank\./, 'an image-only answer is not labeled blank');
   assert.match(html, /Also sent Spring 2025/); assert.doesNotMatch(html, /<select/);
   assert.match(html, /1 of 2<\/span>/); assert.match(html, /data-action="modal-close"/);
   assert.equal(veil.querySelectorAll('[data-action="recruit-person-form"]').length, 2, 'both forms they sent are offered');
