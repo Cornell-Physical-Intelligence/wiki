@@ -72,6 +72,8 @@ The [September 2026 recruitment repair overview](audits/recruitment-repairs-2026
 
 **Applicant attachments.** Confirmed resubmissions replace written answers but retain saved attachments unless a new file replaces the same question's attachment. Omitted files never request deletion. The website blocks sending when a selected file was rejected or a restored draft still needs a file reattached; the applicant must choose a valid file or explicitly remove the pending attachment. Invalid, empty, and obsolete upload fields are rejected before a receipt is saved. Browser drafts retain filenames, not file bytes.
 
+Success requires `ok: true` and a valid `jr-<timestamp>-<random>` receipt. A superseded submission returns `409 SUBMISSION_SUPERSEDED`, not success. A database outage returns `202 queued: true` only after the private journal saves the submission and its files; failure of both stores returns `503`. The site retains drafts on unconfirmed responses, rejects multi-file drops for a single upload question, and requires explicit removal of pending files whose question was removed or changed. CI runs the website draft tests and wiki route failure tests, plus `scripts/test-recruit-postgres-live.mjs` against an isolated Postgres cluster to verify concurrent intake, attachment rollback, and journal recovery. The latter can be run locally with `RECRUIT_PG_RUNTIME` pointing to a separate installation of `embedded-postgres` and `pg`; it never connects to a configured production database.
+
 ## Deploy (≈10 minutes, one time)
 
 1. **Import to Vercel** — vercel.com → *Add New → Project* → import `Cornell-Physical-Intelligence/wiki`. The defaults work (`vercel.json` carries the build command).

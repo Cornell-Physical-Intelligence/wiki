@@ -15,7 +15,7 @@
     "check": "npm run build && npm run build:preview && npm run verify:seo",
     "dev": "npm run build && DEV_FAKE_AUTH=ab3233@cornell.edu node dev.mjs",
     "start": "npm run build && node dev.mjs",
-    "test:recruit": "node scripts/test-recruit-kernel.mjs && node scripts/test-recruit-core.mjs && node scripts/test-recruit-pg.mjs && node scripts/test-recruit-site.mjs && node scripts/test-recruit-ui.mjs"
+    "test:recruit": "node scripts/test-recruit-kernel.mjs && node scripts/test-recruit-core.mjs && node scripts/test-recruit-pg.mjs && node scripts/test-recruit-site.mjs && node scripts/test-recruit-ui.mjs && node scripts/test-recruit-upload-failures.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

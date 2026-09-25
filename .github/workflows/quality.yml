@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  postgres-upload-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install isolated database test runtime
+        run: npm install --prefix "$RUNNER_TEMP/recruit-pg-runtime" --no-save --package-lock=false embedded-postgres@18.4.0-beta.17 pg@8.23.0
+      - name: Verify concurrent intake and attachment rollback against real Postgres
+        run: node scripts/test-recruit-postgres-live.mjs
+        env:
+          RECRUIT_PG_RUNTIME: ${{ runner.temp }}/recruit-pg-runtime
   build-and-verify:
     runs-on: ubuntu-latest
     timeout-minutes: 5

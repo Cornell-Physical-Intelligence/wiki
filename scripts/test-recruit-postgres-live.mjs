@@ -72,6 +72,23 @@ try {
   assert.equal(changed.row.files.find(f=>f.question==='portfolio').name,'new.png');
   const persistedFile = (await sql`SELECT data FROM wiki_files WHERE id=${changed.row.files.find(f=>f.question==='portfolio').id}`).rows[0];
   assert.deepEqual(persistedFile.data,newPhoto);
+  const beforeFailure = (await sql`SELECT * FROM recruit_applications WHERE id=${changed.row.id}`).rows[0];
+  const filesBeforeFailure = (await sql`SELECT * FROM wiki_files ORDER BY id`).rows;
+  const failedEntry = receipt(500,{email:saved[0].email,answers:{note:'Must roll back'},files:manifest,confirmUpdate:true});
+  const put = kit.files.put;
+  let writes = 0;
+  kit.files.put = async (...args) => { if (++writes === 2) throw new Error('Synthetic second-file failure'); return put(...args); };
+  try {
+    await assert.rejects(() => kit.apps.commitIntake(cycle,failedEntry,journal,manifest.map(f=>({...f,data:bytes}))), /Synthetic second-file failure/);
+  } finally { kit.files.put = put; }
+  assert.equal(writes,2,'the failure occurs after one real file insert');
+  assert.deepEqual((await sql`SELECT * FROM recruit_applications WHERE id=${changed.row.id}`).rows[0],beforeFailure,'the entire application rolls back');
+  assert.deepEqual((await sql`SELECT * FROM wiki_files ORDER BY id`).rows,filesBeforeFailure,'both file writes roll back');
+  assert.equal((await sql`SELECT * FROM interest_receipts WHERE id=${failedEntry.id}`).rows.length,0,'a failed upload cannot leave a saved receipt');
+  const recovered = await kit.apps.commitIntake(cycle,failedEntry,{async getFile() { return bytes; }});
+  assert.equal(recovered.outcome,'saved','the same journal receipt can recover after rollback');
+  assert.equal(recovered.row.files.length,2);
+  console.log('PASS: real Postgres attachment failure rolls back application, receipt, and files; journal retry recovers');
   await assert.rejects(() => backupCycle(sql, cycle.id, backupPath), /EEXIST/);
   const people=await kit.people.result({cycle,query:{},scope:null});
   assert.equal(people.total,1);
