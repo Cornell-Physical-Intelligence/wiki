@@ -23,12 +23,14 @@ async function recruitLoadPeople(more = false, quiet = false) {
   if (prior?.loading && (quiet || more)) return;
   const cursor = more ? prior?.next : null;
   if (more && !cursor) return;
-  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? prior?.rows || [] : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '' };
+  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? recruitPeopleVisible() : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '' };
+  people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
   st.people = people;
   const key = st.key;
   const params = new URLSearchParams({ q: people.q, limit: '100' });
   if (people.filter) params.set(people.filter, '1');
   if (cursor) params.set('cursor', cursor);
+  if (!quiet) recruitPaintPeople();
   try {
     let out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people?${params}`);
     if (quiet) {
@@ -38,7 +40,7 @@ async function recruitLoadPeople(more = false, quiet = false) {
         out = { ...page, rows: [...out.rows, ...page.rows] };
       }
     }
-    if (st.key !== key || st.people !== people) return;
+    if (st.key !== key || st.people !== people || people.q !== params.get('q')) return;
     const incoming = Array.isArray(out.rows) ? out.rows : [];
     people.rows = more ? people.rows.concat(incoming) : incoming;
     people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
@@ -46,7 +48,7 @@ async function recruitLoadPeople(more = false, quiet = false) {
     people.total = Number(out.total ?? people.rows.length);
     people.next = out.next || null;
   } catch (e) {
-    if (st.key !== key || st.people !== people) return;
+    if (st.key !== key || st.people !== people || people.q !== params.get('q')) return;
     people.error = recruitError(e);
   }
   people.loading = false;
@@ -56,7 +58,8 @@ async function recruitLoadPeople(more = false, quiet = false) {
 function recruitPeopleVisible() {
   const p = recruitState().people;
   if (!p) return [];
-  return p.rows;
+  // A review can change while this server-filtered page is open.
+  return p.rows.filter((row) => p.filter === 'flagged' ? row.flagged : p.filter === 'comments' ? row.comments > 0 : true);
 }
 
 function recruitPeopleCountsLine() {
@@ -71,7 +74,8 @@ function recruitPeopleFootText() {
   const p = recruitState().people;
   if (!p || p.loading || p.error) return '';
   const shown = recruitPeopleVisible().length;
-  return shown === p.total ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.total, 'person', 'people')}`;
+  const total = Math.max(shown, p.total - (p.rows.length - shown));
+  return shown === total ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(total, 'person', 'people')}`;
 }
 
 // The row's flag: the same control the list always had, on the person.
@@ -98,7 +102,7 @@ function recruitPeopleRowsHtml(rows) {
   const span = 6;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No one matches.' : 'No one yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.q?.trim() || p.filter ? 'No one matches these filters.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
     <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${keys.filter((k) => x.sections?.[k]).map((k) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(k)}">${MD.esc(recruitSectionTitle(k))}</button>`).join('')}</div></td>
     ${recruitPersonReviewCellHtml(x)}
@@ -131,7 +135,12 @@ function recruitPeopleHtml(cycle) {
   </div>`;
 }
 
-function recruitPeopleFootHtml() { return `${MD.esc(recruitPeopleFootText())}${recruitState().people?.next ? ' · <button class="linklike" data-action="recruit-people-more">Load more</button>' : ''}`; }
+function recruitPeopleFootHtml() {
+  const p = recruitState().people;
+  if (p?.loading) return 'Loading…';
+  if (p?.error) return `Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button>`;
+  return `${MD.esc(recruitPeopleFootText())}${p?.next ? ' · <button class="linklike" data-action="recruit-people-more">Load more</button>' : ''}`;
+}
 
 function recruitPaintPeople() {
   const body = $('[data-rc="people-rows"]');
@@ -414,7 +423,7 @@ function recruitPersonCommentHtml(c, email) {
   const mine = c.by && Store.me?.()?.email === c.by;
   const removable = cycle?.status !== 'archived' && (recruitCan('lead') || mine);
   const removal = st.mod.personRemovals?.[email + '/' + c.id];
-  return `<article class="interest-comment" data-comment-id="${MD.esc(c.id)}"><div class="interest-comment__meta"><b>${MD.esc(c.name || c.by || 'Member')}</b><time title="${MD.esc(new Date(Number(c.ts)).toLocaleString())}" datetime="${MD.esc(new Date(Number(c.ts)).toISOString())}">${MD.esc(recruitDate(Number(c.ts)))}</time>${removable ? `<button type="button" class="icon-btn interest-comment__delete" data-action="recruit-person-comment-delete" data-email="${MD.esc(email)}" data-cid="${MD.esc(c.id)}" aria-label="Delete comment" ${removal?.confirming ? 'disabled' : ''}>${I.trash}</button>` : ''}</div><p class="interest-comment__text">${MD.esc(c.text || '')}</p><div data-comment-controls>${recruitPersonCommentDeleteHtml(email, c.id)}</div></article>`;
+  return `<article class="interest-comment" data-comment-id="${MD.esc(c.id)}"><div class="interest-comment__meta"><div class="rc-comment-author"><b>${MD.esc(c.name || c.by || 'Member')}</b><time title="${MD.esc(new Date(Number(c.ts)).toLocaleString())}" datetime="${MD.esc(new Date(Number(c.ts)).toISOString())}">${MD.esc(recruitDate(Number(c.ts)))}</time></div>${removable ? `<button type="button" class="icon-btn interest-comment__delete" data-action="recruit-person-comment-delete" data-email="${MD.esc(email)}" data-cid="${MD.esc(c.id)}" aria-label="Delete comment" ${removal?.confirming ? 'disabled' : ''}>${I.trash}</button>` : ''}</div><p class="interest-comment__text">${MD.esc(c.text || '')}</p><div data-comment-controls>${recruitPersonCommentDeleteHtml(email, c.id)}</div></article>`;
 }
 
 function recruitPersonCommentDeleteHtml(email, commentId) {
@@ -433,7 +442,7 @@ function recruitPersonDiscussionHtml(email) {
   return `<h4 class="interest-subhead" id="recruit-comments-heading">Comments <span class="count">${comments.length}</span><span class="interest-private">Team only</span></h4>
     <div class="interest-thread" role="log" aria-label="Comments" aria-live="polite" aria-relevant="additions removals">${d?.loading && !d.person ? '<p class="interest-thread__empty">Loading…</p>' : comments.length ? comments.map((c) => recruitPersonCommentHtml(c, email)).join('') : '<p class="interest-thread__empty">No comments yet.</p>'}</div>
     ${canComment ? `<form class="interest-compose" data-action="recruit-person-comment-form" data-email="${MD.esc(email)}">
-      <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment about this person…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
+      <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
       <p class="field-error" data-comment-error role="alert" ${draft.error ? '' : 'hidden'}>${MD.esc(draft.error || '')}</p>
       <div class="interest-compose__foot"><button type="submit" class="btn btn--primary" ${draft.sending || !draft.text.trim() ? 'disabled' : ''}>${draft.sending ? 'Posting…' : 'Post comment'}</button></div>
     </form>` : '<p class="interest-readonly">Read only</p>'}`;

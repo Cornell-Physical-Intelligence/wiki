@@ -256,8 +256,31 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .rc-app .modal__foot .rc-app__nav > .btn, .rc-app .modal__head [data-rc="person-flag"] > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
 /* Flag and × centre on the two-line identity; the comment row centres its bin. */
 .rc-app .modal__head > [data-rc="person-flag"], .rc-app .modal__head > .icon-btn { align-self: center; }
-.rc-person .interest-comment__meta { align-items: center; }
-.rc-person .interest-comment__delete { width: 28px; height: 28px; min-height: 0; padding: 0; }
+.rc-person .interest-review__body { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.rc-person .interest-discussion { background: color-mix(in srgb, var(--page) 97%, var(--fg)); }
+.rc-person .interest-application .interest-subhead { margin-bottom: 8px; }
+.rc-person #recruit-comments-heading { margin-bottom: 18px; font-family: var(--font-ui); font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--fg); }
+.rc-person #recruit-comments-heading .count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 7px; background: var(--hover); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.rc-person .interest-private { font-weight: 400; }
+.rc-person .interest-thread { gap: 12px; margin-bottom: 16px; }
+.rc-person .interest-thread__empty { margin: 0; padding: 16px 0; }
+.rc-person .interest-comment { padding: 14px 16px; border-radius: 12px; background: var(--page); box-shadow: 0 0 0 1px var(--hairline); }
+.rc-person .interest-comment__meta { align-items: flex-start; gap: 8px; }
+.rc-comment-author { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 2px; }
+.rc-person .interest-comment__meta time { margin-left: 0; }
+.rc-person .interest-comment__text { margin-top: 10px; }
+.rc-person .interest-comment__delete { flex: none; width: 40px; height: 40px; min-height: 40px; margin: -4px -8px -4px auto; padding: 0; color: var(--faint); }
+.rc-person .interest-comment__delete:hover { color: var(--bad); background: var(--bad-bg); }
+.rc-person .interest-compose { overflow: hidden; border: 1px solid var(--hairline); border-radius: 14px; background: var(--page); transition: border-color 160ms, box-shadow 160ms; }
+.rc-person .interest-compose:focus-within { border-color: var(--rule); box-shadow: 0 0 0 2px var(--hover); }
+.rc-person .interest-compose textarea { min-height: 88px; padding: 14px 16px 8px; border: 0; border-radius: 0; background: transparent; box-shadow: none; line-height: 1.6; }
+.rc-person .interest-compose__foot { margin-top: 0; padding: 8px 10px 10px; }
+.rc-person .interest-compose__foot .btn { border-radius: 8px; font-size: 12px; }
+.rc-person .interest-compose .field-error { margin: 8px 16px; }
+@media (max-width: 720px) {
+  .rc-person .interest-review__body { grid-template-columns: minmax(0, 1fr); }
+  .rc-person .interest-discussion { border-left: 0; border-top: 1px solid var(--hairline); }
+}
 .rc-app__index { display: inline-block; min-width: 72px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Held submissions (admins): the count is a count, the rows wrap. */

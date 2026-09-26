@@ -659,6 +659,50 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
 /* ------------------------------- loaders --------------------------------- */
 {
   const f = fixture();
+  const st = loadCycle(f);
+  f.ctx.UI.route.params.sub = 'people';
+  const person = { email: 'ada@cornell.edu', name: 'Ada', flagged: true, comments: 1, sections: {}, last: 1 };
+  st.people = { rows: [person], byEmail: { [person.email]: person }, total: 1, q: '', filter: 'flagged' };
+  f.mount();
+  f.run("recruitAcceptPersonReview('ada@cornell.edu', { person: { email: 'ada@cornell.edu', flagged: false, review: { comments: [] }, reviewVersion: 2 } })");
+  assert.equal(f.run('recruitPeopleVisible().length'), 0, 'unflagging immediately removes a person from Flagged');
+  assert.equal(f.run('recruitPeopleFootText()'), '0 people', 'the filtered count follows review changes');
+  assert.match(f.app.querySelector('[data-rc="people-rows"]').textContent, /No one matches these filters/, 'an empty filter is distinct from an empty cycle');
+  person.comments = 1;
+  st.people.filter = 'comments';
+  f.run("recruitAcceptPersonReview('ada@cornell.edu', { person: { email: 'ada@cornell.edu', flagged: false, review: { comments: [] }, reviewVersion: 3 } })");
+  assert.equal(f.run('recruitPeopleVisible().length'), 0, 'deleting the last comment removes a person from Has comments');
+
+  st.people.next = 'next-page';
+  const more = f.run('recruitLoadPeople(true)');
+  f.requests.at(-1).resolve({ rows: [{ ...person, email: 'bo@cornell.edu', comments: 1 }], total: 1 });
+  await more;
+  assert.equal(f.run('recruitPeopleFootText()'), '1 person', 'paging after removal does not subtract the removed person twice');
+  assert.equal(st.people.rows.length, 1, 'paging drops rows that no longer match');
+
+  st.people.filter = '';
+  st.people.q = 'ada';
+  const oldLoad = f.run('recruitLoadPeople()');
+  const oldRequest = f.requests.at(-1);
+  assert.equal(f.app.querySelector('[data-rc="people-foot"]').textContent, 'Loading…');
+  const q = f.app.querySelector('[data-m="recruit-people-q"]');
+  q.value = 'nobody';
+  f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' });
+  oldRequest.resolve({ rows: [person], total: 1 });
+  await oldLoad;
+  assert.equal(st.people.rows.length, 0, 'a previous search cannot repaint results during the next search debounce');
+  f.run('clearTimeout(recruitPeopleSearchTimer)');
+  const newLoad = f.run('recruitLoadPeople()');
+  assert.match(f.requests.at(-1).url, /q=nobody/);
+  f.requests.at(-1).resolve({ rows: [], total: 0 });
+  await newLoad;
+  assert.match(f.app.querySelector('[data-rc="people-rows"]').textContent, /No one matches these filters/);
+  assert.equal(f.app.querySelector('[data-rc="people-foot"]').textContent, '0 people');
+  console.log('PASS: People filters react to review changes, distinguish empty results, show loading, and discard stale searches');
+}
+
+{
+  const f = fixture();
   f.run("RECRUIT.mount({ name: 'recruit', params: {} })");
   assert.equal(f.requests[0].url, '/recruit/me'); assert.ok(f.requests[0].signal instanceof AbortSignal);
   f.requests[0].resolve({ admin: true, cycles: [] }); await f.settle();
