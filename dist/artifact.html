@@ -2251,8 +2251,31 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .rc-app .modal__foot .rc-app__nav > .btn, .rc-app .modal__head [data-rc="person-flag"] > .btn { min-height: 40px; border-radius: var(--popup-inner-curve); }
 /* Flag and × centre on the two-line identity; the comment row centres its bin. */
 .rc-app .modal__head > [data-rc="person-flag"], .rc-app .modal__head > .icon-btn { align-self: center; }
-.rc-person .interest-comment__meta { align-items: center; }
-.rc-person .interest-comment__delete { width: 28px; height: 28px; min-height: 0; padding: 0; }
+.rc-person .interest-review__body { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.rc-person .interest-discussion { background: color-mix(in srgb, var(--page) 97%, var(--fg)); }
+.rc-person .interest-application .interest-subhead { margin-bottom: 8px; }
+.rc-person #recruit-comments-heading { margin-bottom: 18px; font-family: var(--font-ui); font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--fg); }
+.rc-person #recruit-comments-heading .count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 7px; background: var(--hover); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.rc-person .interest-private { font-weight: 400; }
+.rc-person .interest-thread { gap: 12px; margin-bottom: 16px; }
+.rc-person .interest-thread__empty { margin: 0; padding: 16px 0; }
+.rc-person .interest-comment { padding: 14px 16px; border-radius: 12px; background: var(--page); box-shadow: 0 0 0 1px var(--hairline); }
+.rc-person .interest-comment__meta { align-items: flex-start; gap: 8px; }
+.rc-comment-author { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 2px; }
+.rc-person .interest-comment__meta time { margin-left: 0; }
+.rc-person .interest-comment__text { margin-top: 10px; }
+.rc-person .interest-comment__delete { flex: none; width: 40px; height: 40px; min-height: 40px; margin: -4px -8px -4px auto; padding: 0; color: var(--faint); }
+.rc-person .interest-comment__delete:hover { color: var(--bad); background: var(--bad-bg); }
+.rc-person .interest-compose { overflow: hidden; border: 1px solid var(--hairline); border-radius: 14px; background: var(--page); transition: border-color 160ms, box-shadow 160ms; }
+.rc-person .interest-compose:focus-within { border-color: var(--rule); box-shadow: 0 0 0 2px var(--hover); }
+.rc-person .interest-compose textarea { min-height: 88px; padding: 14px 16px 8px; border: 0; border-radius: 0; background: transparent; box-shadow: none; line-height: 1.6; }
+.rc-person .interest-compose__foot { margin-top: 0; padding: 8px 10px 10px; }
+.rc-person .interest-compose__foot .btn { border-radius: 8px; font-size: 12px; }
+.rc-person .interest-compose .field-error { margin: 8px 16px; }
+@media (max-width: 720px) {
+  .rc-person .interest-review__body { grid-template-columns: minmax(0, 1fr); }
+  .rc-person .interest-discussion { border-left: 0; border-top: 1px solid var(--hairline); }
+}
 .rc-app__index { display: inline-block; min-width: 72px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Held submissions (admins): the count is a count, the rows wrap. */
@@ -2273,9 +2296,11 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .sheet--recruit .interest-row-actions { justify-content: flex-start; gap: 2px; }
 .sheet--recruit .interest-row-actions .icon-btn { min-width: 40px; min-height: 40px; opacity: 1; }
 .rc-mobile-meta { display: none; }
-.rc-participation { display: flex; flex-wrap: wrap; gap: 5px; }
-.rc-participation button { padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--page); color: var(--muted); font: inherit; font-size: 11.5px; text-align: left; cursor: pointer; }
-.rc-participation button:hover { color: var(--fg); border-color: var(--rule); }
+.rc-participation { display: flex; min-width: 0; }
+.rc-forms-trigger { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.rc-forms-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-forms-trigger > svg { flex: none; width: 14px; height: 14px; }
+.rc-forms-trigger:hover, .rc-forms-trigger[aria-expanded="true"] { color: var(--fg); background: var(--hover); }
 .rc-participation.rc-mobile-meta { display: none; }
 .fe-settings { margin: 0 0 20px; border: 1px solid var(--hairline); border-radius: 10px; }
 .fe-settings > summary { padding: 12px 16px; font-size: 13px; font-weight: 500; cursor: pointer; }
@@ -2301,7 +2326,7 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .sheet--recruit .interest-row-actions .icon-btn { width: 42px; height: 44px; }
   .rc-mobile-meta { display: block; font-size: 11.5px; line-height: 1.5; color: var(--muted); margin-top: 5px; overflow-wrap: anywhere; }
   .rc-participation.rc-mobile-meta { display: flex; }
-  .rc-participation button { min-height: 32px; }
+  .rc-participation .rc-forms-trigger { margin-left: -8px; }
   .sheet--recruit .sheet__bar { gap: 8px; padding: 10px; }
   .sheet--recruit .sheet__search-wrap { flex-basis: 100%; }
   .sheet--recruit .sheet__actions { width: 100%; flex-wrap: wrap; gap: 6px; }
@@ -10376,8 +10401,39 @@ RECRUIT.register({
 /* ------------------------------- the list -------------------------------- */
 
 const RECRUIT_PEOPLE_FILTERS = [
-  { value: '', label: 'All people' }, { value: 'flagged', label: 'Flagged' }, { value: 'comments', label: 'Has comments' },
+  { value: '', label: 'Any review status' }, { value: 'flagged', label: 'Flagged' }, { value: 'comments', label: 'Has comments' },
 ];
+
+function recruitPeopleParams(p = recruitState().people) {
+  const params = new URLSearchParams({ q: p?.q || '' });
+  if (p?.filter) params.set(p.filter, '1');
+  if (p?.section) params.set('section', p.section);
+  return params;
+}
+
+function recruitPeopleFilterLabel() {
+  const p = recruitState().people;
+  return [p?.section ? recruitSectionTitle(p.section) : '', p?.filter ? RECRUIT_PEOPLE_FILTERS.find((f) => f.value === p.filter)?.label : ''].filter(Boolean).join(' · ') || 'All people';
+}
+
+function recruitPeopleFilterMenu(host) {
+  const p = recruitState().people;
+  if (!p) return [];
+  const pick = (changes) => {
+    Object.assign(recruitState().people, changes);
+    const label = host.querySelector('.dd__label');
+    if (label) label.textContent = recruitPeopleFilterLabel();
+    clearTimeout(recruitPeopleSearchTimer);
+    recruitLoadPeople();
+  };
+  const item = (label, selected, changes) => ({ label, selected, icon: selected ? I.check : '<span style="width:14px;flex:none"></span>', run: () => pick(changes) });
+  return [
+    item('All people', !p.section && !p.filter, { section: '', filter: '' }), '-',
+    item('All forms', !p.section, { section: '' }),
+    ...recruitSectionKeys().map((key) => item(recruitSectionTitle(key), p.section === key, { section: key })), '-',
+    ...RECRUIT_PEOPLE_FILTERS.map((f) => item(f.label, (p.filter || '') === f.value, { filter: f.value })),
+  ];
+}
 
 let recruitPeopleSearchTimer;
 async function recruitLoadPeople(more = false, quiet = false) {
@@ -10387,12 +10443,14 @@ async function recruitLoadPeople(more = false, quiet = false) {
   if (prior?.loading && (quiet || more)) return;
   const cursor = more ? prior?.next : null;
   if (more && !cursor) return;
-  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? prior?.rows || [] : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '' };
+  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? recruitPeopleVisible() : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '', section: prior?.section || '' };
+  people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
   st.people = people;
   const key = st.key;
-  const params = new URLSearchParams({ q: people.q, limit: '100' });
-  if (people.filter) params.set(people.filter, '1');
+  const params = recruitPeopleParams(people);
+  params.set('limit', '100');
   if (cursor) params.set('cursor', cursor);
+  if (!quiet) recruitPaintPeople();
   try {
     let out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people?${params}`);
     if (quiet) {
@@ -10402,7 +10460,7 @@ async function recruitLoadPeople(more = false, quiet = false) {
         out = { ...page, rows: [...out.rows, ...page.rows] };
       }
     }
-    if (st.key !== key || st.people !== people) return;
+    if (st.key !== key || st.people !== people || people.q !== params.get('q')) return;
     const incoming = Array.isArray(out.rows) ? out.rows : [];
     people.rows = more ? people.rows.concat(incoming) : incoming;
     people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
@@ -10410,7 +10468,7 @@ async function recruitLoadPeople(more = false, quiet = false) {
     people.total = Number(out.total ?? people.rows.length);
     people.next = out.next || null;
   } catch (e) {
-    if (st.key !== key || st.people !== people) return;
+    if (st.key !== key || st.people !== people || people.q !== params.get('q')) return;
     people.error = recruitError(e);
   }
   people.loading = false;
@@ -10420,7 +10478,8 @@ async function recruitLoadPeople(more = false, quiet = false) {
 function recruitPeopleVisible() {
   const p = recruitState().people;
   if (!p) return [];
-  return p.rows;
+  // A review can change while this server-filtered page is open.
+  return p.rows.filter((row) => (!p.section || row.sections?.[p.section]) && (p.filter === 'flagged' ? row.flagged : p.filter === 'comments' ? row.comments > 0 : true));
 }
 
 function recruitPeopleCountsLine() {
@@ -10435,7 +10494,8 @@ function recruitPeopleFootText() {
   const p = recruitState().people;
   if (!p || p.loading || p.error) return '';
   const shown = recruitPeopleVisible().length;
-  return shown === p.total ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(p.total, 'person', 'people')}`;
+  const total = Math.max(shown, p.total - (p.rows.length - shown));
+  return shown === total ? recruitPlural(shown, 'person', 'people') : `${shown} of ${recruitPlural(total, 'person', 'people')}`;
 }
 
 // The row's flag: the same control the list always had, on the person.
@@ -10456,17 +10516,33 @@ function recruitPersonReviewCellHtml(p) {
     </div></td>`;
 }
 
+function recruitPersonFormsHtml(person) {
+  const keys = recruitSectionKeys().filter((key) => person.sections?.[key]);
+  if (!keys.length) return '<span class="faint">—</span>';
+  const label = keys.length === 1 ? recruitSectionTitle(keys[0]) : `${keys.length} forms`;
+  return `<button type="button" class="rc-forms-trigger" data-action="${keys.length === 1 ? 'recruit-person-open' : 'recruit-person-forms'}" data-email="${MD.esc(person.email)}" ${keys.length === 1 ? `data-form="${MD.esc(keys[0])}"` : 'aria-haspopup="menu" aria-expanded="false"'} aria-label="${MD.esc(keys.length === 1 ? `Open ${label} for ${person.name}` : `View ${keys.length} forms from ${person.name}`)}"><span>${MD.esc(label)}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="${keys.length === 1 ? 'm9 6 6 6-6 6' : 'm6 9 6 6 6-6'}"/></svg></button>`;
+}
+
+function recruitOpenPersonForms(el) {
+  const person = recruitPersonRow(el.dataset.email);
+  if (!person) return;
+  openMenu(recruitSectionKeys().filter((key) => person.sections?.[key]).map((key) => ({
+    label: recruitSectionTitle(key),
+    hint: person.sections[key].ts ? recruitDate(Number(person.sections[key].ts)) : '',
+    run: () => recruitOpenPerson(person.email, { form: key }),
+  })), el);
+}
+
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const keys = recruitSectionKeys();
   const span = 6;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.rows.length ? 'No one matches.' : 'No one yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.q?.trim() || p.filter || p.section ? 'No one matches these filters.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${keys.filter((k) => x.sections?.[k]).map((k) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(k)}">${MD.esc(recruitSectionTitle(k))}</button>`).join('')}</div></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${recruitPersonFormsHtml(x)}</div></td>
     ${recruitPersonReviewCellHtml(x)}
-    <td data-col="forms"><div class="rc-participation">${keys.filter((key) => x.sections?.[key]).map((key) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(key)}">${MD.esc(recruitSectionTitle(key))}</button>`).join('')}</div></td>
+    <td data-col="forms"><div class="rc-participation">${recruitPersonFormsHtml(x)}</div></td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
@@ -10483,8 +10559,8 @@ function recruitPeopleHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions">
         <button class="icon-btn" data-action="recruit-people-refresh" aria-label="Refresh people" title="Refresh people">${I.refresh || '↻'}</button>
-        ${dd('recruit-people-filter', RECRUIT_PEOPLE_FILTERS, p?.filter || '')}
-        ${lead ? `<a class="btn" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
+        ${dd('recruit-people-filter', [{ value: 'combined', label: recruitPeopleFilterLabel() }], 'combined')}
+        ${lead ? `<a class="btn" data-rc="people-export" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv?${MD.esc(recruitPeopleParams().toString())}" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
@@ -10495,7 +10571,12 @@ function recruitPeopleHtml(cycle) {
   </div>`;
 }
 
-function recruitPeopleFootHtml() { return `${MD.esc(recruitPeopleFootText())}${recruitState().people?.next ? ' · <button class="linklike" data-action="recruit-people-more">Load more</button>' : ''}`; }
+function recruitPeopleFootHtml() {
+  const p = recruitState().people;
+  if (p?.loading) return 'Loading…';
+  if (p?.error) return `Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button>`;
+  return `${MD.esc(recruitPeopleFootText())}${p?.next ? ' · <button class="linklike" data-action="recruit-people-more">Load more</button>' : ''}`;
+}
 
 function recruitPaintPeople() {
   const body = $('[data-rc="people-rows"]');
@@ -10505,6 +10586,8 @@ function recruitPaintPeople() {
   if (foot) foot.innerHTML = recruitPeopleFootHtml();
   const counts = $('[data-rc="people-counts"]');
   if (counts) counts.textContent = recruitPeopleCountsLine();
+  const exporter = $('[data-rc="people-export"]');
+  if (exporter) exporter.setAttribute('href', `/api/recruit/cycles/${encodeURIComponent(recruitCycleRow().id)}/people.csv?${recruitPeopleParams()}`);
   return true;
 }
 
@@ -10778,7 +10861,7 @@ function recruitPersonCommentHtml(c, email) {
   const mine = c.by && Store.me?.()?.email === c.by;
   const removable = cycle?.status !== 'archived' && (recruitCan('lead') || mine);
   const removal = st.mod.personRemovals?.[email + '/' + c.id];
-  return `<article class="interest-comment" data-comment-id="${MD.esc(c.id)}"><div class="interest-comment__meta"><b>${MD.esc(c.name || c.by || 'Member')}</b><time title="${MD.esc(new Date(Number(c.ts)).toLocaleString())}" datetime="${MD.esc(new Date(Number(c.ts)).toISOString())}">${MD.esc(recruitDate(Number(c.ts)))}</time>${removable ? `<button type="button" class="icon-btn interest-comment__delete" data-action="recruit-person-comment-delete" data-email="${MD.esc(email)}" data-cid="${MD.esc(c.id)}" aria-label="Delete comment" ${removal?.confirming ? 'disabled' : ''}>${I.trash}</button>` : ''}</div><p class="interest-comment__text">${MD.esc(c.text || '')}</p><div data-comment-controls>${recruitPersonCommentDeleteHtml(email, c.id)}</div></article>`;
+  return `<article class="interest-comment" data-comment-id="${MD.esc(c.id)}"><div class="interest-comment__meta"><div class="rc-comment-author"><b>${MD.esc(c.name || c.by || 'Member')}</b><time title="${MD.esc(new Date(Number(c.ts)).toLocaleString())}" datetime="${MD.esc(new Date(Number(c.ts)).toISOString())}">${MD.esc(recruitDate(Number(c.ts)))}</time></div>${removable ? `<button type="button" class="icon-btn interest-comment__delete" data-action="recruit-person-comment-delete" data-email="${MD.esc(email)}" data-cid="${MD.esc(c.id)}" aria-label="Delete comment" ${removal?.confirming ? 'disabled' : ''}>${I.trash}</button>` : ''}</div><p class="interest-comment__text">${MD.esc(c.text || '')}</p><div data-comment-controls>${recruitPersonCommentDeleteHtml(email, c.id)}</div></article>`;
 }
 
 function recruitPersonCommentDeleteHtml(email, commentId) {
@@ -10797,7 +10880,7 @@ function recruitPersonDiscussionHtml(email) {
   return `<h4 class="interest-subhead" id="recruit-comments-heading">Comments <span class="count">${comments.length}</span><span class="interest-private">Team only</span></h4>
     <div class="interest-thread" role="log" aria-label="Comments" aria-live="polite" aria-relevant="additions removals">${d?.loading && !d.person ? '<p class="interest-thread__empty">Loading…</p>' : comments.length ? comments.map((c) => recruitPersonCommentHtml(c, email)).join('') : '<p class="interest-thread__empty">No comments yet.</p>'}</div>
     ${canComment ? `<form class="interest-compose" data-action="recruit-person-comment-form" data-email="${MD.esc(email)}">
-      <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment about this person…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
+      <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
       <p class="field-error" data-comment-error role="alert" ${draft.error ? '' : 'hidden'}>${MD.esc(draft.error || '')}</p>
       <div class="interest-compose__foot"><button type="submit" class="btn btn--primary" ${draft.sending || !draft.text.trim() ? 'disabled' : ''}>${draft.sending ? 'Posting…' : 'Post comment'}</button></div>
     </form>` : '<p class="interest-readonly">Read only</p>'}`;
@@ -10985,6 +11068,7 @@ RECRUIT.register({
     'recruit-people-more': () => recruitLoadPeople(true),
     'recruit-people-refresh': () => { recruitLoadPeople(false, true); },
     'recruit-person-open': (el) => recruitOpenPerson(el.dataset.email, { form: el.dataset.form || null, comments: Boolean(el.dataset.comments) }),
+    'recruit-person-forms': recruitOpenPersonForms,
     'recruit-person-form': (el) => {
       if (UI.modal?.kind !== 'recruit-person' || UI.modal.email !== el.dataset.email) return;
       UI.modal.form = el.dataset.form || null;
@@ -11012,13 +11096,7 @@ RECRUIT.register({
   },
   dd: {
     'recruit-person-form-select': (host, value) => { if (value === undefined || UI.modal?.kind !== 'recruit-person') return; UI.modal.form = value; recruitPaintPerson(UI.modal.email); $('.rc-person [data-m="recruit-person-form-select"]')?.focus(); },
-    'recruit-people-filter': (host, value) => {
-      if (value === undefined) return undefined;
-      const p = recruitState().people;
-      if (!p) return;
-      p.filter = value;
-      recruitLoadPeople();
-    },
+    'recruit-people-filter': (host, value) => value === undefined ? recruitPeopleFilterMenu(host) : undefined,
   },
   reset() { const st = recruitState(); st.people = undefined; st.persons = {}; },
 });
