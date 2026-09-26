@@ -653,6 +653,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.doesNotMatch(f.requests.at(-1).url, /section=|flagged=/, 'All people clears both filter groups');
   f.requests.at(-1).resolve({rows:allRows,total:2}); await f.settle();
   assert.equal(body.querySelectorAll('tr').length, 2);
+  st.people.section = 'coffee';
+  f.run("recruitOpenPerson('a@cornell.edu')");
+  assert.equal(f.ctx.UI.modal.form, 'coffee', 'opening a person respects the form used to filter People');
+  assert.equal(f.run('recruitPersonSteps()[0].form'), 'coffee', 'Previous and Next preserve the form being reviewed');
+  st.people.section = '';
   f.run("recruitOpenPerson('a@cornell.edu', { form: 'interest' })");
   assert.equal(f.ctx.UI.modal.email, 'a@cornell.edu');
   assert.ok(f.document.querySelector('.rc-person'), 'a person opens from the People tab without the section sheet');

@@ -322,7 +322,7 @@ function recruitPersonSideHtml(email, want) {
 // People tab, otherwise the section sheet, one entry per person.
 function recruitPersonSteps() {
   const st = recruitState();
-  if (recruitActivePanel()?.id === 'people' && st.people) return recruitPeopleVisible().map((p) => ({ email: p.email, form: null }));
+  if (recruitActivePanel()?.id === 'people' && st.people) return recruitPeopleVisible().map((p) => ({ email: p.email, form: st.people.section || null }));
   const seen = new Set();
   const out = [];
   for (const r of recruitVisibleRows()) { if (!r.email || seen.has(r.email)) continue; seen.add(r.email); out.push({ email: r.email, form: r.section || recruitSection() }); }
@@ -382,6 +382,7 @@ function recruitPaintPerson(email) {
 
 function recruitOpenPerson(email, { form = null, comments = false } = {}) {
   if (!email) return;
+  if (!form && recruitActivePanel()?.id === 'people') form = recruitState().people?.section || null;
   recruitShowModal({ kind: 'recruit-person', email, form, focusComments: comments, inPlace: true });
   recruitSegSlide($('.rc-person .rc-seg--forms'));
   const d = recruitPerson(email);
