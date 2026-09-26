@@ -160,7 +160,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const dup = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', availability: 'Wed' } });
   assert.equal(dup.status, 409); assert.equal(dup.data.exists, true); assert.equal(dup.data.submitted, list.rows[0].ts);
   const replaced = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', subteam: 'Software', availability: 'Wed' }, confirmUpdate: true });
-  assert.equal(replaced.status, 200);
+  assert.equal(replaced.status, 409); assert.equal(replaced.data.replaceable, false);
   const after = (await recruit('GET', '/recruit/cycles/cy-interest/applications?section=coffee')).data;
   assert.equal(after.rows.length, 1); assert.equal(after.rows[0].id, list.rows[0].id, 'a confirmed update keeps the row');
   assert.equal(sent.length, 1, 'updates do not re-notify');
@@ -267,9 +267,9 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal((await anon('POST', '/recruit/site/application', { answers: { name: 'Neither', email: 'neither@cornell.edu' } })).status, 400, 'required means text or a file');
   const textOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'Text Only', email: 'textonly@cornell.edu', portfolio: 'Built a rover' } });
   assert.equal(textOnly.status, 200, textOnly.text);
-  const fileOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'File Only', email: 'fileonly@cornell.edu' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: 'JVBERi0xLjQK' } } });
+  const fileOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'File Only', email: 'fileonly@cornell.edu' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.4\n%%EOF').toString('base64') } } });
   assert.equal(fileOnly.status, 200, fileOnly.text);
-  const both = await anon('POST', '/recruit/site/application', { answers: { name: 'Both', email: 'both@cornell.edu', portfolio: 'See attached' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: 'JVBERi0xLjQK' } } });
+  const both = await anon('POST', '/recruit/site/application', { answers: { name: 'Both', email: 'both@cornell.edu', portfolio: 'See attached' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.4\n%%EOF').toString('base64') } } });
   assert.equal(both.status, 200, both.text);
   const appRows = (await recruit('GET', '/recruit/cycles/cy-interest/applications?section=application')).data.rows;
   const bothRow = (await recruit('GET', `/recruit/cycles/cy-interest/applications/${appRows.find((r) => r.email === 'both@cornell.edu').id}`)).data.application;

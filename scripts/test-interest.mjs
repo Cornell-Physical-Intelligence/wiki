@@ -46,16 +46,16 @@ if (!process.env.INTEREST_TEST_ROOT) {
     assert.equal((await request('POST', '/interest', { name: 'Invalid', email: 'invalid@example.com', year })).status, 400);
   }
   assert.equal((await request('POST', '/interest', { name: 'Freshman', email: 'freshman@example.com' })).status, 409);
-  assert.equal((await request('POST', '/interest', { name: 'Updated', email: 'freshman@example.com', confirmUpdate: true })).status, 200);
+  assert.equal((await request('POST', '/interest', { name: 'Updated', email: 'freshman@example.com', confirmUpdate: true })).status, 409);
   assert.equal((await rows()).find((r) => r.email === 'freshman@example.com').year, 'Freshman', 'old clients preserve a saved year');
-  assert.equal((await request('POST', '/interest', { name: 'Updated', email: 'freshman@example.com', confirmUpdate: true, year: null })).status, 200);
-  assert.equal((await rows()).find((r) => r.email === 'freshman@example.com').year, null, 'explicit blank can clear year');
-  assert.equal((await request('POST', '/interest', { name: 'Legacy Applicant', email: old.email, confirmUpdate: true, year: 'Grad', project: old.project })).status, 200);
+  assert.equal((await request('POST', '/interest', { name: 'Updated', email: 'freshman@example.com', confirmUpdate: true, year: null })).status, 409);
+  assert.equal((await rows()).find((r) => r.email === 'freshman@example.com').year, 'Freshman', 'an unverified request cannot clear year');
+  assert.equal((await request('POST', '/interest', { name: 'Legacy Applicant', email: old.email, confirmUpdate: true, year: 'Grad', project: old.project })).status, 409);
   const legacyUpdated = (await rows()).find((r) => r.email === old.email);
   assert.equal(legacyUpdated.id, old.id);
   assert.equal(legacyUpdated.ts, old.ts);
   assert.equal(legacyUpdated.project, old.project);
-  assert.equal(legacyUpdated.year, 'Grad');
+  assert.equal(legacyUpdated.year, old.year);
   const reviewer = { role: 'admin', email: 'lead@example.com', name: 'Team Lead' };
   const secondReviewer = { role: 'admin', email: 'other@example.com', name: 'Other Lead' };
   const reviewPath = `/interest/${old.id}/review`;
@@ -87,7 +87,7 @@ if (!process.env.INTEREST_TEST_ROOT) {
   assert.equal(retry.data.row.review.comments.length, 2, 'lost-response retries do not duplicate comments');
   assert.equal((await request('POST', commentPath, { ...firstComment, text: 'Different' }, reviewer)).status, 409);
   assert.equal((await request('POST', commentPath, firstComment, secondReviewer)).status, 409);
-  assert.equal((await request('POST', '/interest', { name: old.name, email: old.email, confirmUpdate: true, project: 'A revised answer', review: { comments: [] } })).status, 200);
+  assert.equal((await request('POST', '/interest', { name: old.name, email: old.email, confirmUpdate: true, project: 'A revised answer', review: { comments: [] } })).status, 409);
   reviewed = (await rows()).find((r) => r.id === old.id);
   assert.equal(reviewed.review.comments.length, 2, 'applicant edits cannot erase admin comments');
   assert.equal(reviewed.review.flagged, true);

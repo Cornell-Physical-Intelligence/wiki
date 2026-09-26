@@ -33,6 +33,7 @@ function openEditor(pageId, isNew, draft) {
     origTitle: draft?.origTitle ?? p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
     origSection: draft?.origSection ?? p?.section ?? '',
     baseUpdated: draft?.baseUpdated ?? p?.updated ?? null,
+    uploadItems: (draft?.uploadItems || []).map((item) => ({ id: item.id, name: item.name, error: 'Choose this file again to finish attaching it.', state: 'failed' })),
     createRequestId: draft?.createRequestId ?? null,
     createRequestDraft: draft?.createRequestId ? draft : null,
   };
@@ -78,7 +79,7 @@ function viewEditor() {
         <button role="tab" data-action="ed-mode" data-mode="preview" class="${e.mode === 'preview' ? 'active' : ''}">Preview</button>
       </div>
       <button class="btn btn--ghost" data-action="ed-cancel">Close</button>
-      <button class="btn btn--primary" data-action="ed-save">Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
+      <button class="btn btn--primary" data-action="ed-save" ${e.uploadItems?.length || e.uploads ? 'disabled' : ''}>Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
     )}
     <div class="editor__toolbar" role="toolbar" aria-label="Formatting">
       <div class="editor__tools">
@@ -91,6 +92,7 @@ function viewEditor() {
       </div>
     </div>
     ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft. The page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
+    <div class="editor__uploads" data-ed-uploads aria-live="polite">${edUploadItemsHtml(e)}</div>
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
@@ -243,6 +245,7 @@ function editorDraft(e) {
   const sameCreate = e.createRequestDraft && e.createRequestDraft.title.trim() === e.title.trim()
     && e.createRequestDraft.body === e.body && e.createRequestDraft.section === e.section;
   return { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags,
+    uploadItems: (e.uploadItems || []).map(({ id, name }) => ({ id, name })),
     origBody: e.origBody, origTitle: e.origTitle, origSection: e.origSection, baseUpdated: e.baseUpdated,
     ...(sameCreate && e.createRequestId ? { createRequestId: e.createRequestId } : {}) };
 }
@@ -266,15 +269,47 @@ function uploadInsertPosition(before, after, position) {
   return after.length - suffix;
 }
 
-async function edHandleFiles(files) {
+function edUploadItemsHtml(e) {
+  return (e.uploadItems || []).map((item) => `<div class="editor__upload"><div><b>${MD.esc(item.name)}</b><span>${MD.esc(item.state === 'uploading' ? 'Uploading…' : item.error || 'Upload failed')}</span></div>${item.state === 'uploading' ? '' : `<button type="button" class="btn btn--sm" data-action="ed-upload-retry" data-id="${MD.esc(item.id)}">${item.file ? 'Retry' : 'Choose file'}</button><button type="button" class="btn btn--sm btn--ghost" data-action="ed-upload-remove" data-id="${MD.esc(item.id)}">Remove</button>`}</div>`).join('');
+}
+
+function edPaintUploads(e) {
+  if (UI.editor !== e) return;
+  const host = $('[data-ed-uploads]');
+  if (host) host.innerHTML = edUploadItemsHtml(e);
+  const save = $('[data-action="ed-save"]');
+  if (save) save.disabled = Boolean(e.saving || e.uploads || e.uploadItems?.length);
+}
+
+function edResolveUpload(id, remove = false) {
+  const e = UI.editor, item = e?.uploadItems?.find((i) => i.id === id);
+  if (!item || item.state === 'uploading' || e.saving) return;
+  if (remove) {
+    e.uploadItems = e.uploadItems.filter((i) => i !== item);
+    keepEditorDraft(e); edPaintUploads(e);
+    $('[data-ed="body"]')?.focus();
+  } else if (item.file) edHandleFiles([item.file], item.id);
+  else { e.reattachId = item.id; $('[data-ed-file]')?.click(); }
+}
+
+async function edHandleFiles(files, retryId = null) {
   const e = UI.editor;
   if (!e || e.saving || !files.length) return;
   const originalField = $('[data-ed="body"]');
   let baseline = e.body, position = originalField?.selectionStart ?? e.body.length;
+  e.uploadItems ||= [];
+  const items = files.map((file, index) => {
+    const item = index === 0 && retryId ? e.uploadItems.find((i) => i.id === retryId) : null;
+    if (item) { Object.assign(item, { file, name: file.name, state: 'uploading', error: '' }); return item; }
+    const added = { id: uid('upload'), name: file.name, file, state: 'uploading', error: '' };
+    e.uploadItems.push(added); return added;
+  });
   e.uploads = (e.uploads || 0) + files.length;
+  edPaintUploads(e);
   e.dirty = true;
   keepEditorDraft(e);
-  for (const f of files) {
+  for (const item of items) {
+    const f = item.file;
     try {
       const att = await Store.addAttachment(f);
       const label = f.name.replace(/\.[^.]+$/, '').replace(/[\[\]\\\r\n]/g, '');
@@ -302,10 +337,17 @@ async function edHandleFiles(files) {
       } else e.body = e.body.slice(0, position) + text + e.body.slice(position);
       baseline = e.body;
       position += text.length;
+      e.uploadItems = e.uploadItems.filter((i) => i !== item);
       keepEditorDraft(e);
       toast(`Attached ${f.name} (${MD.fmtSize(att.size)})`);
-    } catch (err) { toast(err.message || 'Upload failed'); }
-    finally { e.uploads--; }
+    } catch (err) {
+      item.state = 'failed'; item.error = err.message || 'Upload failed. Retry or remove this attachment before saving.';
+    } finally {
+      e.uploads--;
+      const draft = draftStash.get(e.pageId || 'new');
+      if (UI.editor === e || (draft && draft.body === e.body && draft.title === e.title && (!UI.editor || UI.editor.pageId !== e.pageId))) keepEditorDraft(e);
+      edPaintUploads(e);
+    }
   }
 }
 
@@ -562,6 +604,7 @@ async function edSave() {
   const e = UI.editor;
   if (!e || e.saving || UI.modal?.kind === 'save-summary') return;
   if (e.uploads) { toast('Wait for attachments to finish uploading.'); return; }
+  if (e.uploadItems?.length) { toast('Retry or remove unfinished attachments before saving.'); return; }
   if (!e.title.trim()) { toast('Every page needs a title.'); $('[data-ed="title"]')?.focus(); return; }
   const clash = Store.pageByTitle(e.title.trim());
   if (clash && clash.id !== e.pageId && (!e.createRequestId || clash.createRequestId !== e.createRequestId)) { toast(`“${e.title.trim()}” already exists. Titles are how pages link, so they have to be unique.`); return; }
@@ -613,6 +656,7 @@ async function edCommit(summary) {
   const e = UI.editor;
   if (!e || e.saving) return;
   if (e.uploads) { toast('Wait for attachments to finish uploading.'); return; }
+  if (e.uploadItems?.length) { toast('Retry or remove unfinished attachments before saving.'); return; }
   if (e.body.length > 2 * 1024 * 1024) { toast('That page is over the 2 MB text limit. Attach big content as files instead.'); return; }
   // Someone else (or another tab) may have changed the page while this editor
   // was open. An explicit overwrite acknowledges only the displayed revision;

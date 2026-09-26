@@ -60,7 +60,7 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'nope' }).error, 'That email does not look right');
   assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', file: { name: 'x', type: 'text/plain', data: 'aGk=' } }).error, 'Images or PDF only');
   assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', file: { name: 'x', type: 'image/png', data: '!!' } }).error, 'The file did not decode');
-  assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', file: { name: 'cv', type: 'application/pdf', data: Buffer.from('pdf').toString('base64') } }).files[0].size, 3);
+  assert.equal(validateAnswers(FIXED_FORM_V1, { name: 'A', email: 'a@b.co', file: { name: 'cv', type: 'application/pdf', data: Buffer.from('%PDF-1.7\n%%EOF').toString('base64') } }).files[0].size, 14);
   const custom = { sections: [{ key: 'main', title: '', subteam: null }, { key: 'sw', title: 'Software', subteam: 'software' }], questions: [...FIXED_FORM_V1.questions, { key: 'github', type: 'link', label: 'GitHub', required: true, section: 'sw' }, { key: 'langs', type: 'multi', label: 'Languages', options: ['C', 'Rust'], section: 'main' }] };
   assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', subteam: 'Electrical', answers: { langs: ['C'] } }).answers.github, undefined, 'a required question in a hidden section is not required');
   assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', subteam: 'Software' }).error, 'GitHub is required');

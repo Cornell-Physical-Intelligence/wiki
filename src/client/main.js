@@ -943,6 +943,8 @@ document.addEventListener('click', async (ev) => {
     case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/home'); route(); render(); toast('Draft kept. It will be waiting when you come back'); } break;
     case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/home'); route(); render(); } break;
     case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } break;
+    case 'ed-upload-retry': stop(); edResolveUpload(el.dataset.id); break;
+    case 'ed-upload-remove': stop(); edResolveUpload(el.dataset.id, true); break;
     case 'ed-save': stop(); edSave(); break;
     case 'page-review-dismiss': {
       stop();
@@ -1711,7 +1713,8 @@ document.addEventListener('change', (ev) => {
     return;
   }
   if (t.matches('[data-ed-file]')) {
-    edHandleFiles([...t.files]);
+    edHandleFiles([...t.files], UI.editor?.reattachId);
+    if (UI.editor) UI.editor.reattachId = null;
     t.value = '';
   }
 });

@@ -255,7 +255,7 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
         return result();
       }
 
-      if (text === 'SELECT doc FROM recruit_cycles WHERE id = $1 FOR UPDATE') return result(db.cycles.filter((c) => c.id === v[0]).map((c) => ({ doc: c.doc })));
+      if (['SELECT doc FROM recruit_cycles WHERE id = $1 FOR UPDATE', 'SELECT doc, closes_at FROM recruit_cycles WHERE id = $1 FOR UPDATE'].includes(text)) return result(db.cycles.filter((c) => c.id === v[0]).map((c) => ({ doc: c.doc, closes_at: c.closes_at })));
       if (text === 'SELECT email, review, review_version FROM recruit_people WHERE cycle_id = $1') return result([]);
       if (text === 'SELECT count(*) AS n FROM recruit_applications WHERE cycle_id = $1') return result([{ n: String(db.applications.filter((a) => a.cycle_id === v[0]).length) }]);
       /* applications */
@@ -271,12 +271,12 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
       if (m(/^SELECT \* FROM recruit_applications WHERE email = \$1 ORDER BY ts DESC$/)) return result(db.applications.filter((a) => a.email === v[0]));
       if (/^WITH prior AS \( ?SELECT outcome FROM interest_receipts WHERE id = \$1 AND NOT \(\$2 AND outcome IN/.test(text)) {
         db.commitStatement = text;
-        assert.equal(v.length, 34, 'the commit CTE carries every value as a parameter');
+        assert.equal(v.length, 35, 'the commit CTE carries every value as a parameter');
         const [rid, override] = v;
         const prior = db.receipts.get(rid);
         if (prior && !(override && ['review', 'held'].includes(prior))) return result([{ outcome: prior, inserted: null }]);
-        const incoming = { id: v[2], cycle_id: v[3], section: v[4], email: v[5], ts: v[6], updated: v[7], name: v[8], cornell: v[9], subteam: v[10], year: v[11], source: v[12], form_version: v[13], answers: JSON.parse(v[14]), files: JSON.parse(v[15]), stage: v[16], stage_at: v[17], stage_history: JSON.parse(v[18]), ip_hash: v[19], receipt_id: v[20], outcome: null, decision: {}, tags: [], review: {}, review_version: 0, edit_version: 0, onboarded_at: null, erased_at: null };
-        const hasYear = v[21], modern = v[22], confirmUpdate = v[24];
+        const incoming = { id: v[2], cycle_id: v[3], section: v[4], email: v[5], ts: v[6], updated: v[7], name: v[8], cornell: v[9], subteam: v[10], year: v[11], source: v[12], form_version: v[13], answers: JSON.parse(v[14]), files: JSON.parse(v[15]), stage: v[16], stage_at: v[17], stage_history: JSON.parse(v[18]), ip_hash: v[19], receipt_id: v[20], form_snapshot: JSON.parse(v[21]), outcome: null, decision: {}, tags: [], review: {}, review_version: 0, edit_version: 0, onboarded_at: null, erased_at: null };
+        const hasYear = v[22], modern = v[23], confirmUpdate = v[25];
         const current = db.applications.find((a) => a.cycle_id === incoming.cycle_id && (a.section || 'interest') === (incoming.section || 'interest') && a.email === incoming.email);
         let written = false, inserted = false;
         if (!current) { db.applications.push(incoming); written = inserted = true; }
@@ -499,7 +499,7 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
   assert.match(commit[0], /INSERT INTO interest_receipts/);
   assert.match(commit[0], /ON CONFLICT \(cycle_id, section, email\) DO UPDATE SET/);
   assert.match(commit[0], /INSERT INTO recruit_applicants/);
-  const setClause = /DO UPDATE SET (.*?) WHERE \$25 AND recruit_applications\.updated <= EXCLUDED\.updated/s.exec(commit[0])[1];
+  const setClause = /DO UPDATE SET (.*?) WHERE \$26 AND recruit_applications\.updated <= EXCLUDED\.updated/s.exec(commit[0])[1];
   for (const col of ['review', 'stage', 'tags', 'decision', 'edit_version', 'outcome']) assert.ok(!new RegExp(`\\b${col} =`).test(setClause), `${col} is never in the applicant SET list`);
   assert.ok(!tracedSince(mark).some((t) => t.startsWith('INSERT INTO interest_submissions')), 'nothing lands in the legacy table');
   const bridged = db.applications.find((a) => a.email === 'bridge@example.com');

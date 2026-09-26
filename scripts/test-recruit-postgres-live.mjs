@@ -40,11 +40,11 @@ try {
   assert.equal(results.filter((r)=>r.outcome==='held').length,7);
   const saved=(await sql`SELECT * FROM recruit_applications WHERE cycle_id=${cycle.id}`).rows;
   assert.equal(saved.length,1);
-  const update=await kit.apps.commitIntake(cycle,receipt(100,{email:saved[0].email,answers:{note:'Replaced'},confirmUpdate:true}),journal);
+  const update=await kit.apps.commitIntake(cycle,receipt(100,{email:saved[0].email,answers:{note:'Replaced'},confirmUpdate:true}),journal,null,{override:true});
   assert.equal(update.outcome,'saved','confirmed replacement allowed while full');
   assert.equal(update.inserted,false);
   assert.deepEqual(update.row.answers,{note:'Replaced'});
-  const retry=await kit.apps.commitIntake(cycle,receipt(100,{email:saved[0].email,confirmUpdate:true}),journal);
+  const retry=await kit.apps.commitIntake(cycle,receipt(100,{email:saved[0].email,confirmUpdate:true}),journal,null,{override:true});
   assert.equal(retry.outcome,'saved','receipt retry idempotent');
   assert.equal((await sql`SELECT count(*)::int AS n FROM recruit_applications`).rows[0].n,1);
   await assert.rejects(()=>kit.cycles.update(cycle.id,1,{docSet:{key:'site',value:{sections:{round:null}}},emptySections:['round'],by:'test',now:2}),/has responses/);
@@ -54,7 +54,7 @@ try {
   await sql`CREATE TABLE wiki_files (id text PRIMARY KEY, name text, type text, size int, by text, ts bigint, data bytea)`;
   const bytes = Buffer.from('%PDF-live-test');
   const manifest = ['resume', 'portfolio'].map((question) => ({question,name:question+'.pdf',type:'application/pdf',size:bytes.length}));
-  const withFiles = await kit.apps.commitIntake(cycle, receipt(200,{email:saved[0].email,files:manifest,confirmUpdate:true}),journal,manifest.map(f=>({...f,data:bytes})));
+  const withFiles = await kit.apps.commitIntake(cycle, receipt(200,{email:saved[0].email,files:manifest,confirmUpdate:true}),journal,manifest.map(f=>({...f,data:bytes})),{override:true});
   assert.deepEqual(withFiles.row.files.map(f=>f.question),['resume','portfolio']);
   const { backupCycle } = await import('./recruit-backup.mjs');
   const backupPath = join(root, 'backup.json');
@@ -64,11 +64,11 @@ try {
   assert.equal(backup.cycle.id, cycle.id);
   assert.equal(backup.files.length,2);
   assert.equal(Buffer.from(backup.files[0].data_base64,'base64').toString(),bytes.toString());
-  const withoutFiles = await kit.apps.commitIntake(cycle,receipt(300,{email:saved[0].email,files:[],confirmUpdate:true}),journal);
+  const withoutFiles = await kit.apps.commitIntake(cycle,receipt(300,{email:saved[0].email,files:[],confirmUpdate:true}),journal,null,{override:true});
   assert.deepEqual(withoutFiles.row.files,withFiles.row.files,'text-only replacements preserve every attachment');
   const newPhoto = Buffer.from('new image bytes');
   const changedFile = { question: 'portfolio', name: 'new.png', type: 'image/png', size: newPhoto.length };
-  const changed = await kit.apps.commitIntake(cycle,receipt(400,{email:saved[0].email,files:[changedFile],confirmUpdate:true}),journal,[{...changedFile,data:newPhoto}]);
+  const changed = await kit.apps.commitIntake(cycle,receipt(400,{email:saved[0].email,files:[changedFile],confirmUpdate:true}),journal,[{...changedFile,data:newPhoto}],{override:true});
   assert.equal(changed.row.files.length,2,'replacing one upload keeps the other question');
   assert.equal(changed.row.files.find(f=>f.question==='resume').id,withFiles.row.files.find(f=>f.question==='resume').id);
   assert.equal(changed.row.files.find(f=>f.question==='portfolio').name,'new.png');
@@ -81,13 +81,13 @@ try {
   let writes = 0;
   kit.files.put = async (...args) => { if (++writes === 2) throw new Error('Synthetic second-file failure'); return put(...args); };
   try {
-    await assert.rejects(() => kit.apps.commitIntake(cycle,failedEntry,journal,manifest.map(f=>({...f,data:bytes}))), /Synthetic second-file failure/);
+    await assert.rejects(() => kit.apps.commitIntake(cycle,failedEntry,journal,manifest.map(f=>({...f,data:bytes})),{override:true}), /Synthetic second-file failure/);
   } finally { kit.files.put = put; }
   assert.equal(writes,2,'the failure occurs after one real file insert');
   assert.deepEqual((await sql`SELECT * FROM recruit_applications WHERE id=${changed.row.id}`).rows[0],beforeFailure,'the entire application rolls back');
   assert.deepEqual((await sql`SELECT * FROM wiki_files ORDER BY id`).rows,filesBeforeFailure,'both file writes roll back');
   assert.equal((await sql`SELECT * FROM interest_receipts WHERE id=${failedEntry.id}`).rows.length,0,'a failed upload cannot leave a saved receipt');
-  const recovered = await kit.apps.commitIntake(cycle,failedEntry,{async getFile() { return bytes; }});
+  const recovered = await kit.apps.commitIntake(cycle,failedEntry,{async getFile() { return bytes; }},null,{override:true});
   assert.equal(recovered.outcome,'saved','the same journal receipt can recover after rollback');
   assert.equal(recovered.row.files.length,2);
   console.log('PASS: real Postgres attachment failure rolls back application, receipt, and files; journal retry recovers');
@@ -95,6 +95,18 @@ try {
   const people=await kit.people.result({cycle,query:{},scope:null});
   assert.equal(people.total,1);
   assert.equal(await kit.apps.count(cycle.id,'round',true),1);
+  const unverified = await kit.apps.commitIntake(cycle,receipt(600,{email:saved[0].email,confirmUpdate:true,name:'Impersonator'}),journal);
+  assert.equal(unverified.outcome,'review');
+  const historical = (await kit.apps.get(cycle.id, changed.row.id)).formSnapshot;
+  await sql`UPDATE recruit_applications SET form_snapshot=NULL WHERE id=${changed.row.id}`;
+  const site = structuredClone(cycle.doc.site); site.sections.round.form.questions[0].label = 'Changed label';
+  const editedCycle = await kit.cycles.update(cycle.id,1,{docSet:{key:'site',value:site},by:'test@example.com',now:1790000000900});
+  assert.equal(editedCycle.version,2);
+  assert.deepEqual((await kit.apps.get(cycle.id,changed.row.id)).formSnapshot,historical,'legacy rows freeze their schema inside the settings transaction');
+  await sql`UPDATE recruit_cycles SET closes_at=${1790000000900} WHERE id=${cycle.id}`;
+  const late=await kit.apps.commitIntake(cycle,receipt(901),journal);
+  assert.equal(late.outcome,'closed','commit checks the deadline from the locked current row, not a stale cycle');
+  console.log('PASS: real Postgres unverified replacement rejection, transactional schema snapshots and locked deadline check');
   await sql`UPDATE recruit_applications SET erased_at=1 WHERE cycle_id=${cycle.id}`;
   assert.equal(await kit.apps.count(cycle.id,'round',true),0);
   assert.equal(await kit.apps.count(cycle.id,'round'),1,'erased rows still prevent destructive form removal');

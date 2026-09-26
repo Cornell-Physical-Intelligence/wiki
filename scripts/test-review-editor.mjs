@@ -226,3 +226,25 @@ test('a move advances the revision so an already-open editor cannot silently mov
   assert.ok(state.pages[0].updated > 2);
   assert.match(applyOp(state, 'savePage', { id: 'page', title: 'New title', body: 'Same body', section: 'software', baseUpdated: 2 }, 'author', 'member').error, /Edit conflict/);
 });
+
+test('failed uploads block save, survive reload metadata, and retry or removal resolves them', async () => {
+  const f = editorFixture();
+  const work = f.run("edHandleFiles([{name:'resume.pdf'}])");
+  f.uploads[0].reject(new Error('Offline'));
+  await work;
+  assert.equal(f.e.uploadItems[0].error, 'Offline');
+  assert.equal(f.context.draftStash.get('new').uploadItems[0].name, 'resume.pdf');
+  assert.equal(f.context.draftStash.get('new').uploadItems[0].file, undefined, 'file bytes are never put in browser storage');
+  await f.run("edCommit('Save')");
+  assert.equal(f.calls.length, 0);
+  const retry = f.run('edHandleFiles([UI.editor.uploadItems[0].file], UI.editor.uploadItems[0].id)');
+  f.uploads[1].resolve({ id: 'retried', type: 'application/pdf', size: 100 });
+  await retry;
+  assert.equal(f.e.uploadItems.length, 0);
+  assert.match(f.e.body, /att:retried/);
+  const second = f.run("edHandleFiles([{name:'remove.pdf'}])");
+  f.uploads[2].reject(new Error('Offline')); await second;
+  f.run('edResolveUpload(UI.editor.uploadItems[0].id, true)');
+  assert.equal(f.e.uploadItems.length, 0);
+  assert.equal(f.context.draftStash.get('new').uploadItems.length, 0);
+});

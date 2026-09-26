@@ -147,7 +147,7 @@ function fixture({ remote = true, admin = true } = {}) {
     MD: { esc }, I: new Proxy({}, { get: () => '<svg></svg>' }),
     document, $: (sel, root) => (root || document.body).querySelector(sel), $$: (sel, root) => (root || document.body).querySelectorAll(sel),
     crypto: { randomUUID }, AbortSignal, URLSearchParams, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); return t; }, clearTimeout, setImmediate, console,
-    location: { hash: '' }, window: { open() {} }, navigator: { clipboard: { writeText: async () => {} } },
+    location: { hash: '' }, window: { open() {}, addEventListener() {} }, localStorage: (() => { const data = new Map(); return { getItem: (k) => data.get(k) || null, setItem: (k,v) => data.set(k,v), removeItem: (k) => data.delete(k) }; })(), navigator: { clipboard: { writeText: async () => {} } },
     topbar: (crumbs, right) => `<header class="topbar"><nav class="crumbs">${crumbs}</nav>${right || ''}</header>`,
     api(url, options = {}) { return new Promise((resolve, reject) => requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null, signal: options.signal, resolve, reject })); },
     render() { renders.push(base.UI.modal); },
@@ -460,7 +460,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const open = f.app.querySelector('[data-action="recruit-fe-open"]'); open.checked = true; await click('recruit-fe-open');
   const landing = f.app.querySelector('[data-action="recruit-fe-landing"]'); landing.checked = true; await click('recruit-fe-landing');
   assert.ok(f.app.querySelector('[data-rc="fe-options"] [data-action="recruit-fe-notify"]').checked, 'emailing the team is on by default');
-  const replace = f.app.querySelector('[data-action="recruit-fe-replace"]'); replace.checked = false; await click('recruit-fe-replace');
+  assert.equal(f.app.querySelector('[data-action="recruit-fe-replace"]'), null, 'unverified replacement is not offered');
   const note = f.app.querySelector('[data-rc="fe-notify-default"]');
   assert.ok(!note.hidden && /Nobody is emailed until an address is added/.test(note.textContent), 'with no addresses the row says nobody is emailed');
   await click('recruit-fe-recipient-add');
@@ -483,7 +483,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const saved = put.body.settings.sections.coffee;
   assert.equal(put.body.settings.landing, 'coffee', 'the /apply choice rides with the save');
   assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.'); assert.equal(saved.thanks, 'A member will write to you.', 'what applicants read after sending rides along, trimmed');
-  assert.deepEqual([saved.notify, saved.replace, saved.capacity], [true, false, 40], 'the form\'s own email, replace and cap settings ride with the save');
+  assert.deepEqual([saved.notify, saved.replace, saved.capacity], [true, true, 40], 'the form\'s own email, replace and cap settings ride with the save');
   assert.deepEqual(saved.notifyTo, ['lead@cornell.edu'], 'its recipients ride along, trimmed and lowercased');
   same(saved.form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a new question gets a key from its label');
   same(saved.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
@@ -833,7 +833,8 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const field = veil.querySelector('.interest-compose textarea');
   field.value = 'New <comment>';
   assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(field, { type: 'input' }), true);
-  const draft = st.drafts['person:' + email];
+  const draft = f.run('recruitPersonDraft')(email);
+  assert.equal(JSON.parse(f.ctx.localStorage.getItem(draft.key)).text, 'New <comment>');
   assert.equal(draft.text, 'New <comment>');
   const existingNode = veil.querySelector('[data-comment-id="ic-first"]');
   // A background refresh brings a second comment and a changed answer.
@@ -909,3 +910,30 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
 }
 
 console.log('PASS: recruit UI — registry, cycle index, sheet, dialog, sync and merges');
+
+{
+  const f = fixture(); const st = loadCycle(f);
+  const draft = f.run('recruitPersonDraft')('draft@example.test');
+  draft.text = 'Survives reload'; draft.id = 'ic-retry-persisted';
+  f.run('recruitSavePersonDraft')(draft);
+  st.drafts = {};
+  const restored = f.run('recruitPersonDraft')('draft@example.test');
+  assert.equal(restored.text, draft.text); assert.equal(restored.id, draft.id);
+  f.ctx.Store.me = () => ({ email: 'other@example.test' });
+  assert.equal(f.run('recruitPersonDraft')('draft@example.test').text, '', 'another account cannot read this draft');
+  f.ctx.Store.me = () => ({ email: 'lead@cornell.edu' });
+  f.ctx.localStorage.setItem(draft.key, JSON.stringify({text: 'Other tab', id: null}));
+  restored.text = ''; restored.id = null; f.run('recruitSavePersonDraft')(restored);
+  assert.equal(JSON.parse(f.ctx.localStorage.getItem(draft.key)).text, 'Other tab', 'posting does not erase newer work from another tab');
+  const savedSet = f.ctx.localStorage.setItem;
+  f.ctx.localStorage.setItem = () => { throw new Error('Quota'); };
+  restored.text = 'Still here'; f.run('recruitSavePersonDraft')(restored);
+  assert.equal(restored.storageError, true);
+  assert.match(f.run('recruitPersonDraftError')(restored), /Keep this tab open/);
+  f.ctx.localStorage.setItem = savedSet;
+  assert.equal(f.run("recruitParseDate('2026-09-26', true)"), Date.parse('2026-09-27T03:59:59.999Z'));
+  assert.equal(f.run("recruitParseDate('2026-12-26', true)"), Date.parse('2026-12-27T04:59:59.999Z'));
+  assert.equal(f.run("recruitDateInput(recruitParseDate('2026-09-26', true))"), '2026-09-26');
+  assert.ok(Number.isNaN(f.run("recruitParseDate('2026-02-30', true)")));
+  console.log('PASS: comment reload persistence, retry IDs, account isolation, storage errors, cross-tab clearing and Eastern deadlines');
+}

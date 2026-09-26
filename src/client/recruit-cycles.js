@@ -434,16 +434,17 @@ async function recruitRemoveRole(member) {
   finally { st.busy.delete('role'); recruitPaintRoles(); }
 }
 
-const recruitDateInput = (ts) => (ts ? new Date(Number(ts)).toISOString().slice(0, 10) : '');
+const recruitDateInput = (ts) => ts ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Number(ts))) : '';
 
-// 'YYYY-MM-DD' text → epoch ms at local midnight, null when blank, NaN when bad.
 function recruitParseDate(text, endOfDay = false) {
   const t = String(text || '').trim();
   if (!t) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  if (!m) return NaN;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0);
-  return d.getMonth() === Number(m[2]) - 1 ? d.getTime() : NaN;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return NaN;
+  const date = new Date(t + 'T12:00:00Z');
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== t) return NaN;
+  const offset = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' }).formatToParts(date).find((part) => part.type === 'timeZoneName').value;
+  const hours = Number(offset.replace('GMT', ''));
+  return Date.parse(t + (endOfDay ? 'T23:59:59.999Z' : 'T00:00:00Z')) - hours * 3600000;
 }
 
 function recruitFormField(label, inner, note) {
@@ -455,7 +456,7 @@ const RECRUIT_SETTINGS = [
     id: 'about', label: 'About', heading: false, when: () => recruitCan('lead'),
     view: (cycle) => `<form class="rc-form" data-action="recruit-settings-about">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
+      ${recruitFormField('Deadline (11:59 PM Eastern)', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
       <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
     </form>`,
     submit: async (form, cycle) => {

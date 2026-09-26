@@ -446,7 +446,30 @@ function recruitStepPerson(delta) {
 
 function recruitPersonDraft(email) {
   const st = recruitState();
-  return st.drafts['person:' + email] ||= { text: '', id: null, sending: false, error: '' };
+  const key = 'cupi-comment-draft:' + JSON.stringify([Store.me?.()?.email || Store.session?.() || 'anon', recruitCycleRow()?.id || '', email]);
+  if (st.drafts[key]) return st.drafts[key];
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(key)); } catch (e) { /* storage may be unavailable */ }
+  return st.drafts[key] = { key, text: typeof saved?.text === 'string' ? saved.text.slice(0, 4000) : '', id: typeof saved?.id === 'string' ? saved.id : null, sending: false, error: '', storageError: false, savedValue: saved ? JSON.stringify(saved) : null };
+}
+
+function recruitSavePersonDraft(draft) {
+  try {
+    if (draft.text) {
+      const value = JSON.stringify({ text: draft.text, id: draft.id });
+      localStorage.setItem(draft.key, value);
+      draft.savedValue = value;
+    } else {
+      // A completed post in this tab must not erase newer work in another tab.
+      if (localStorage.getItem(draft.key) === draft.savedValue) localStorage.removeItem(draft.key);
+      draft.savedValue = null;
+    }
+    draft.storageError = false;
+  } catch (e) { draft.storageError = true; }
+}
+
+function recruitPersonDraftError(draft) {
+  return draft.error || (draft.storageError ? 'This browser could not save your draft. Keep this tab open until you post or copy your comment.' : '');
 }
 
 function recruitPersonCommentHtml(c, email) {
@@ -475,7 +498,7 @@ function recruitPersonDiscussionHtml(email) {
     <div class="interest-thread" role="log" aria-label="Comments" aria-live="polite" aria-relevant="additions removals">${d?.loading && !d.person ? '<p class="interest-thread__empty">Loading…</p>' : comments.length ? comments.map((c) => recruitPersonCommentHtml(c, email)).join('') : '<p class="interest-thread__empty">No comments yet.</p>'}</div>
     ${canComment ? `<form class="interest-compose" data-action="recruit-person-comment-form" data-email="${MD.esc(email)}">
       <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
-      <p class="field-error" data-comment-error role="alert" ${draft.error ? '' : 'hidden'}>${MD.esc(draft.error || '')}</p>
+      <p class="field-error" data-comment-error role="alert" ${recruitPersonDraftError(draft) ? '' : 'hidden'}>${MD.esc(recruitPersonDraftError(draft))}</p>
       <div class="interest-compose__foot"><button type="submit" class="btn btn--primary" ${draft.sending || !draft.text.trim() ? 'disabled' : ''}>${draft.sending ? 'Posting…' : 'Post comment'}</button></div>
     </form>` : '<p class="interest-readonly">Read only</p>'}`;
 }
@@ -531,7 +554,7 @@ function recruitPaintPersonDiscussion(email, { posted = false } = {}) {
     button.disabled = draft.sending || !draft.text.trim();
     button.textContent = draft.sending ? 'Posting…' : 'Post comment';
   }
-  if (error) { error.textContent = draft.error || ''; error.hidden = !draft.error; }
+  if (error) { error.textContent = recruitPersonDraftError(draft); error.hidden = !error.textContent; }
   if (scroller) scroller.scrollTop = posted && followBottom ? scroller.scrollHeight : scrollTop + (anchor?.isConnected ? anchor.getBoundingClientRect().top - anchorTop : 0);
   if (restoreAfterRemoval) ($('[data-action="recruit-person-comment-delete"]', thread) || field)?.focus({ preventScroll: true });
   if (posted && (document.activeElement === document.body || document.activeElement === button || document.activeElement === field)) field?.focus({ preventScroll: true });
@@ -585,12 +608,14 @@ async function recruitPostPersonComment(email) {
   draft.id ||= recruitId('ic');
   draft.sending = true;
   draft.error = '';
+  recruitSavePersonDraft(draft);
   recruitPaintPersonDiscussion(email);
   let posted = false;
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/comments`, { method: 'POST', body: JSON.stringify({ id: draft.id, text: draft.text }) });
     recruitAcceptPersonReview(email, out);
     draft.text = ''; draft.id = null;
+    recruitSavePersonDraft(draft);
     posted = true;
     toast('Comment posted');
   } catch (e) {
@@ -683,6 +708,9 @@ RECRUIT.register({
       const draft = recruitPersonDraft(el.dataset.email);
       draft.text = el.value;
       if (!draft.sending) draft.id = null;
+      recruitSavePersonDraft(draft);
+      const error = el.closest('form')?.querySelector('[data-comment-error]');
+      if (error) { error.textContent = recruitPersonDraftError(draft); error.hidden = !error.textContent; }
       const button = el.closest('form')?.querySelector('[type="submit"]');
       if (button) button.disabled = draft.sending || !draft.text.trim();
     },
@@ -692,6 +720,13 @@ RECRUIT.register({
     'recruit-people-filter': (host, value) => value === undefined ? recruitPeopleFilterMenu(host) : undefined,
   },
   reset() { const st = recruitState(); st.people = undefined; st.persons = {}; },
+});
+
+
+if (typeof window !== 'undefined') window.addEventListener('beforeunload', (event) => {
+  if (Object.values(recruitState().drafts).some((draft) => draft.key && draft.text && (draft.sending || draft.storageError))) {
+    event.preventDefault(); event.returnValue = '';
+  }
 });
 
 // recruit:people:end

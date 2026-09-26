@@ -176,13 +176,13 @@ if (!process.env.INTAKE_TEST_ROOT) {
   blob.failed = false; trace.length = 0;
 
   db.down = true;
-  const outage = await request('POST', '/interest', form('outage@example.com', { year: 'Grad', file: { name: 'synthetic.pdf', type: 'application/pdf', data: Buffer.from('synthetic PDF bytes').toString('base64') } }));
+  const outage = await request('POST', '/interest', form('outage@example.com', { year: 'Grad', file: { name: 'synthetic.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.7\nsynthetic PDF bytes\n%%EOF').toString('base64') } }));
   assert.equal(outage.status, 202); assert.equal(outage.data.queued, true);
   assert.match(outage.data.receipt, /^jr-/);
   assert.equal(originals(), 1);
   assert.ok(trace.findIndex((s) => s.includes('blob:put:') && s.includes('/records/')) < trace.findIndex((s) => s.startsWith('sql:')), 'durable intake must precede any Neon access');
   const raw = await journal.getEntry(outage.data.receipt);
-  assert.equal(raw.project, 'Synthetic project answer'); assert.equal(raw.fileSize, 19);
+  assert.equal(raw.project, 'Synthetic project answer'); assert.equal(raw.fileSize, 34);
   assert.equal(raw.file, undefined, 'metadata does not duplicate attachment bytes');
 
   db.down = false;
@@ -199,7 +199,7 @@ if (!process.env.INTAKE_TEST_ROOT) {
     assert.equal(trace.length, before, 'unauthorized downloads must not read private Blob');
   }
   const downloaded = await request('GET', filePath);
-  assert.equal(downloaded.data.toString(), 'synthetic PDF bytes');
+  assert.equal(downloaded.data.toString(), '%PDF-1.7\nsynthetic PDF bytes\n%%EOF');
   assert.equal(downloaded.headers['cache-control'], 'private, no-store');
   const preservedFile = db.rows[0].file_id;
   await request('POST', '/interest', form('outage@example.com', { confirmUpdate: true, project: 'Confirmed text edit' }));
@@ -208,7 +208,7 @@ if (!process.env.INTAKE_TEST_ROOT) {
 
   db.failCommit = true;
   const afterFileFailure = await request('POST', '/interest', form('writefail@example.com', {
-    file: { name: 'retry.pdf', type: 'application/pdf', data: Buffer.from('retry attachment').toString('base64') },
+    file: { name: 'retry.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.7\nretry attachment\n%%EOF').toString('base64') },
   }));
   assert.equal(afterFileFailure.status, 202, 'a failed DB row write after attachment storage remains recoverable');
   const filesBeforeReplay = db.files.size;
@@ -253,9 +253,9 @@ if (!process.env.INTAKE_TEST_ROOT) {
   await request('POST', '/interest', form('duplicate@example.com', { confirmUpdate: true, project: 'Latest confirmed change' }));
   db.down = false;
   await request('GET', '/interest');
-  assert.equal(db.rows[0].project, 'Latest confirmed change'); assert.equal(db.rows[0].year, 'Grad', 'old clients preserve a saved year');
+  assert.equal(db.rows[0].project, 'Synthetic project answer'); assert.equal(db.rows[0].year, 'Grad', 'old clients preserve a saved year');
   await request('POST', '/interest', form('duplicate@example.com', { confirmUpdate: true, year: null }));
-  assert.equal(db.rows[0].year, null, 'explicit blank can still clear year');
+  assert.equal(db.rows[0].year, 'Grad', 'unverified updates cannot clear year');
 
   db.archiveRace = () => {
     db.rows[0].updated += 1; db.rows[0].project = 'Changed during archive';

@@ -94,7 +94,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
     { email: 'admin2@example.com', name: 'Second Admin', role: 'admin', status: 'active' },
     { email: 'plain@example.com', name: 'Pat Plain', role: 'member', status: 'active' },
   ];
-  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
   const files = [
     { id: 'int-legacyfile', name: 'legacy.png', type: 'image/png', size: png.length, by: 'legacy@example.com', ts: 1, data: png.toString('base64') },
     { id: 'int-archfile', name: 'arch.pdf', type: 'application/pdf', size: 3, by: 'arch1@example.com', ts: 1, data: Buffer.from('pdf').toString('base64') },
@@ -251,34 +251,21 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   }
   assert.equal((await interest('POST', '/interest', { name: 'Fresh', email: 'fresh@example.com' })).status, 409);
   const dup = await interest('POST', '/interest', { name: 'Fresh', email: 'fresh@example.com' });
-  assert.deepEqual([dup.data.exists, dup.data.submitted, dup.data.error], [true, freshRow.ts, 'This email is already on the interest list']);
+  assert.deepEqual([dup.data.exists, dup.data.submitted, dup.data.error], [true, freshRow.ts, 'A submission already exists for this email. To correct it, email cuphysint@cornell.edu.']);
   assert.match(dup.data.receipt, /^jr-/);
   const bot = await interest('POST', '/interest', { name: 'Bot', email: 'bot@example.com', website: 'http://spam' });
   assert.deepEqual([bot.status, bot.data], [200, { ok: true }]);
   assert.ok(!(await appsIn('cy-interest')).some((r) => r.email === 'bot@example.com'));
   assert.equal((await interest('POST', '/interest', { name: 'x', email: 'x@example.com' }, null, { origin: 'https://evil.example' })).status, 200, 'origin check is per header (still cornell here)');
 
-  // confirmUpdate on a migrated row keeps id/ts/review/file, updates the rest.
-  const upd = await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, year: 'Grad', project: 'Revised answer', subteam: 'Software', review: { comments: [] } });
-  assert.equal(upd.status, 200);
-  let legacyRow = (await appsIn('cy-interest')).find((r) => r.email === 'legacy@example.com');
-  assert.deepEqual([legacyRow.id, legacyRow.ts, legacyRow.year, legacyRow.answers.project, legacyRow.updated], ['in-legacy', 1000, 'Grad', 'Revised answer', clock]);
-  assert.deepEqual(legacyRow.review, legacyReview, 'applicant updates never touch the review');
-  assert.equal(legacyRow.reviewVersion, 3);
-  assert.equal(legacyRow.files[0].id, 'int-legacyfile', 'the old file stays when none is sent');
-  assert.equal((await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, project: 'Revised answer', subteam: 'Software' })).status, 200);
-  assert.equal((await appsIn('cy-interest')).find((r) => r.email === 'legacy@example.com').year, 'Grad', 'old clients preserve a saved year');
-  assert.equal((await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, year: null, project: 'Revised answer', subteam: 'Software' })).status, 200);
-  assert.equal((await appsIn('cy-interest')).find((r) => r.email === 'legacy@example.com').year, null, 'explicit blank clears the year');
-  // Superseded: an update older than the row's last update is silently skipped.
-  const saved = clock;
-  clock -= 100000;
-  const old = await interest('POST', '/interest', { name: 'Older Name', email: 'legacy@example.com', confirmUpdate: true });
-  clock = saved;
-  assert.equal(old.status, 200);
-  legacyRow = (await appsIn('cy-interest')).find((r) => r.email === 'legacy@example.com');
-  assert.equal(legacyRow.name, 'Legacy Applicant', 'superseded submissions change nothing');
-  assert.equal(journal.done.get(old.data.receipt), 'superseded');
+  // A checkbox is not ownership proof, including through the old bridge.
+  const beforePublicUpdate = (await appsIn('cy-interest')).find((r) => r.email === 'legacy@example.com');
+  for (const changes of [{ year: 'Grad' }, { year: null }, { name: 'Impersonator' }]) {
+    const upd = await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, project: 'Revised answer', ...changes });
+    assert.equal(upd.status, 409);
+    assert.equal(upd.data.replaceable, false);
+    assert.deepEqual((await appsIn('cy-interest')).find((r) => r.email === 'legacy@example.com'), beforePublicUpdate);
+  }
   // A file rides the same commit and is stored under the receipt id.
   const withFile = await interest('POST', '/interest', { name: 'Filed', email: 'filed@example.com', file: { name: 'shot.png', type: 'image/png', data: png.toString('base64') } });
   assert.equal(withFile.status, 200);
@@ -296,7 +283,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.equal((await bridge.target()).capacity, before, 'the old route takes the interest form\'s own cap');
   const full = await interest('POST', '/interest', { name: 'Late', email: 'late@example.com' });
   assert.deepEqual([full.status, full.data.error], [429, 'The interest list is full. Email cuphysint@cornell.edu instead']);
-  assert.equal((await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, project: 'Revised answer', subteam: 'Software' })).status, 200, 'existing applicants still update at capacity');
+  assert.equal((await interest('POST', '/interest', { name: 'Legacy Applicant', email: 'legacy@example.com', confirmUpdate: true, project: 'Revised answer', subteam: 'Software' })).status, 409, 'capacity does not bypass ownership checks');
   const uncapped = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: capped.data.cycle.version, settings: { sections: { interest: { capacity: 0 } } } });
   assert.equal(uncapped.status, 200);
   // Journal entries that never reached storage replay into their cycle.
@@ -400,7 +387,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   for (const r of rows) {
     const keys = Object.keys(r).filter((k) => k !== 'review' && k !== 'reviewVersion').sort();
     assert.deepEqual(keys, [...legacyKeys].sort(), 'legacy rows carry exactly the legacy keys');
-    if (r.id === 'in-legacy') { assert.equal(r.reviewVersion, 3); assert.equal(r.fileId, 'int-legacyfile'); assert.equal(r.project, 'Revised answer'); }
+    if (r.id === 'in-legacy') { assert.equal(r.reviewVersion, 3); assert.equal(r.fileId, 'int-legacyfile'); assert.equal(r.project, 'Existing answer'); }
     else if (!r.reviewVersion) assert.equal(r.review, undefined, 'review keys only when reviewed');
   }
   assert.deepEqual(rows.map((r) => r.ts), [...rows.map((r) => r.ts)].sort((a, b) => b - a), 'ORDER BY ts DESC');
@@ -481,7 +468,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?flagged=1')).data.rows.length, 0, 'the people list filters by the person flag');
   const detail = await recruit('GET', `/recruit/cycles/cy-interest/applications/in-legacy`);
   assert.equal(detail.status, 200);
-  assert.deepEqual(detail.data.application.answers, { project: 'Revised answer' });
+  assert.deepEqual(detail.data.application.answers, { project: 'Existing answer' });
   const personPath = `/recruit/cycles/cy-interest/people/${encodeURIComponent('legacy@example.com')}`;
   const person = await recruit('GET', personPath);
   assert.equal(person.status, 200, person.text);

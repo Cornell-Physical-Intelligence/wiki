@@ -206,7 +206,7 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${recruitFormNotifyHtml(fe)}
-    ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
+
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
 }

@@ -1748,6 +1748,14 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 .agent-context-discovery { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .agent-context-discovery:focus-within { position:fixed; top:12px; left:12px; width:min(560px, calc(100vw - 24px)); height:auto; max-height:calc(100vh - 24px); padding:16px; margin:0; overflow:auto; clip-path:none; white-space:normal; z-index:10000; background:var(--page); color:var(--fg); border:1px solid var(--hairline); border-radius:var(--radius); box-shadow:var(--pop-shadow); }
 
+/* Unresolved attachments remain visible until retried or explicitly removed. */
+.editor__uploads:empty { display: none; }
+.editor__uploads { padding: 8px clamp(16px, 4vw, 40px); border-bottom: 1px solid var(--hairline); }
+.editor__upload { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.editor__upload > div { flex: 1; min-width: 0; }
+.editor__upload b, .editor__upload span { display: block; overflow-wrap: anywhere; font-size: 12px; }
+.editor__upload span { color: var(--muted); margin-top: 4px; }
+
 /* Search retains CUPI's quiet monochrome language, with space for context. */
 .search-veil { padding-top: min(9vh, 88px); }
 .search-palette {
@@ -5323,6 +5331,7 @@ function openEditor(pageId, isNew, draft) {
     origTitle: draft?.origTitle ?? p?.title ?? '', origBody: draft?.origBody ?? p?.body ?? '',
     origSection: draft?.origSection ?? p?.section ?? '',
     baseUpdated: draft?.baseUpdated ?? p?.updated ?? null,
+    uploadItems: (draft?.uploadItems || []).map((item) => ({ id: item.id, name: item.name, error: 'Choose this file again to finish attaching it.', state: 'failed' })),
     createRequestId: draft?.createRequestId ?? null,
     createRequestDraft: draft?.createRequestId ? draft : null,
   };
@@ -5368,7 +5377,7 @@ function viewEditor() {
         <button role="tab" data-action="ed-mode" data-mode="preview" class="${e.mode === 'preview' ? 'active' : ''}">Preview</button>
       </div>
       <button class="btn btn--ghost" data-action="ed-cancel">Close</button>
-      <button class="btn btn--primary" data-action="ed-save">Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
+      <button class="btn btn--primary" data-action="ed-save" ${e.uploadItems?.length || e.uploads ? 'disabled' : ''}>Save${e.isNew ? ' page' : ''}…<span class="kbd" style="background:transparent;border-color:currentColor;color:inherit;opacity:.6;margin-left:2px">⌘S</span></button>`
     )}
     <div class="editor__toolbar" role="toolbar" aria-label="Formatting">
       <div class="editor__tools">
@@ -5381,6 +5390,7 @@ function viewEditor() {
       </div>
     </div>
     ${e.fromDraft ? `<div class="editor__draftbar">${lucide('info')} Restored your unsaved draft. The page may have moved on since you wrote it. <button class="btn btn--sm" data-action="ed-discard-draft">Discard draft</button></div>` : ''}
+    <div class="editor__uploads" data-ed-uploads aria-live="polite">${edUploadItemsHtml(e)}</div>
     <div class="editor__panes">
       <div class="editor__pane editor__pane--src">
         <div class="preview-tag preview-tag--src"><span class="eyebrow">Source</span></div>
@@ -5533,6 +5543,7 @@ function editorDraft(e) {
   const sameCreate = e.createRequestDraft && e.createRequestDraft.title.trim() === e.title.trim()
     && e.createRequestDraft.body === e.body && e.createRequestDraft.section === e.section;
   return { title: e.title, body: e.body, section: e.section, parent: e.parent, tags: e.tags,
+    uploadItems: (e.uploadItems || []).map(({ id, name }) => ({ id, name })),
     origBody: e.origBody, origTitle: e.origTitle, origSection: e.origSection, baseUpdated: e.baseUpdated,
     ...(sameCreate && e.createRequestId ? { createRequestId: e.createRequestId } : {}) };
 }
@@ -5556,15 +5567,47 @@ function uploadInsertPosition(before, after, position) {
   return after.length - suffix;
 }
 
-async function edHandleFiles(files) {
+function edUploadItemsHtml(e) {
+  return (e.uploadItems || []).map((item) => `<div class="editor__upload"><div><b>${MD.esc(item.name)}</b><span>${MD.esc(item.state === 'uploading' ? 'Uploading…' : item.error || 'Upload failed')}</span></div>${item.state === 'uploading' ? '' : `<button type="button" class="btn btn--sm" data-action="ed-upload-retry" data-id="${MD.esc(item.id)}">${item.file ? 'Retry' : 'Choose file'}</button><button type="button" class="btn btn--sm btn--ghost" data-action="ed-upload-remove" data-id="${MD.esc(item.id)}">Remove</button>`}</div>`).join('');
+}
+
+function edPaintUploads(e) {
+  if (UI.editor !== e) return;
+  const host = $('[data-ed-uploads]');
+  if (host) host.innerHTML = edUploadItemsHtml(e);
+  const save = $('[data-action="ed-save"]');
+  if (save) save.disabled = Boolean(e.saving || e.uploads || e.uploadItems?.length);
+}
+
+function edResolveUpload(id, remove = false) {
+  const e = UI.editor, item = e?.uploadItems?.find((i) => i.id === id);
+  if (!item || item.state === 'uploading' || e.saving) return;
+  if (remove) {
+    e.uploadItems = e.uploadItems.filter((i) => i !== item);
+    keepEditorDraft(e); edPaintUploads(e);
+    $('[data-ed="body"]')?.focus();
+  } else if (item.file) edHandleFiles([item.file], item.id);
+  else { e.reattachId = item.id; $('[data-ed-file]')?.click(); }
+}
+
+async function edHandleFiles(files, retryId = null) {
   const e = UI.editor;
   if (!e || e.saving || !files.length) return;
   const originalField = $('[data-ed="body"]');
   let baseline = e.body, position = originalField?.selectionStart ?? e.body.length;
+  e.uploadItems ||= [];
+  const items = files.map((file, index) => {
+    const item = index === 0 && retryId ? e.uploadItems.find((i) => i.id === retryId) : null;
+    if (item) { Object.assign(item, { file, name: file.name, state: 'uploading', error: '' }); return item; }
+    const added = { id: uid('upload'), name: file.name, file, state: 'uploading', error: '' };
+    e.uploadItems.push(added); return added;
+  });
   e.uploads = (e.uploads || 0) + files.length;
+  edPaintUploads(e);
   e.dirty = true;
   keepEditorDraft(e);
-  for (const f of files) {
+  for (const item of items) {
+    const f = item.file;
     try {
       const att = await Store.addAttachment(f);
       const label = f.name.replace(/\.[^.]+$/, '').replace(/[\[\]\\\r\n]/g, '');
@@ -5592,10 +5635,17 @@ async function edHandleFiles(files) {
       } else e.body = e.body.slice(0, position) + text + e.body.slice(position);
       baseline = e.body;
       position += text.length;
+      e.uploadItems = e.uploadItems.filter((i) => i !== item);
       keepEditorDraft(e);
       toast(`Attached ${f.name} (${MD.fmtSize(att.size)})`);
-    } catch (err) { toast(err.message || 'Upload failed'); }
-    finally { e.uploads--; }
+    } catch (err) {
+      item.state = 'failed'; item.error = err.message || 'Upload failed. Retry or remove this attachment before saving.';
+    } finally {
+      e.uploads--;
+      const draft = draftStash.get(e.pageId || 'new');
+      if (UI.editor === e || (draft && draft.body === e.body && draft.title === e.title && (!UI.editor || UI.editor.pageId !== e.pageId))) keepEditorDraft(e);
+      edPaintUploads(e);
+    }
   }
 }
 
@@ -5852,6 +5902,7 @@ async function edSave() {
   const e = UI.editor;
   if (!e || e.saving || UI.modal?.kind === 'save-summary') return;
   if (e.uploads) { toast('Wait for attachments to finish uploading.'); return; }
+  if (e.uploadItems?.length) { toast('Retry or remove unfinished attachments before saving.'); return; }
   if (!e.title.trim()) { toast('Every page needs a title.'); $('[data-ed="title"]')?.focus(); return; }
   const clash = Store.pageByTitle(e.title.trim());
   if (clash && clash.id !== e.pageId && (!e.createRequestId || clash.createRequestId !== e.createRequestId)) { toast(`“${e.title.trim()}” already exists. Titles are how pages link, so they have to be unique.`); return; }
@@ -5903,6 +5954,7 @@ async function edCommit(summary) {
   const e = UI.editor;
   if (!e || e.saving) return;
   if (e.uploads) { toast('Wait for attachments to finish uploading.'); return; }
+  if (e.uploadItems?.length) { toast('Retry or remove unfinished attachments before saving.'); return; }
   if (e.body.length > 2 * 1024 * 1024) { toast('That page is over the 2 MB text limit. Attach big content as files instead.'); return; }
   // Someone else (or another tab) may have changed the page while this editor
   // was open. An explicit overwrite acknowledges only the displayed revision;
@@ -9506,16 +9558,17 @@ async function recruitRemoveRole(member) {
   finally { st.busy.delete('role'); recruitPaintRoles(); }
 }
 
-const recruitDateInput = (ts) => (ts ? new Date(Number(ts)).toISOString().slice(0, 10) : '');
+const recruitDateInput = (ts) => ts ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Number(ts))) : '';
 
-// 'YYYY-MM-DD' text → epoch ms at local midnight, null when blank, NaN when bad.
 function recruitParseDate(text, endOfDay = false) {
   const t = String(text || '').trim();
   if (!t) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  if (!m) return NaN;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0);
-  return d.getMonth() === Number(m[2]) - 1 ? d.getTime() : NaN;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return NaN;
+  const date = new Date(t + 'T12:00:00Z');
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== t) return NaN;
+  const offset = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' }).formatToParts(date).find((part) => part.type === 'timeZoneName').value;
+  const hours = Number(offset.replace('GMT', ''));
+  return Date.parse(t + (endOfDay ? 'T23:59:59.999Z' : 'T00:00:00Z')) - hours * 3600000;
 }
 
 function recruitFormField(label, inner, note) {
@@ -9527,7 +9580,7 @@ const RECRUIT_SETTINGS = [
     id: 'about', label: 'About', heading: false, when: () => recruitCan('lead'),
     view: (cycle) => `<form class="rc-form" data-action="recruit-settings-about">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
-      ${recruitFormField('Deadline', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
+      ${recruitFormField('Deadline (11:59 PM Eastern)', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
       <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
     </form>`,
     submit: async (form, cycle) => {
@@ -9906,7 +9959,7 @@ function recruitFormOptionsHtml(fe) {
     ${sw('recruit-fe-open', m.open, 'Open on the website')}
     ${sw('recruit-fe-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
     ${recruitFormNotifyHtml(fe)}
-    ${sw('recruit-fe-replace', m.replace, 'If someone submits twice, replace their earlier answers')}
+
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-fe-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
     ${recruitFormRemoveHtml(fe)}`;
 }
@@ -10836,7 +10889,30 @@ function recruitStepPerson(delta) {
 
 function recruitPersonDraft(email) {
   const st = recruitState();
-  return st.drafts['person:' + email] ||= { text: '', id: null, sending: false, error: '' };
+  const key = 'cupi-comment-draft:' + JSON.stringify([Store.me?.()?.email || Store.session?.() || 'anon', recruitCycleRow()?.id || '', email]);
+  if (st.drafts[key]) return st.drafts[key];
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(key)); } catch (e) { /* storage may be unavailable */ }
+  return st.drafts[key] = { key, text: typeof saved?.text === 'string' ? saved.text.slice(0, 4000) : '', id: typeof saved?.id === 'string' ? saved.id : null, sending: false, error: '', storageError: false, savedValue: saved ? JSON.stringify(saved) : null };
+}
+
+function recruitSavePersonDraft(draft) {
+  try {
+    if (draft.text) {
+      const value = JSON.stringify({ text: draft.text, id: draft.id });
+      localStorage.setItem(draft.key, value);
+      draft.savedValue = value;
+    } else {
+      // A completed post in this tab must not erase newer work in another tab.
+      if (localStorage.getItem(draft.key) === draft.savedValue) localStorage.removeItem(draft.key);
+      draft.savedValue = null;
+    }
+    draft.storageError = false;
+  } catch (e) { draft.storageError = true; }
+}
+
+function recruitPersonDraftError(draft) {
+  return draft.error || (draft.storageError ? 'This browser could not save your draft. Keep this tab open until you post or copy your comment.' : '');
 }
 
 function recruitPersonCommentHtml(c, email) {
@@ -10865,7 +10941,7 @@ function recruitPersonDiscussionHtml(email) {
     <div class="interest-thread" role="log" aria-label="Comments" aria-live="polite" aria-relevant="additions removals">${d?.loading && !d.person ? '<p class="interest-thread__empty">Loading…</p>' : comments.length ? comments.map((c) => recruitPersonCommentHtml(c, email)).join('') : '<p class="interest-thread__empty">No comments yet.</p>'}</div>
     ${canComment ? `<form class="interest-compose" data-action="recruit-person-comment-form" data-email="${MD.esc(email)}">
       <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
-      <p class="field-error" data-comment-error role="alert" ${draft.error ? '' : 'hidden'}>${MD.esc(draft.error || '')}</p>
+      <p class="field-error" data-comment-error role="alert" ${recruitPersonDraftError(draft) ? '' : 'hidden'}>${MD.esc(recruitPersonDraftError(draft))}</p>
       <div class="interest-compose__foot"><button type="submit" class="btn btn--primary" ${draft.sending || !draft.text.trim() ? 'disabled' : ''}>${draft.sending ? 'Posting…' : 'Post comment'}</button></div>
     </form>` : '<p class="interest-readonly">Read only</p>'}`;
 }
@@ -10921,7 +10997,7 @@ function recruitPaintPersonDiscussion(email, { posted = false } = {}) {
     button.disabled = draft.sending || !draft.text.trim();
     button.textContent = draft.sending ? 'Posting…' : 'Post comment';
   }
-  if (error) { error.textContent = draft.error || ''; error.hidden = !draft.error; }
+  if (error) { error.textContent = recruitPersonDraftError(draft); error.hidden = !error.textContent; }
   if (scroller) scroller.scrollTop = posted && followBottom ? scroller.scrollHeight : scrollTop + (anchor?.isConnected ? anchor.getBoundingClientRect().top - anchorTop : 0);
   if (restoreAfterRemoval) ($('[data-action="recruit-person-comment-delete"]', thread) || field)?.focus({ preventScroll: true });
   if (posted && (document.activeElement === document.body || document.activeElement === button || document.activeElement === field)) field?.focus({ preventScroll: true });
@@ -10975,12 +11051,14 @@ async function recruitPostPersonComment(email) {
   draft.id ||= recruitId('ic');
   draft.sending = true;
   draft.error = '';
+  recruitSavePersonDraft(draft);
   recruitPaintPersonDiscussion(email);
   let posted = false;
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/comments`, { method: 'POST', body: JSON.stringify({ id: draft.id, text: draft.text }) });
     recruitAcceptPersonReview(email, out);
     draft.text = ''; draft.id = null;
+    recruitSavePersonDraft(draft);
     posted = true;
     toast('Comment posted');
   } catch (e) {
@@ -11073,6 +11151,9 @@ RECRUIT.register({
       const draft = recruitPersonDraft(el.dataset.email);
       draft.text = el.value;
       if (!draft.sending) draft.id = null;
+      recruitSavePersonDraft(draft);
+      const error = el.closest('form')?.querySelector('[data-comment-error]');
+      if (error) { error.textContent = recruitPersonDraftError(draft); error.hidden = !error.textContent; }
       const button = el.closest('form')?.querySelector('[type="submit"]');
       if (button) button.disabled = draft.sending || !draft.text.trim();
     },
@@ -11082,6 +11163,13 @@ RECRUIT.register({
     'recruit-people-filter': (host, value) => value === undefined ? recruitPeopleFilterMenu(host) : undefined,
   },
   reset() { const st = recruitState(); st.people = undefined; st.persons = {}; },
+});
+
+
+if (typeof window !== 'undefined') window.addEventListener('beforeunload', (event) => {
+  if (Object.values(recruitState().drafts).some((draft) => draft.key && draft.text && (draft.sending || draft.storageError))) {
+    event.preventDefault(); event.returnValue = '';
+  }
 });
 
 // recruit:people:end
@@ -12582,6 +12670,8 @@ document.addEventListener('click', async (ev) => {
     case 'editor-keep-draft': stop(); { UI.modal = null; const pid = UI.editor.pageId; stashDraftIfDirty(true); nav(pid ? '#/page/' + pid : '#/home'); route(); render(); toast('Draft kept. It will be waiting when you come back'); } break;
     case 'editor-discard-close': stop(); { UI.modal = null; const pid = UI.editor.pageId; draftStash.delete(pid || 'new'); draftDeleted.add(pid || 'new'); persistDrafts(); UI.editor = null; nav(pid ? '#/page/' + pid : '#/home'); route(); render(); } break;
     case 'copy-mine': stop(); { try { await navigator.clipboard.writeText(UI.editor?.body || ''); toast('Your version copied'); } catch (e) { toast("Couldn't copy: your browser blocked clipboard access"); } } break;
+    case 'ed-upload-retry': stop(); edResolveUpload(el.dataset.id); break;
+    case 'ed-upload-remove': stop(); edResolveUpload(el.dataset.id, true); break;
     case 'ed-save': stop(); edSave(); break;
     case 'page-review-dismiss': {
       stop();
@@ -13350,7 +13440,8 @@ document.addEventListener('change', (ev) => {
     return;
   }
   if (t.matches('[data-ed-file]')) {
-    edHandleFiles([...t.files]);
+    edHandleFiles([...t.files], UI.editor?.reattachId);
+    if (UI.editor) UI.editor.reattachId = null;
     t.value = '';
   }
 });
