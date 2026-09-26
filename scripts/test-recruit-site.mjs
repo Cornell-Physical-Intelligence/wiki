@@ -324,6 +324,15 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const listed = (await recruit('GET', '/recruit/cycles/cy-interest/people')).data.rows.find((p) => p.email === 'cam@cornell.edu');
   assert.equal(listed.flagged, true); assert.equal(listed.comments, 1, "the list carries the person's flag and thread size");
   assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?flagged=1')).data.rows.length, 1);
+  const filteredPeople = await recruit('GET', '/recruit/cycles/cy-interest/people?section=coffee&flagged=1&q=cam&limit=1');
+  assert.deepEqual(filteredPeople.data.rows.map((p) => p.email), ['cam@cornell.edu'], 'form participation combines with search and review filters before paging');
+  assert.equal(filteredPeople.data.total, 1);
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?section=application&flagged=1&q=cam')).data.total, 0, 'a person is absent if they did not submit the selected form');
+  assert.equal((await recruit('GET', '/recruit/cycles/cy-interest/people?section=unknown-form')).status, 400);
+  const filteredCsv = await recruit('GET', '/recruit/cycles/cy-interest/people.csv?section=coffee&flagged=1&q=cam');
+  assert.equal(filteredCsv.status, 200);
+  assert.equal(filteredCsv.text.trim().split('\n').length, 2, 'CSV exports the same filtered population');
+  assert.match(filteredCsv.text, /cam@cornell.edu/);
   assert.equal((await recruit('DELETE', `${camPath}/comments/ic-cam00001`)).data.person.review.comments.length, 0);
   assert.equal((await recruit('PATCH', `${camPath}/review`, { flagged: true }, plain)).status, 403, 'members without a role cannot flag');
   assert.equal((await recruit('GET', `/recruit/cycles/cy-interest/people/${encodeURIComponent('nobody@cornell.edu')}`)).status, 404);

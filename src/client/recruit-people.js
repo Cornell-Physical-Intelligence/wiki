@@ -12,8 +12,39 @@
 /* ------------------------------- the list -------------------------------- */
 
 const RECRUIT_PEOPLE_FILTERS = [
-  { value: '', label: 'All people' }, { value: 'flagged', label: 'Flagged' }, { value: 'comments', label: 'Has comments' },
+  { value: '', label: 'Any review status' }, { value: 'flagged', label: 'Flagged' }, { value: 'comments', label: 'Has comments' },
 ];
+
+function recruitPeopleParams(p = recruitState().people) {
+  const params = new URLSearchParams({ q: p?.q || '' });
+  if (p?.filter) params.set(p.filter, '1');
+  if (p?.section) params.set('section', p.section);
+  return params;
+}
+
+function recruitPeopleFilterLabel() {
+  const p = recruitState().people;
+  return [p?.section ? recruitSectionTitle(p.section) : '', p?.filter ? RECRUIT_PEOPLE_FILTERS.find((f) => f.value === p.filter)?.label : ''].filter(Boolean).join(' · ') || 'All people';
+}
+
+function recruitPeopleFilterMenu(host) {
+  const p = recruitState().people;
+  if (!p) return [];
+  const pick = (changes) => {
+    Object.assign(recruitState().people, changes);
+    const label = host.querySelector('.dd__label');
+    if (label) label.textContent = recruitPeopleFilterLabel();
+    clearTimeout(recruitPeopleSearchTimer);
+    recruitLoadPeople();
+  };
+  const item = (label, selected, changes) => ({ label, selected, icon: selected ? I.check : '<span style="width:14px;flex:none"></span>', run: () => pick(changes) });
+  return [
+    item('All people', !p.section && !p.filter, { section: '', filter: '' }), '-',
+    item('All forms', !p.section, { section: '' }),
+    ...recruitSectionKeys().map((key) => item(recruitSectionTitle(key), p.section === key, { section: key })), '-',
+    ...RECRUIT_PEOPLE_FILTERS.map((f) => item(f.label, (p.filter || '') === f.value, { filter: f.value })),
+  ];
+}
 
 let recruitPeopleSearchTimer;
 async function recruitLoadPeople(more = false, quiet = false) {
@@ -23,12 +54,12 @@ async function recruitLoadPeople(more = false, quiet = false) {
   if (prior?.loading && (quiet || more)) return;
   const cursor = more ? prior?.next : null;
   if (more && !cursor) return;
-  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? recruitPeopleVisible() : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '' };
+  const people = { key: st.key + ':' + cycle.id, rows: quiet || more ? recruitPeopleVisible() : [], byEmail: {}, counts: prior?.counts, total: prior?.total || 0, loading: true, error: null, q: prior?.q || '', filter: prior?.filter || '', section: prior?.section || '' };
   people.byEmail = Object.fromEntries(people.rows.map((p) => [p.email, p]));
   st.people = people;
   const key = st.key;
-  const params = new URLSearchParams({ q: people.q, limit: '100' });
-  if (people.filter) params.set(people.filter, '1');
+  const params = recruitPeopleParams(people);
+  params.set('limit', '100');
   if (cursor) params.set('cursor', cursor);
   if (!quiet) recruitPaintPeople();
   try {
@@ -59,7 +90,7 @@ function recruitPeopleVisible() {
   const p = recruitState().people;
   if (!p) return [];
   // A review can change while this server-filtered page is open.
-  return p.rows.filter((row) => p.filter === 'flagged' ? row.flagged : p.filter === 'comments' ? row.comments > 0 : true);
+  return p.rows.filter((row) => (!p.section || row.sections?.[p.section]) && (p.filter === 'flagged' ? row.flagged : p.filter === 'comments' ? row.comments > 0 : true));
 }
 
 function recruitPeopleCountsLine() {
@@ -96,17 +127,33 @@ function recruitPersonReviewCellHtml(p) {
     </div></td>`;
 }
 
+function recruitPersonFormsHtml(person) {
+  const keys = recruitSectionKeys().filter((key) => person.sections?.[key]);
+  if (!keys.length) return '<span class="faint">—</span>';
+  const label = keys.length === 1 ? recruitSectionTitle(keys[0]) : `${keys.length} forms`;
+  return `<button type="button" class="rc-forms-trigger" data-action="${keys.length === 1 ? 'recruit-person-open' : 'recruit-person-forms'}" data-email="${MD.esc(person.email)}" ${keys.length === 1 ? `data-form="${MD.esc(keys[0])}"` : 'aria-haspopup="menu" aria-expanded="false"'} aria-label="${MD.esc(keys.length === 1 ? `Open ${label} for ${person.name}` : `View ${keys.length} forms from ${person.name}`)}"><span>${MD.esc(label)}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="${keys.length === 1 ? 'm9 6 6 6-6 6' : 'm6 9 6 6 6-6'}"/></svg></button>`;
+}
+
+function recruitOpenPersonForms(el) {
+  const person = recruitPersonRow(el.dataset.email);
+  if (!person) return;
+  openMenu(recruitSectionKeys().filter((key) => person.sections?.[key]).map((key) => ({
+    label: recruitSectionTitle(key),
+    hint: person.sections[key].ts ? recruitDate(Number(person.sections[key].ts)) : '',
+    run: () => recruitOpenPerson(person.email, { form: key }),
+  })), el);
+}
+
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const keys = recruitSectionKeys();
   const span = 6;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
-  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.q?.trim() || p.filter ? 'No one matches these filters.' : 'No one yet.'}</td></tr>`;
+  if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.q?.trim() || p.filter || p.section ? 'No one matches these filters.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${keys.filter((k) => x.sections?.[k]).map((k) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(k)}">${MD.esc(recruitSectionTitle(k))}</button>`).join('')}</div></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${recruitPersonFormsHtml(x)}</div></td>
     ${recruitPersonReviewCellHtml(x)}
-    <td data-col="forms"><div class="rc-participation">${keys.filter((key) => x.sections?.[key]).map((key) => `<button data-action="recruit-person-open" data-email="${MD.esc(x.email)}" data-form="${MD.esc(key)}">${MD.esc(recruitSectionTitle(key))}</button>`).join('')}</div></td>
+    <td data-col="forms"><div class="rc-participation">${recruitPersonFormsHtml(x)}</div></td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
@@ -123,8 +170,8 @@ function recruitPeopleHtml(cycle) {
       <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-people-q" type="search" placeholder="Search people…" value="${MD.esc(p?.q || '')}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
       <div class="sheet__actions">
         <button class="icon-btn" data-action="recruit-people-refresh" aria-label="Refresh people" title="Refresh people">${I.refresh || '↻'}</button>
-        ${dd('recruit-people-filter', RECRUIT_PEOPLE_FILTERS, p?.filter || '')}
-        ${lead ? `<a class="btn" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv" download>${RC_ICONS.download} Export</a>` : ''}
+        ${dd('recruit-people-filter', [{ value: 'combined', label: recruitPeopleFilterLabel() }], 'combined')}
+        ${lead ? `<a class="btn" data-rc="people-export" href="/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv?${MD.esc(recruitPeopleParams().toString())}" download>${RC_ICONS.download} Export</a>` : ''}
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
@@ -150,6 +197,8 @@ function recruitPaintPeople() {
   if (foot) foot.innerHTML = recruitPeopleFootHtml();
   const counts = $('[data-rc="people-counts"]');
   if (counts) counts.textContent = recruitPeopleCountsLine();
+  const exporter = $('[data-rc="people-export"]');
+  if (exporter) exporter.setAttribute('href', `/api/recruit/cycles/${encodeURIComponent(recruitCycleRow().id)}/people.csv?${recruitPeopleParams()}`);
   return true;
 }
 
@@ -630,6 +679,7 @@ RECRUIT.register({
     'recruit-people-more': () => recruitLoadPeople(true),
     'recruit-people-refresh': () => { recruitLoadPeople(false, true); },
     'recruit-person-open': (el) => recruitOpenPerson(el.dataset.email, { form: el.dataset.form || null, comments: Boolean(el.dataset.comments) }),
+    'recruit-person-forms': recruitOpenPersonForms,
     'recruit-person-form': (el) => {
       if (UI.modal?.kind !== 'recruit-person' || UI.modal.email !== el.dataset.email) return;
       UI.modal.form = el.dataset.form || null;
@@ -657,13 +707,7 @@ RECRUIT.register({
   },
   dd: {
     'recruit-person-form-select': (host, value) => { if (value === undefined || UI.modal?.kind !== 'recruit-person') return; UI.modal.form = value; recruitPaintPerson(UI.modal.email); $('.rc-person [data-m="recruit-person-form-select"]')?.focus(); },
-    'recruit-people-filter': (host, value) => {
-      if (value === undefined) return undefined;
-      const p = recruitState().people;
-      if (!p) return;
-      p.filter = value;
-      recruitLoadPeople();
-    },
+    'recruit-people-filter': (host, value) => value === undefined ? recruitPeopleFilterMenu(host) : undefined,
   },
   reset() { const st = recruitState(); st.people = undefined; st.persons = {}; },
 });
