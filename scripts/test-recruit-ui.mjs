@@ -526,7 +526,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   create.resolve({ cycle: { ...cycleRow(), version: 5 } }); await creating; await f.settle();
   assert.equal(f.toasts.at(-1), 'Coffee chats, round 2 added');
   assert.equal(f.navs.at(-1), `#/applications/cy-a/${newKey}?edit=1`, 'it opens on the new form\'s editor');
-  // A cycle with its own forms shows them as tabs and columns.
+  // A cycle with its own forms shows them as tabs and People filters.
   const g = fixture();
   const gst = loadCycle(g);
   gst.cycle.sections = { ...sections(), 'coffee-2': { title: 'Round 2', description: '', open: true, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } } };
@@ -534,7 +534,8 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   g.ctx.UI.route.params.sub = 'coffee-2'; g.mount();
   assert.match(g.app.innerHTML, /aria-current="page"[^>]*>Round 2</, 'a form of the cycle\'s own is a tab by its title');
   g.ctx.UI.route.params.sub = 'people'; g.mount();
-  assert.match(g.app.querySelector('.sheet--people thead').innerHTML, /Forms sent/, 'participation has one scalable column');
+  gst.people ||= { rows: [], q: '', filter: '' };
+  assert.ok(g.run('recruitPeopleFilterMenu')(g.app.querySelector('[data-m="recruit-people-filter"]')).some((i) => i.label === 'Round 2'), 'People filters include custom forms');
   g.ctx.UI.route.params.sub = 'coffee-2'; g.ctx.UI.route.params.edit = '1'; g.mount();
   assert.match(g.app.querySelector('[data-rc="fe-options"]').innerHTML, /Remove this form/, 'a form of the cycle\'s own can be removed from its editor');
   g.ctx.UI.route.params.sub = 'interest'; g.mount();
@@ -617,12 +618,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   assert.equal(body.querySelectorAll('tr').length, 2, 'one row per person');
   assert.match(body.innerHTML, /&lt;b&gt;Bo&lt;\/b&gt;/); assert.doesNotMatch(body.innerHTML, /<b>Bo/);
   assert.equal(body.querySelectorAll('[data-action="recruit-person-open"][data-email="a@cornell.edu"]').length, 2, 'identity and comments open the person');
-  const formsTrigger = body.querySelector('[data-action="recruit-person-forms"][data-email="a@cornell.edu"]');
-  assert.match(formsTrigger.textContent, /2 forms/, 'multiple submissions use one compact control');
-  f.run('recruitOpenPersonForms')(formsTrigger);
-  same(f.menus.at(-1).items.map((i) => i.label), ['Interest form', 'Coffee chats'], 'the menu lists the forms this person submitted');
-  assert.ok(f.menus.at(-1).items.every((i) => i.hint), 'submission dates appear in the menu');
-  assert.equal(body.querySelector('[data-action="recruit-person-open"][data-email="b@cornell.edu"][data-form="application"]').dataset.form, 'application', 'a single submission still opens directly');
+  assert.doesNotMatch(f.app.innerHTML, /data-col="forms"|recruit-person-forms/, 'submissions are reached through the person, without a redundant Forms sent column');
   const ada = body.querySelector('tr[data-email="a@cornell.edu"]');
   const adaFlag = ada.querySelector('[data-action="recruit-person-flag"][data-email="a@cornell.edu"]');
   assert.ok(adaFlag && adaFlag.classList.contains('is-flagged') && adaFlag.getAttribute('aria-pressed') === 'true', 'the row flags the person with the list\'s own control');

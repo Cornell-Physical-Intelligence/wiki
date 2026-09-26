@@ -2289,19 +2289,12 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .sheet.sheet--recruit th[data-col="check"] { width: 44px; }
 .sheet.sheet--recruit .sheet__check-cell { padding: 0 2px; }
 .sheet.sheet--recruit th[data-col="review"] { width: 108px; }
-.sheet.sheet--recruit th[data-col="forms"] { width: 180px; }
 .sheet.sheet--recruit th[data-col="subteam"] { width: 140px; }
 .sheet.sheet--recruit th[data-col="year"] { width: 95px; }
 .sheet.sheet--recruit th[data-col="last"], .sheet.sheet--recruit th[data-col="received"] { width: 100px; }
 .sheet--recruit .interest-row-actions { justify-content: flex-start; gap: 2px; }
 .sheet--recruit .interest-row-actions .icon-btn { min-width: 40px; min-height: 40px; opacity: 1; }
 .rc-mobile-meta { display: none; }
-.rc-participation { display: flex; min-width: 0; }
-.rc-forms-trigger { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
-.rc-forms-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rc-forms-trigger > svg { flex: none; width: 14px; height: 14px; }
-.rc-forms-trigger:hover, .rc-forms-trigger[aria-expanded="true"] { color: var(--fg); background: var(--hover); }
-.rc-participation.rc-mobile-meta { display: none; }
 .fe-settings { margin: 0 0 20px; border: 1px solid var(--hairline); border-radius: 10px; }
 .fe-settings > summary { padding: 12px 16px; font-size: 13px; font-weight: 500; cursor: pointer; }
 .fe-settings .fe-options { border: 0; margin: 0; padding: 0 16px 8px; }
@@ -2325,8 +2318,6 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .sheet--recruit .interest-row-actions { gap: 0; }
   .sheet--recruit .interest-row-actions .icon-btn { width: 42px; height: 44px; }
   .rc-mobile-meta { display: block; font-size: 11.5px; line-height: 1.5; color: var(--muted); margin-top: 5px; overflow-wrap: anywhere; }
-  .rc-participation.rc-mobile-meta { display: flex; }
-  .rc-participation .rc-forms-trigger { margin-left: -8px; }
   .sheet--recruit .sheet__bar { gap: 8px; padding: 10px; }
   .sheet--recruit .sheet__search-wrap { flex-basis: 100%; }
   .sheet--recruit .sheet__actions { width: 100%; flex-wrap: wrap; gap: 6px; }
@@ -2378,7 +2369,6 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .sheet.sheet--recruit th[data-col="review"] { width: 90px; }
   .sheet.sheet--recruit th[data-col="check"] { width: 44px; }
   .rc-mobile-meta { display: block; margin-top: 5px; font-size: 11.5px; color: var(--muted); white-space: normal; }
-  .rc-participation.rc-mobile-meta { display: flex; }
 }
 
 </style>
@@ -10516,33 +10506,15 @@ function recruitPersonReviewCellHtml(p) {
     </div></td>`;
 }
 
-function recruitPersonFormsHtml(person) {
-  const keys = recruitSectionKeys().filter((key) => person.sections?.[key]);
-  if (!keys.length) return '<span class="faint">—</span>';
-  const label = keys.length === 1 ? recruitSectionTitle(keys[0]) : `${keys.length} forms`;
-  return `<button type="button" class="rc-forms-trigger" data-action="${keys.length === 1 ? 'recruit-person-open' : 'recruit-person-forms'}" data-email="${MD.esc(person.email)}" ${keys.length === 1 ? `data-form="${MD.esc(keys[0])}"` : 'aria-haspopup="menu" aria-expanded="false"'} aria-label="${MD.esc(keys.length === 1 ? `Open ${label} for ${person.name}` : `View ${keys.length} forms from ${person.name}`)}"><span>${MD.esc(label)}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="${keys.length === 1 ? 'm9 6 6 6-6 6' : 'm6 9 6 6 6-6'}"/></svg></button>`;
-}
-
-function recruitOpenPersonForms(el) {
-  const person = recruitPersonRow(el.dataset.email);
-  if (!person) return;
-  openMenu(recruitSectionKeys().filter((key) => person.sections?.[key]).map((key) => ({
-    label: recruitSectionTitle(key),
-    hint: person.sections[key].ts ? recruitDate(Number(person.sections[key].ts)) : '',
-    run: () => recruitOpenPerson(person.email, { form: key }),
-  })), el);
-}
-
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const span = 6;
+  const span = 5;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.q?.trim() || p.filter || p.section ? 'No one matches these filters.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${recruitPersonFormsHtml(x)}</div></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span></td>
     ${recruitPersonReviewCellHtml(x)}
-    <td data-col="forms"><div class="rc-participation">${recruitPersonFormsHtml(x)}</div></td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
@@ -10564,7 +10536,7 @@ function recruitPeopleHtml(cycle) {
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${th('review', 'Review')}${th('forms', 'Forms sent')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}</tr></thead>
+      <thead><tr>${th('person', 'Person')}${th('review', 'Review')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}</tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
     <div class="sheet__foot" role="status" data-rc="people-foot">${recruitPeopleFootHtml()}</div>
@@ -11068,7 +11040,6 @@ RECRUIT.register({
     'recruit-people-more': () => recruitLoadPeople(true),
     'recruit-people-refresh': () => { recruitLoadPeople(false, true); },
     'recruit-person-open': (el) => recruitOpenPerson(el.dataset.email, { form: el.dataset.form || null, comments: Boolean(el.dataset.comments) }),
-    'recruit-person-forms': recruitOpenPersonForms,
     'recruit-person-form': (el) => {
       if (UI.modal?.kind !== 'recruit-person' || UI.modal.email !== el.dataset.email) return;
       UI.modal.form = el.dataset.form || null;

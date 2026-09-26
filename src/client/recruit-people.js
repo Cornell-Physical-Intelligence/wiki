@@ -127,33 +127,15 @@ function recruitPersonReviewCellHtml(p) {
     </div></td>`;
 }
 
-function recruitPersonFormsHtml(person) {
-  const keys = recruitSectionKeys().filter((key) => person.sections?.[key]);
-  if (!keys.length) return '<span class="faint">—</span>';
-  const label = keys.length === 1 ? recruitSectionTitle(keys[0]) : `${keys.length} forms`;
-  return `<button type="button" class="rc-forms-trigger" data-action="${keys.length === 1 ? 'recruit-person-open' : 'recruit-person-forms'}" data-email="${MD.esc(person.email)}" ${keys.length === 1 ? `data-form="${MD.esc(keys[0])}"` : 'aria-haspopup="menu" aria-expanded="false"'} aria-label="${MD.esc(keys.length === 1 ? `Open ${label} for ${person.name}` : `View ${keys.length} forms from ${person.name}`)}"><span>${MD.esc(label)}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="${keys.length === 1 ? 'm9 6 6 6-6 6' : 'm6 9 6 6 6-6'}"/></svg></button>`;
-}
-
-function recruitOpenPersonForms(el) {
-  const person = recruitPersonRow(el.dataset.email);
-  if (!person) return;
-  openMenu(recruitSectionKeys().filter((key) => person.sections?.[key]).map((key) => ({
-    label: recruitSectionTitle(key),
-    hint: person.sections[key].ts ? recruitDate(Number(person.sections[key].ts)) : '',
-    run: () => recruitOpenPerson(person.email, { form: key }),
-  })), el);
-}
-
 function recruitPeopleRowsHtml(rows) {
   const p = recruitState().people;
-  const span = 6;
+  const span = 5;
   if (!p || (p.loading && !p.rows.length)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (p.error && !p.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(p.error)}. <button class="linklike" data-action="recruit-people-refresh">Retry</button></td></tr>`;
   if (!rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${p.q?.trim() || p.filter || p.section ? 'No one matches these filters.' : 'No one yet.'}</td></tr>`;
   return rows.map((x) => `<tr data-email="${MD.esc(x.email)}">
-    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span><div class="rc-participation rc-mobile-meta">${recruitPersonFormsHtml(x)}</div></td>
+    <td data-col="person"><button class="interest-person" data-action="recruit-person-open" data-email="${MD.esc(x.email)}" aria-label="Open ${MD.esc(x.name)}"><b>${MD.esc(x.name)}</b><span class="mail">${MD.esc(x.email)}</span></button><span class="rc-mobile-meta">${MD.esc([x.subteam, x.year].filter(Boolean).join(' · '))}</span></td>
     ${recruitPersonReviewCellHtml(x)}
-    <td data-col="forms"><div class="rc-participation">${recruitPersonFormsHtml(x)}</div></td>
     <td data-col="subteam">${MD.esc(x.subteam || 'Undecided')}</td>
     <td data-col="year">${x.year ? MD.esc(x.year) : '<span class="faint">—</span>'}</td>
     <td class="interest-when" data-col="last" title="${MD.esc(new Date(Number(x.last)).toLocaleString())}">${MD.esc(recruitDate(Number(x.last)))}</td>
@@ -175,7 +157,7 @@ function recruitPeopleHtml(cycle) {
       </div>
     </div>
     <div class="sheet__scroll"><table aria-label="People in ${MD.esc(cycle.name)}">
-      <thead><tr>${th('person', 'Person')}${th('review', 'Review')}${th('forms', 'Forms sent')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}</tr></thead>
+      <thead><tr>${th('person', 'Person')}${th('review', 'Review')}${th('subteam', 'Subteam')}${th('year', 'Year')}${th('last', 'Latest')}</tr></thead>
       <tbody data-rc="people-rows">${recruitPeopleRowsHtml(recruitPeopleVisible())}</tbody>
     </table></div>
     <div class="sheet__foot" role="status" data-rc="people-foot">${recruitPeopleFootHtml()}</div>
@@ -679,7 +661,6 @@ RECRUIT.register({
     'recruit-people-more': () => recruitLoadPeople(true),
     'recruit-people-refresh': () => { recruitLoadPeople(false, true); },
     'recruit-person-open': (el) => recruitOpenPerson(el.dataset.email, { form: el.dataset.form || null, comments: Boolean(el.dataset.comments) }),
-    'recruit-person-forms': recruitOpenPersonForms,
     'recruit-person-form': (el) => {
       if (UI.modal?.kind !== 'recruit-person' || UI.modal.email !== el.dataset.email) return;
       UI.modal.form = el.dataset.form || null;
