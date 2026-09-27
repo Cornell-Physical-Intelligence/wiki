@@ -110,6 +110,24 @@ try {
   await sql`UPDATE recruit_applications SET erased_at=1 WHERE cycle_id=${cycle.id}`;
   assert.equal(await kit.apps.count(cycle.id,'round',true),0);
   assert.equal(await kit.apps.count(cycle.id,'round'),1,'erased rows still prevent destructive form removal');
+  // The flow: checklist writes from separate connections at once, per-reviewer scores, bulk moves.
+  const { newCycleSite } = await lib('recruit/sections.js');
+  await kit.cycles.insert({...cycle,id:'cy-pg-flow',version:1,doc:{site:newCycleSite(),subteams:[]}});
+  const flowCycle = await kit.cycles.get('cy-pg-flow');
+  await kit.apps.create(flowCycle,{name:'Ann',email:'ann@example.com',section:'coffee',answers:{},by:'test',now:10});
+  await kit.apps.create(flowCycle,{name:'Ben',email:'ben@example.com',section:'interest',answers:{},by:'test',now:11});
+  await Promise.all([
+    ...['completed','met_with','notes'].map((field,i)=>kit.people.setField(flowCycle.id,'ann@example.com','Ann',{stage:'coffee',field,each:false,value:field==='completed'?true:'v'+i,by:'r@example.com',byName:'R',now:20+i})),
+    ...Array.from({length:6},(_,i)=>kit.people.setField(flowCycle.id,'ann@example.com','Ann',{stage:'application',field:'score',each:true,value:1+(i%5),by:`r${i}@example.com`,byName:'R'+i,now:30+i})),
+  ]);
+  const ann = await kit.people.get(flowCycle.id,'ann@example.com');
+  assert.deepEqual(Object.keys(ann.track.fields.coffee).sort(),['completed','met_with','notes'],'concurrent writes to different fields all land');
+  assert.equal(Object.keys(ann.track.fields.application.score.each).length,6,'every reviewer keeps their own score');
+  assert.equal(ann.trackVersion,9);
+  const moved = await kit.people.moveMany(flowCycle.id,[{email:'ann@example.com',name:'Ann',entry:{n:1}},{email:'ben@example.com',name:'Ben',entry:{n:2}}],{patch:{stage:'interview',stageAt:50},now:50});
+  assert.deepEqual(moved.sort(),['ann@example.com','ben@example.com']);
+  assert.deepEqual(await kit.people.usage(flowCycle.id,'interview'),{placed:2,recorded:0});
+  console.log('PASS: real Postgres flow tracking — concurrent checklist writes across connections, per-reviewer scores, bulk moves');
   console.log('PASS: real Postgres — 8 concurrent admissions at capacity 1, replacement while full, receipt replay, removal rollback, list and people queries');
 } finally {
   // pg-pool can resolve end() as soon as clients leave its list, before their

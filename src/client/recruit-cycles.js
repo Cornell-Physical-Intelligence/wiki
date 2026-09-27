@@ -1,7 +1,7 @@
 /* ============================================================================
    Applications — cycles module (client). The cycle index, the New cycle
-   dialog, the migration and adopt actions, the cycle tools menu, and the
-   Settings panel that hosts every module's settings sections.
+   dialog, the migration and adopt actions, held website responses, the cycle
+   tools menu, and the Settings dialog: about, status, subteams, who can review.
    ========================================================================== */
 
 'use strict';
@@ -10,33 +10,44 @@
 
 /* ------------------------------- index ----------------------------------- */
 
+// One card per cycle: name, status, deadline, and how many people each of
+// its stages has heard from.
 function recruitCycleRowHtml(c, intakeCycleId) {
   const by = c.counts?.bySection || {};
-  const meta = [c.term && c.term !== c.name ? c.term : '', recruitStatusText(c, intakeCycleId), c.status !== 'archived' && c.closesAt ? 'closes ' + recruitDate(Number(c.closesAt)) : '', ...recruitSectionKeys(c).map((key) => `${recruitSectionTitle(key, c)} ${Number(by[key] || 0).toLocaleString('en-US')}`), c.updated ? 'updated ' + recruitDate(Number(c.updated)) : ''].filter(Boolean).join(' · ');
-  return `<div class="sheet__archive">
-    <button class="sheet__archivename" data-action="recruit-cycle-open" data-id="${MD.esc(c.id)}"><span class="sheet__archivetitle">${MD.esc(c.name)}</span>
-      <span class="sheet__archivemeta">${MD.esc(meta)}</span></button>
-  </div>`;
+  const receiving = intakeCycleId && c.id === intakeCycleId && c.status === 'open';
+  const stages = recruitSectionKeys(c).map((key) => ({ key, title: recruitSectionTitle(key, c), n: Number(by[key] || 0) }));
+  const max = Math.max(1, ...stages.map((s) => s.n));
+  const meta = [
+    c.term && c.term !== c.name ? c.term : '',
+    c.status !== 'archived' && c.closesAt ? 'Deadline ' + recruitDay(Number(c.closesAt)) : '',
+    c.updated ? 'Updated ' + recruitAgo(Number(c.updated)) : '',
+  ].filter(Boolean).join(' · ');
+  return `<a class="rc-cycle-card" href="${recruitPanelHref(c.id, '')}" data-id="${MD.esc(c.id)}">
+    <span class="rc-cycle-card__head"><span class="rc-cycle-card__name">${MD.esc(c.name)}</span>
+      <span class="rc-cycle-state rc-cycle-state--${MD.esc(c.status)}"><span class="rc-cycle-state__dot"></span>${MD.esc(recruitStatusText(c, intakeCycleId).replace(" · receives the website's forms", ''))}</span>
+      ${receiving ? `<span class="rc-cycle-card__live">${RC_ICONS.globe}Website</span>` : ''}</span>
+    ${meta ? `<span class="rc-cycle-card__meta">${MD.esc(meta)}</span>` : ''}
+    <span class="rc-cycle-card__stages">${stages.map((s) => `<span class="rc-cycle-card__stage"><span class="rc-cycle-card__bar"><span style="width:${Math.round((s.n / max) * 100)}%"></span></span><span class="rc-cycle-card__label">${MD.esc(s.title)}</span><span class="rc-cycle-card__n">${recruitNum(s.n)}</span></span>`).join('')}</span>
+  </a>`;
 }
 
 function recruitIndexHtml() {
   const st = recruitState();
   const admin = recruitIsAdmin();
-  const head = `<div class="plain-head"><h1>Applications</h1></div>`;
+  const head = `<div class="plain-head rc-index__head"><h1>Applications</h1>${admin ? `<button class="btn btn--primary" data-action="recruit-cycle-new">${I.plus} New cycle</button>` : ''}</div>`;
   const cy = st.cycles;
   if (!cy || cy.loading) return head + '<p class="sheet__note">Loading…</p>';
   if (cy.error) return head + `<p class="sheet__note">Could not load: ${MD.esc(cy.error)}. <button class="linklike" data-action="recruit-refresh">Retry</button></p>`;
   const list = cy.list || [];
   const live = list.filter((c) => c.status !== 'archived');
   const archived = list.filter((c) => c.status === 'archived');
-  const tools = admin ? `<div class="rc-index__tools"><button class="btn" data-action="recruit-cycle-new">${I.plus} New cycle</button></div>` : '';
   const liveBlock = live.length
-    ? `<div class="sheet sheet--list">${live.map((c) => recruitCycleRowHtml(c, cy.intakeCycleId)).join('')}</div>`
-    : `<div class="sheet sheet--list"><div class="sheet__archive"><span class="sheet__archivemeta">${admin ? 'No cycle yet. Create one to start receiving applications.' : 'No open cycle.'}</span></div></div>`;
+    ? `<div class="rc-cycle-grid">${live.map((c) => recruitCycleRowHtml(c, cy.intakeCycleId)).join('')}</div>`
+    : `<div class="rc-empty-card"><b>${admin ? 'No cycle yet' : 'No open cycle'}</b>${admin ? '<p>A cycle holds one season of recruiting: its forms, its flow, and the people in it.</p><button class="btn btn--primary" data-action="recruit-cycle-new">New cycle</button>' : ''}</div>`;
   const archivedBlock = archived.length
-    ? `<h2 class="sheet__heading">Archived</h2><div class="sheet sheet--list">${archived.map((c) => recruitCycleRowHtml(c, cy.intakeCycleId)).join('')}</div>`
+    ? `<h2 class="sheet__heading">Archived</h2><div class="rc-cycle-grid rc-cycle-grid--archived">${archived.map((c) => recruitCycleRowHtml(c, cy.intakeCycleId)).join('')}</div>`
     : '';
-  return head + tools + liveBlock + archivedBlock + `<div data-rc="queue">${recruitAttentionHtml()}</div>`;
+  return head + `<div data-rc="queue">${recruitAttentionHtml()}</div>` + liveBlock + archivedBlock;
 }
 
 // Shown only when something needs an admin: the one-time import, orphaned
@@ -56,17 +67,93 @@ function recruitAttentionHtml() {
     items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">${MD.esc(recruitPlural(mig.orphans, 'submission'))} arrived while no cycle was receiving the form</span>
       <button class="btn" data-action="recruit-adopt" aria-haspopup="menu" ${st.busy.has('adopt') ? 'disabled' : ''}>Adopt into…</button></div>`);
   }
-  const pending = st.queue?.pending?.length || 0;
-  if (pending) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">${MD.esc(recruitPlural(pending, 'saved submission'))} waiting to join a list</span>
-    <button class="btn" data-action="recruit-queue-sync">Sync queue</button></div>`);
-  if (st.queue?.queueUnavailable) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">Could not check the saved-submission queue.</span><button class="btn" data-action="recruit-queue-sync">Retry</button></div>`);
-  if (!items.length) return '';
-  return `<h2 class="sheet__heading">Needs attention</h2><div class="sheet sheet--list">${items.join('')}</div>`;
+  if (st.queue?.queueUnavailable || st.queue?.error) items.push(`<div class="sheet__archive"><span class="sheet__archivemeta">Could not check the saved-submission queue.</span><button class="btn" data-action="recruit-queue-sync">Retry</button></div>`);
+  const pending = recruitPendingHtml();
+  if (!items.length && !pending) return '';
+  return `${items.length ? `<h2 class="sheet__heading">Needs attention</h2><div class="sheet sheet--list">${items.join('')}</div>` : ''}${pending}`;
 }
 
-// The index's queue block repaints through the same hook the panel uses.
+// The index's queue block and the flow's repaint through the same hook.
 function recruitQueueHtml() {
-  return typeof recruitPendingHtml === 'function' && recruitCycleRow() ? recruitPendingHtml() : recruitAttentionHtml();
+  return recruitCycleRow() ? recruitPendingHtml() : recruitAttentionHtml();
+}
+
+/* ------------------------------- held responses -------------------------- */
+
+function recruitPendingReason(reason) {
+  if (reason === 'duplicate') return 'A repeat from an email that had already sent this form, never confirmed';
+  if (reason === 'capacity') return 'Arrived after the form was full';
+  if (reason === 'replay_failed') return 'Could not be written to its form yet';
+  if (reason === 'unsynced') return 'Not yet written to its form';
+  if (reason === 'legacy') return 'Sent to the old list';
+  return 'Not on its form yet';
+}
+
+// Responses the website took but did not put on a form (admins).
+function recruitPendingHtml() {
+  const st = recruitState();
+  if (!recruitIsAdmin()) return '';
+  const pending = st.queue?.pending || [];
+  if (!pending.length) return '';
+  return `<section class="rc-held" aria-labelledby="recruit-pending-heading">
+    <h2 class="sheet__heading" id="recruit-pending-heading">Held responses <span class="count">${pending.length}</span></h2>
+    <p class="sheet__note">The website took these but did not put them on a form: a repeat that was never confirmed, or a form that was full. Place one on its form, or leave it.</p>
+    <div class="sheet sheet--list">${pending.map((r) => `<div class="sheet__archive rc-pending">
+      <button class="interest-person" data-action="recruit-queue-open" data-id="${MD.esc(r.id)}" aria-label="Review the held response from ${MD.esc(r.name)}"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></button>
+      <span class="sheet__archivemeta">${r.sectionTitle ? MD.esc(r.sectionTitle) + ' · ' : ''}${MD.esc(recruitPendingReason(r.reason))}</span>
+      <span class="interest-when" title="${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}">${recruitDate(Number(r.receivedAt))}</span>
+      <button class="btn" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button>
+    </div>`).join('')}</div>
+  </section>`;
+}
+
+function recruitQueueModalHtml(m) {
+  const r = (recruitState().queue?.pending || []).find((row) => row.id === m.id);
+  if (!r) return `<div class="modal" role="dialog" aria-label="Held response"><div class="modal__head"><h3>Held response</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div><div class="modal__body"><p>This entry is no longer waiting. Close this window to refresh.</p></div></div>`;
+  const fileUrl = `/api/recruit/queue/${encodeURIComponent(r.id)}/file`;
+  const questions = Array.isArray(r.questions) ? r.questions : [];
+  const has = (key) => questions.some((q) => q.key === key);
+  return `<div class="modal modal--wide" role="dialog" aria-label="Held response">
+    <div class="modal__head"><h3>${MD.esc(r.name)}</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+    <div class="modal__body">
+      <p class="sheet__note">${MD.esc(recruitPendingReason(r.reason))}. Placing it puts these answers on the form${r.reason === 'duplicate' ? ', replacing what that email sent before' : ''}.</p>
+      <dl class="interest-detail">
+        <dt>Email</dt><dd>${MD.esc(r.email)}</dd>
+        ${r.sectionTitle ? `<dt>Form</dt><dd>${MD.esc(r.sectionTitle)}</dd>` : ''}
+        ${has('subteam') || r.subteam ? `<dt>Subteam</dt><dd>${MD.esc(r.subteam || 'Undecided')}</dd>` : ''}
+        ${has('year') || r.year ? `<dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>` : ''}
+        <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
+        <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
+        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" download="${MD.esc(f.name)}">${MD.esc(f.name)}</a></dd>`).join('')}
+        ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
+      </dl>
+      ${recruitAnswersHtml({ application: { answers: r.answers || {}, files: [], section: r.section }, form: { questions } })}
+    </div>
+    <div class="modal__foot"><button class="btn" data-action="modal-close">Close</button><button class="btn btn--primary" data-action="recruit-queue-place" data-id="${MD.esc(r.id)}" aria-haspopup="menu">Place in…</button></div>
+  </div>`;
+}
+
+function recruitOpenQueuePlace(anchor, receipt) {
+  const st = recruitState();
+  const cycles = (st.cycles?.list || []).filter((c) => c.status === 'open' || c.status === 'draft');
+  if (!cycles.length) { toast('Open a cycle first'); return; }
+  openMenu(cycles.map((c) => ({ label: c.name, run: () => recruitPlaceQueued(receipt, c) })), anchor);
+}
+
+async function recruitPlaceQueued(receipt, cycle) {
+  const st = recruitState();
+  const key = 'place:' + receipt;
+  if (st.busy.has(key)) return;
+  st.busy.add(key);
+  try {
+    await RECRUIT.api(`/recruit/queue/${encodeURIComponent(receipt)}/place`, { method: 'POST', body: JSON.stringify({ requestId: recruitId('rq'), cycleId: cycle.id, confirmUpdate: true }) });
+    if (st.queue?.pending) st.queue.pending = st.queue.pending.filter((r) => r.id !== receipt);
+    st.cycles = undefined;
+    toast(`Placed in ${cycle.name}`);
+    if (UI.modal?.kind === 'recruit-queue' && UI.modal.id === receipt) closeModal(() => renderBackground('recruit'));
+    else if (!recruitPaintQueue()) renderBackground('recruit');
+  } catch (e) { toast(`Could not place: ${recruitError(e)}`); }
+  finally { st.busy.delete(key); }
 }
 
 /* ------------------------------- new cycle ------------------------------- */
@@ -87,13 +174,14 @@ function recruitDefaultTerm() {
 function recruitCycleModalHtml(m) {
   const st = recruitState();
   const list = st.cycles?.list || [];
-  const copy = [{ value: '', label: 'Start from the defaults' }, ...list.map((c) => ({ value: c.id, label: c.name }))];
+  const copy = [{ value: '', label: 'The default flow' }, ...list.map((c) => ({ value: c.id, label: `${c.name}'s flow` }))];
   return `<div class="modal" role="dialog" aria-label="New cycle">
     <div class="modal__head"><h3>New cycle</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <div class="modal__body rc-form">
       <label>Name<input class="text-input" data-m="recruit-cycle-name" value="${MD.esc(m.name || '')}" placeholder="e.g. Fall 2026" maxlength="80" autocomplete="off" spellcheck="false"></label>
       <label>Term${dd('recruit-cycle-term', recruitTermOptions(m.term), m.term || recruitDefaultTerm())}</label>
       <label>Start from${dd('recruit-cycle-copy', copy, m.copyFrom || '')}</label>
+      <p class="rc-set__note">A copy takes that cycle's stages, forms and checklists; its people stay behind.</p>
       <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
     </div>
     <div class="modal__foot"><button class="btn" data-action="modal-close">Cancel</button><button class="btn btn--primary" data-action="recruit-cycle-create" ${m.busy ? 'disabled' : ''}>${m.busy ? 'Creating…' : 'Create cycle'}</button></div>
@@ -119,7 +207,7 @@ async function recruitCreateCycle() {
     const out = await RECRUIT.api('/recruit/cycles', { method: 'POST', body: JSON.stringify({ requestId: m.requestId, name, term, copyFrom: copyFrom || undefined }) });
     const st = recruitState();
     st.cycles = undefined;
-    if (UI.modal === m) closeModal(() => { nav(recruitPanelHref(out.cycle?.id || '', 'settings')); if (!out.cycle?.id) renderBackground('recruit'); });
+    if (UI.modal === m) closeModal(() => { nav(recruitPanelHref(out.cycle?.id || '', 'flow')); if (!out.cycle?.id) renderBackground('recruit'); });
     toast(`Created ${name}`);
   } catch (e) {
     m.busy = false;
@@ -200,11 +288,11 @@ function recruitOpenCycleTools(anchor) {
   const cycle = recruitCycleRow();
   if (!cycle) return;
   const roles = recruitMyRoles();
-  const lead = recruitCan('lead', roles), admin = recruitCan('admin', roles);
+  const admin = recruitCan('admin', roles);
   const items = [{ label: 'Refresh', run: () => { const id = cycle.id; st.cycles = undefined; RECRUIT.reset(id); render(); } }];
+  if (recruitCan('lead', roles)) items.push({ label: 'Export people (CSV)', run: () => { location.href = `/api/recruit/cycles/${encodeURIComponent(cycle.id)}/people.csv?columns=full`; } });
   if (admin) items.push({ label: 'Sync queue', run: () => { st.queue = undefined; recruitLoadQueue(true); toast('Checking saved submissions…'); } });
   if (admin) items.push({ label: 'Check storage', run: recruitCheckStorage });
-  // Settings live behind the gear beside the cycle's name.
   openMenu(items, anchor);
 }
 
@@ -248,17 +336,12 @@ function recruitSetStatus(status, confirm) {
   render();
 }
 
-function recruitVersionToast(e, cycleId) {
-  if (e?.status === 409) toast(recruitError(e), { label: 'Reload', run: () => { const st = recruitState(); st.cycles = undefined; RECRUIT.reset(cycleId); render(); } });
-  else toast(recruitError(e));
-}
-
 function recruitConfirmDeleteCycle() {
   const cycle = recruitCycleRow();
   if (!cycle || !recruitCan('admin')) return;
   UI.modal = {
     kind: 'confirm', title: `Delete ${cycle.name}?`, danger: true, typed: 'delete cycle', confirm: 'Delete cycle',
-    text: `Every response, comment, flag and role in <b>${MD.esc(cycle.name)}</b> is erased for good. Export the CSVs first if you want a record.`,
+    text: `Every response, comment, flag, checklist entry and role in <b>${MD.esc(cycle.name)}</b> is erased for good. Export the CSVs first if you want a record.`,
     onGo: async () => {
       const st = recruitState();
       try {
@@ -273,7 +356,7 @@ function recruitConfirmDeleteCycle() {
   render();
 }
 
-/* ------------------------------- settings panel -------------------------- */
+/* ------------------------------- settings dialog ------------------------- */
 
 // Settings open from the gear beside the cycle's name, in one glass dialog:
 // about, status, subteams, who can review; archive and delete in the foot.
@@ -283,7 +366,6 @@ function recruitSettingsBodyHtml(cycle, role) {
   return sections.map((s) => {
     let inner = '';
     try { inner = String(s.view?.(cycle, role) ?? ''); } catch (e) { console.error(e); inner = `<p class="field-error" role="alert">Could not draw this section.</p>`; }
-    // A group whose fields name themselves carries no heading of its own.
     const head = s.heading === false ? '' : `<h4 class="rc-set__title" id="rc-set-${MD.esc(s.id)}-h">${MD.esc(s.label || s.id)}</h4>`;
     const named = head ? `aria-labelledby="rc-set-${MD.esc(s.id)}-h"` : `aria-label="${MD.esc(s.label || s.id)}"`;
     return `<section class="rc-set" id="rc-set-${MD.esc(s.id)}" ${named}>${head}${inner}</section>`;
@@ -314,7 +396,6 @@ function recruitPaintSettings() {
   if (!dialog) return false;
   const fresh = document.createElement('div');
   fresh.innerHTML = recruitSettingsModalHtml();
-  // The status pill's thumb slides from where it was before the repaint.
   const was = [...$$('.rc-seg--status button', dialog)].findIndex((b) => b.getAttribute('aria-current') === 'page');
   recruitRepaint(dialog, fresh.firstElementChild ? fresh.firstElementChild.innerHTML : fresh.innerHTML);
   const seg = $('.rc-seg--status', dialog);
@@ -373,7 +454,7 @@ function recruitRolesBodyHtml() {
   const add = cycle?.status === 'archived' ? '' : members.length
     ? `<form class="rc-roles__add" data-action="recruit-role-form" aria-label="Add a reviewer">${dd('recruit-role-member', members, members[0].value)}${dd('recruit-role-role', roleChoices, 'reviewer')}<button type="submit" class="btn btn--primary">Add</button></form>`
     : '<p class="rc-set__note">Everyone on the wiki roster already has a role here.</p>';
-  return `<p class="rc-set__note">Admins can do everything in every cycle. Leads edit forms and see everyone here; reviewers read and comment.</p>
+  return `<p class="rc-set__note">Admins can do everything in every cycle. Leads edit the flow and move people; reviewers read, comment and fill in checklists.</p>
     <div class="rc-roles__list">${rows || '<p class="rc-set__note">Nobody yet besides admins.</p>'}</div>${add}`;
 }
 
@@ -394,10 +475,14 @@ function recruitPaintRoles() {
   return true;
 }
 
-// The cycle's grants follow the dialog, so the settings row counts right.
+// The cycle's grants and team follow the dialog.
 function recruitSyncGrants() {
   const st = recruitState();
-  if (st.cycle && st.mod.roles) st.cycle.grants = st.mod.roles.roles.map((g) => ({ member: g.member, roles: g.roles, subteams: g.subteams || [] }));
+  if (!st.cycle || !st.mod.roles) return;
+  st.cycle.grants = st.mod.roles.roles.map((g) => ({ member: g.member, roles: g.roles, subteams: g.subteams || [] }));
+  const team = new Map((st.cycle.team || []).map((m) => [m.email, m]));
+  for (const g of st.mod.roles.roles) if (!team.has(g.member)) team.set(g.member, { email: g.member, name: g.name || '' });
+  st.cycle.team = [...team.values()].sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email));
 }
 
 async function recruitAddRole(form) {
@@ -429,6 +514,7 @@ async function recruitRemoveRole(member) {
   try {
     await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/roles/${encodeURIComponent(member)}`, { method: 'DELETE' });
     if (st.mod.roles) { st.mod.roles.roles = st.mod.roles.roles.filter((g) => g.member !== member); recruitSyncGrants(); }
+    if (st.cycle?.team) st.cycle.team = st.cycle.team.filter((m) => m.email !== member || recruitIsAdmin());
     toast('Removed');
   } catch (e) { toast(`Could not remove: ${recruitError(e)}`); }
   finally { st.busy.delete('role'); recruitPaintRoles(); }
@@ -533,13 +619,6 @@ const RECRUIT_SETTINGS = [
   },
 ];
 
-// A cycle's sections as the server reports them (GET /recruit/cycles/:id
-// carries `sections` merged over the defaults).
-function recruitSections(cycle) {
-  const st = recruitState();
-  return (st.cycle?.data?.id === cycle?.id && st.cycle.sections) || cycle?.doc?.site?.sections || {};
-}
-
 function recruitSubteamRowHtml(t = {}) {
   return `<div class="rc-row" data-key="${MD.esc(t.key || '')}">
     <input class="text-input" name="name" value="${MD.esc(t.name || '')}" placeholder="Subteam" maxlength="40" aria-label="Subteam name" autocomplete="off" spellcheck="false">
@@ -551,14 +630,8 @@ const recruitSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, 
 
 async function recruitPutSettings(cycle, module, settings) {
   const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/settings/${module}`, { method: 'PUT', body: JSON.stringify({ version: cycle.version, settings }) });
-  recruitAdoptCycle(out.cycle);
+  recruitAdoptCycle(out.cycle, out.sections);
   return out;
-}
-
-function recruitAdoptCycle(row) {
-  const st = recruitState();
-  if (row && st.cycle?.data?.id === row.id) { st.cycle.data = row; if (row.doc?.site?.sections) st.cycle.sections = Object.fromEntries(Object.entries(row.doc.site.sections).filter(([, s]) => s)); }
-  st.cycles = undefined;
 }
 
 async function recruitToggleIntake(on) {
@@ -591,12 +664,13 @@ RECRUIT.register({
     'recruit-role-form': (form) => recruitAddRole(form),
     'recruit-role-remove': (el) => recruitRemoveRole(el.dataset.member),
     'recruit-refresh': () => { const st = recruitState(); UI.recruitMe = undefined; st.me = undefined; st.cycles = undefined; RECRUIT.reset(st.cycleId); render(); },
-    'recruit-cycle-open': (el) => { nav(recruitPanelHref(el.dataset.id)); },
-    'recruit-cycle-new': () => { UI.modal = { kind: 'recruit-cycle' }; render(); },
+    'recruit-cycle-new': () => { UI.modal = { kind: 'recruit-cycle' }; render(); $('.modal [data-m="recruit-cycle-name"]')?.focus(); },
     'recruit-cycle-create': recruitCreateCycle,
     'recruit-migrate': recruitRunMigration,
     'recruit-adopt': (el) => recruitOpenAdopt(el),
     'recruit-queue-sync': () => { const st = recruitState(); st.queue = undefined; recruitLoadQueue(true); },
+    'recruit-queue-open': (el) => { UI.modal = { kind: 'recruit-queue', id: el.dataset.id }; render(); },
+    'recruit-queue-place': (el) => recruitOpenQueuePlace(el, el.dataset.id),
     'recruit-cycle-tools': (el) => recruitOpenCycleTools(el),
     'recruit-status': (el) => recruitSetStatus(el.dataset.status, Boolean(el.dataset.confirm)),
     'recruit-cycle-delete': recruitConfirmDeleteCycle,
@@ -617,10 +691,17 @@ RECRUIT.register({
     },
   },
   dd: {
-    'recruit-panel-switch': (host, value) => { if (value !== undefined) nav(recruitPanelHref(recruitCycleRow().id, value)); },
-    'recruit-cycle-switch': (host, value) => { if (value !== undefined && value !== recruitCycleRow()?.id) nav(recruitPanelHref(value, UI.route?.params?.sub || '')); },
+    'recruit-cycle-switch': (host, value) => { if (value !== undefined && value !== recruitCycleRow()?.id) { const sub = UI.route?.params?.sub; nav(recruitPanelHref(value, ['flow', 'people', 'insights'].includes(sub) ? sub : '')); } },
   },
-  modals: { 'recruit-cycle': recruitCycleModalHtml, 'recruit-settings': recruitSettingsModalHtml, 'recruit-roles': recruitRolesModalHtml },
+  modals: {
+    'recruit-cycle': recruitCycleModalHtml, 'recruit-settings': recruitSettingsModalHtml, 'recruit-roles': recruitRolesModalHtml, 'recruit-queue': recruitQueueModalHtml,
+    'recruit-copy': (m) => `<div class="modal" role="dialog" aria-label="Copy">
+      <div class="modal__head"><h3>Copy</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
+      <div class="modal__body"><p>Clipboard access was blocked. Select and copy the text.</p>
+        <textarea class="text-input" rows="6" readonly aria-label="Text to copy">${MD.esc(m.text || '')}</textarea>
+      </div><div class="modal__foot"><button class="btn" data-action="modal-close">Close</button></div>
+    </div>`,
+  },
   settings: RECRUIT_SETTINGS,
   reset() {},
 });
