@@ -679,14 +679,14 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   st.cycle.sections = { ...sections(), elec: form('Electrical form'), sw: form('Software form') };
   st.cycle.sections.application.next = ['elec', 'sw'];
   st.cycle.sections.application.split = { stage: 'interest', q: 'subteam', routes: { Electrical: 'elec', Software: 'sw' }, otherwise: null };
-  const ada = { ...people()[0], stage: 'application', states: { interest: 'done', coffee: 'done', application: 'current', elec: 'offpath', sw: 'ahead' }, done: { interest: true, coffee: true }, next: ['sw'] };
+  const ada = { ...people()[0], first: Date.UTC(2026, 8, 25, 16), stage: 'application', states: { interest: 'done', coffee: 'done', application: 'current', elec: 'offpath', sw: 'ahead' }, done: { interest: true, coffee: true }, next: ['sw'] };
   st.people = { id: `${st.key}:cy-a`, rows: [ada], byEmail: { [ada.email]: ada }, next: null, total: 1, counts: null, loading: false, loaded: true, error: null, q: '', filters: {}, sort: 'last', view: 'table', selected: new Set(), appliedParams: '' };
   f.mount();
   same(f.app.querySelectorAll('.pn-journey__step').map((li) => [li.querySelector('.pn-journey__name').textContent, li.querySelector('.pn-journey__state').textContent]),
     [['Interest form', 'Done'], ['Coffee chats', 'Done'], ['Application form', 'Here now'], ['Software form', 'Up next']], 'the stage their answer sent them away from is not on their page');
   same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'sw']);
   assert.match(f.app.querySelector('.pn-stage[data-stage="sw"] .pn-state').textContent, /Up next/);
-  assert.match(f.app.querySelector('.pn-tile').textContent, /Forms sent\s*2\s*of 4/, 'forms they will never get are not counted');
+  assert.match(f.app.querySelector('.pn-meta time').textContent, /^Submitted Sep 25\b/, 'when they first sent a form sits under their name');
   // A new answer that sends them the other way changes the cards in place.
   f.run('recruitAcceptTrack')('ada@cornell.edu', { stage: 'application', status: 'active', states: { ...ada.states, elec: 'ahead', sw: 'offpath' }, done: ada.done, fields: {}, trackVersion: 9, next: ['elec'] });
   same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'elec']);
