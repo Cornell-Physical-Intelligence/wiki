@@ -340,6 +340,11 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   assert.match(lines.find((l) => l.includes('ben@cornell.edu')), /"3 \(2\)"/, 'per-reviewer scores export as their average');
   const plain = await call('GET', `/recruit/cycles/${id}/people.csv`, null, 'lead@example.com');
   assert.doesNotMatch(String(plain.body).split('\r\n')[0], /Status|Chat completed/);
+  // A lead's stage and field names become headers, and no header starts a formula.
+  cycle = ok(await call('GET', `/recruit/cycles/${id}`), 'reload').cycle;
+  ok(await site({ sections: { evil: { title: '=Evil', form: null, kind: 'step', fields: [{ key: 'cmd', type: 'text', label: '@cmd' }], next: [] } }, order: ['interest', 'coffee', 'application', 'interview', 'evil'] }), 'a stage named like a formula');
+  const guarded = String((await call('GET', `/recruit/cycles/${id}/people.csv?columns=full`, null, 'lead@example.com')).body).replace(/^\uFEFF/, '').split('\r\n')[0];
+  assert.match(guarded, /"'=Evil","/); assert.match(guarded, /"'=Evil: @cmd"/);
 
   // Everything is audited.
   const audit = ok(await call('GET', `/recruit/cycles/${id}/audit`), 'audit').rows.map((a) => a.kind);
