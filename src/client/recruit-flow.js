@@ -233,11 +233,11 @@ function recruitFlowConnect(from, to) {
   if (from === to || !flow.sections[from] || !flow.sections[to]) return;
   if ((flow.edges.get(from) || []).includes(to)) { toast(`${title(from)} already leads to ${title(to)}`); return; }
   if (recruitReaches(flow, from, to)) { toast(`${title(to)} comes before ${title(from)}; that connection would loop back`); return; }
-  recruitFlowEdit((e) => { e.next.get(from).push(to); }, `${title(from)} now leads to ${title(to)}`);
+  return recruitFlowEdit((e) => { e.next.get(from).push(to); }, `${title(from)} now leads to ${title(to)}`);
 }
 
 function recruitFlowUnlink(from, to) {
-  recruitFlowEdit((e) => { const list = e.next.get(from) || []; if (!list.includes(to)) return false; e.next.set(from, list.filter((k) => k !== to)); }, `Removed the connection from ${recruitSectionTitle(from)} to ${recruitSectionTitle(to)}`);
+  return recruitFlowEdit((e) => { const list = e.next.get(from) || []; if (!list.includes(to)) return false; e.next.set(from, list.filter((k) => k !== to)); }, `Removed the connection from ${recruitSectionTitle(from)} to ${recruitSectionTitle(to)}`);
 }
 
 // Up or down within its column; the order also sorts stages everywhere else.

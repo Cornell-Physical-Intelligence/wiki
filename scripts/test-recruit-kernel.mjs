@@ -214,6 +214,7 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   assert.deepEqual(roster.data.roles, []);
   assert.deepEqual(roster.data.members.map((u) => u.email), ['admin@example.com', 'lead@example.com', 'rev@example.com', 'plain@example.com'], 'roster projection lists active members only');
   assert.deepEqual(roster.data.members[1], { email: 'lead@example.com', name: 'Lee Lead', subteam: 'Software' });
+  assert.equal(roster.data.members[0].admin, true, 'admins are marked: they stay on the team without a grant');
   assert.equal((await request('GET', `/api/recruit/cycles/${cycle.id}/roles`, {}, lead)).status, 403, 'no grant yet');
   assert.equal((await request('PUT', `/api/recruit/cycles/${cycle.id}/roles/nobody%40example.com`, { requestId: 'rq-role-0001', roles: ['lead'] })).status, 400, 'grants go to roster members');
   assert.equal((await request('PUT', `/api/recruit/cycles/${cycle.id}/roles/lead%40example.com`, { requestId: 'rq-role-0002', roles: ['boss'] })).status, 400);

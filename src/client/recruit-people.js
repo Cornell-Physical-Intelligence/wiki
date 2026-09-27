@@ -33,6 +33,7 @@ function recruitApplyRouteFilters(p) {
   p.appliedParams = sig;
   p.filters = given;
   p.selected = new Set();
+  p.loaded = false;   // the list shows Loading until the filtered rows arrive
   return true;
 }
 

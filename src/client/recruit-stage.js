@@ -292,7 +292,7 @@ function recruitStagePeopleHeadHtml(cycle, key, sp) {
 function recruitStagePeopleRowsHtml(cycle, key, sp) {
   const s = recruitSections(cycle)[key];
   const span = 4 + s.fields.length + (s.form ? 1 : 0);
-  if (!sp.loaded && sp.loading) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
+  if (!sp.loaded && (sp.loading || !sp.error)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (sp.error && !sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(sp.error)}. <button class="linklike" data-action="recruit-stage-people-retry">Retry</button></td></tr>`;
   if (!sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${sp.q.trim() ? 'No one matches.' : sp.filter === 'here' ? 'No one is here now.' : sp.filter === 'done' ? 'No one yet.' : sp.filter === 'notdone' ? 'Everyone here is done.' : 'No one has reached this stage yet.'}</td></tr>`;
   return sp.rows.map((r) => recruitStagePersonRowHtml(cycle, key, r, sp)).join('');
