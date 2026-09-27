@@ -196,6 +196,8 @@ const RECRUIT = {
     if (st.cycle?.data) {
       const panel = recruitActivePanel();
       st.panel = panel?.id || null;
+      // The stage panel marks itself open when it mounts; any other view closes it.
+      if (st.panel !== 'stage') st.mod.drawer = null;
       try { panel?.module.mount?.(st.cycle.data, st.cycle.role, panel.id); } catch (e) { console.error(e); }
     }
     this.sync();
@@ -818,7 +820,8 @@ function recruitCycleShellHtml(id) {
     let inner = '';
     try { inner = active.module.view ? String(active.module.view(cycle, role, active.id) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this view: ${MD.esc(e.message || 'error')}</p>`; }
     // The view fades in when it changes, never on a re-render of the same one.
-    const where = cycle.id + ':' + active.id + ':' + (UI.route?.params?.key || '') + ':' + (UI.route?.params?.email || '');
+    // A stage opens in a panel over the chart, so the chart stays put.
+    const where = cycle.id + ':' + (active.id === 'stage' ? 'flow' : active.id) + ':' + (active.id === 'person' ? UI.route?.params?.email || '' : '');
     const enter = st.paintedPanel !== where;
     st.paintedPanel = where;
     body = `<div class="rc-panel ${enter ? 'rc-panel--enter' : ''}" id="rc-panel-${MD.esc(active.id)}" ${active.tab ? `role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}"` : ''}>${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;

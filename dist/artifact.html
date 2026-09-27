@@ -2182,12 +2182,8 @@ a.rc-stage-chip:hover { text-decoration: underline; text-underline-offset: 2px; 
 .rc-bulk__count { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------------------
-   The flow chart. */
-.fc-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
-.fc-summary { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; color: var(--muted); }
-.fc-summary__item { display: inline-flex; align-items: baseline; gap: 6px; color: var(--muted); text-decoration: none; }
-.fc-summary__item b { font-size: 20px; font-weight: 600; color: var(--fg); }
-a.fc-summary__item:hover { color: var(--fg); }
+   The flow chart: a quiet canvas, a card per stage, and connections that
+   carry how many people passed along them. */
 .fc-wrap { position: relative; }
 .fc-wrap::before, .fc-wrap::after {
   content: ''; position: absolute; top: 1px; bottom: 1px; width: 56px; z-index: 4; pointer-events: none;
@@ -2197,73 +2193,116 @@ a.fc-summary__item:hover { color: var(--fg); }
 .fc-wrap::after { right: 1px; border-radius: 0 15px 15px 0; background: linear-gradient(to right, transparent, var(--rc-canvas)); }
 .fc-wrap.is-more-left::before, .fc-wrap.is-more-right::after { opacity: 1; }
 .fc-scroll {
-  display: flex; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--hairline); border-radius: 16px; min-height: max(460px, calc(100dvh - 330px));
+  display: flex; overflow-x: auto; overflow-y: hidden; min-height: 300px;
+  border: 1px solid var(--hairline); border-radius: 16px;
   background-color: var(--rc-canvas);
-  background-image: radial-gradient(color-mix(in srgb, var(--fg) 14%, transparent) 1px, transparent 1.2px);
+  background-image: radial-gradient(color-mix(in srgb, var(--fg) 11%, transparent) 1px, transparent 1.2px);
   background-size: 22px 22px;
 }
-/* Centred across while it fits, from the top; the margin falls to zero once it scrolls. */
-.fc-canvas { position: relative; flex: none; margin: 0 auto; }
+/* Centred while it fits; auto margins fall to zero once it scrolls. The
+   sizer holds the chart's drawn size and slides it clear of a stage's panel. */
+.fc-sizer { position: relative; flex: none; margin: auto; transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.fc-sizer.is-still { transition: none; }
+.fc-canvas { position: relative; transform-origin: 0 0; }
 .fc-edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
-.fc-edge { fill: none; stroke: var(--rule); stroke-width: 1.5; transition: stroke 0.15s ease, stroke-width 0.15s ease; }
-.fc-edge.is-hot { stroke: var(--fg); stroke-width: 2; }
-.fc-edge--outcome { stroke: var(--hairline); }
-.fc-edge--draft { stroke: var(--fg); stroke-width: 2; }
+.fc-edge { fill: none; stroke: var(--rule); stroke-width: 1.5; stroke-linejoin: round; transition: stroke 0.15s ease, opacity 0.25s ease; }
+.fc-edge.is-hot { stroke: var(--fg); }
 .fc-edge--split { stroke-dasharray: 5 4; }
+.fc-edge--outcome, .fc-edge--entry { stroke: var(--hairline); }
+.fc-edge--draft { stroke: var(--fg); stroke-width: 2; }
 .fc-edges marker path { fill: var(--rule); }
 #fc-arrow-soft path { fill: var(--hairline); }
+/* How many passed along a connection; a split's answers beside the count. */
+.fc-flow {
+  position: absolute; z-index: 1; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px;
+  border: 1px solid var(--hairline); border-radius: 7px; background: var(--page);
+  font: inherit; font-size: 12px; line-height: 1; color: var(--fg); white-space: nowrap; overflow: hidden;
+  font-variant-numeric: tabular-nums; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); transition: opacity 0.25s ease, border-color 0.15s ease;
+}
+.fc-flow b { font-weight: 600; }
+.fc-flow__why { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+/* A split's answers may take two lines beside the count. */
+.fc-flow--split { height: auto; min-height: 22px; padding: 3px 8px; white-space: normal; }
+.fc-flow--split .fc-flow__why { max-width: 112px; line-height: 1.25; text-align: left; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.fc-flow.is-zero b { font-weight: 500; color: var(--faint); }
+.fc-flow--end { color: var(--muted); }
+button.fc-flow { cursor: pointer; }
+button.fc-flow:hover { border-color: var(--rule); }
+button.fc-flow:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .fc-node {
   position: absolute; display: flex; border: 1px solid var(--hairline); border-radius: 14px; background: var(--page);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.25s ease;
 }
 .fc-node:hover, .fc-node:focus-within { border-color: var(--rule); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 12px 30px rgba(0, 0, 0, 0.08); z-index: 2; }
-.fc-node__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 12px; color: inherit; text-decoration: none; border-radius: 13px; }
+.fc-node__main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 14px 16px; color: inherit; text-decoration: none; border-radius: 13px; }
 .fc-node__main:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-.fc-node__top { display: flex; flex: none; align-items: center; gap: 8px; padding-right: 26px; min-width: 0; }
-.fc-web { margin-left: auto; font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+.fc-node__top { display: flex; flex: none; align-items: center; gap: 8px; height: 20px; padding-right: 26px; min-width: 0; }
+.fc-node__top .rc-kind-tag { flex: none; }
+.fc-web { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: var(--faint); white-space: nowrap; }
 .fc-web.is-open { color: var(--good); }
-.fc-node__title { flex: none; font-size: 15.5px; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fc-node__stats { display: flex; flex: none; gap: 10px; min-width: 0; font-size: 12.5px; line-height: 18px; color: var(--muted); }
-.fc-node__stats > span { flex: none; white-space: nowrap; }
-.fc-node__stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
-.fc-node__next { color: var(--fg); }
-.fc-node__done { display: flex; flex: none; flex-direction: column; gap: 5px; margin-top: 2px; font-size: 12px; line-height: 18px; color: var(--muted); }
-.fc-node__done b { color: var(--fg); font-weight: 600; }
-.fc-node__donetext { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fc-meter { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--rc-soft) 45%, var(--page)); overflow: hidden; }
-.fc-meter > span { display: block; height: 100%; border-radius: 3px; background: var(--fg); }
-.fc-node__more { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; color: var(--faint); }
+.fc-node__title {
+  flex: none; margin-top: 10px; font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -0.005em; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.fc-node__here { flex: none; display: flex; align-items: baseline; gap: 6px; margin-top: auto; font-size: 12.5px; color: var(--muted); }
+.fc-node__here b { font-size: 22px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; color: var(--fg); font-variant-numeric: tabular-nums; }
+.fc-node__here.is-none b { color: var(--faint); }
+.fc-node__done { flex: none; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.fc-node__line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-node__line b { color: var(--fg); font-weight: 600; }
+.fc-meter { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 9%, transparent); overflow: hidden; }
+.fc-meter > span { display: block; height: 100%; border-radius: 2px; background: var(--fg); }
+.fc-node__more { position: absolute; top: 9px; right: 8px; width: 28px; height: 28px; color: var(--faint); }
 .fc-node__more:hover { color: var(--fg); }
 .fc-node__more svg { width: 16px; height: 16px; }
 .fc-port {
-  position: absolute; left: 50%; bottom: -12px; width: 24px; height: 24px; margin-left: -12px; padding: 0;
+  position: absolute; width: 24px; height: 24px; padding: 0;
   display: grid; place-items: center; border: 1px solid var(--rule); border-radius: 50%; background: var(--page); color: var(--muted);
   cursor: crosshair; touch-action: none; opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease; z-index: 3;
 }
+.fc-canvas--across .fc-port { top: 50%; right: -12px; margin-top: -12px; }
+.fc-canvas--down .fc-port { left: 50%; bottom: -12px; margin-left: -12px; }
 .fc-port svg { width: 13px; height: 13px; }
 .fc-node:hover .fc-port, .fc-node:focus-within .fc-port, .fc-port:focus-visible { opacity: 1; }
 .fc-port:hover { color: var(--page); background: var(--fg); border-color: var(--fg); transform: scale(1.1); }
 .fc-port:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-/* A split's answers, on the connections they take. */
-.fc-when {
-  position: absolute; z-index: 1; transform: translate(-50%, -50%); max-width: 200px; height: 24px; padding: 0 9px;
-  display: inline-flex; align-items: center; border: 1px solid var(--hairline); border-radius: 7px; background: var(--page);
-  font: inherit; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-button.fc-when { cursor: pointer; }
-button.fc-when:hover { color: var(--fg); border-color: var(--rule); }
-button.fc-when:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .fc-canvas.is-connecting .fc-node { opacity: 0.45; }
 .fc-canvas.is-connecting .fc-node.is-candidate { opacity: 1; }
-.fc-canvas.is-connecting .fc-when { opacity: 0.4; }
+.fc-canvas.is-connecting .fc-flow { opacity: 0.4; }
 .fc-node.is-target { border-color: var(--fg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 14%, transparent); }
-.fc-node--outcome { align-items: center; padding: 0 8px; background: var(--page); }
-.fc-outcome { list-style: none; margin: 0; padding: 0; flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; font-size: 13px; }
-.fc-outcome a { display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 8px; border-radius: 8px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+/* With a stage's panel open, its card stays lit and the rest steps back. */
+.fc-canvas.is-focus .fc-node:not(.is-open), .fc-canvas.is-focus .fc-flow { opacity: 0.38; }
+.fc-canvas.is-focus .fc-edge { opacity: 0.4; }
+.fc-node.is-open { z-index: 3; border-color: var(--fg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 10%, transparent), 0 18px 40px rgba(0, 0, 0, 0.12); }
+.fc-node--outcome { flex-direction: column; justify-content: center; padding: 8px; }
+.fc-outcome { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.fc-outcome a { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .fc-outcome a:hover { background: var(--hover); color: var(--fg); }
 .fc-outcome b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.fc-canvas--down .fc-outcome { flex-direction: row; }
+.fc-canvas--down .fc-outcome li { flex: 1; min-width: 0; }
+.fc-canvas--down .fc-outcome a { justify-content: center; }
+/* Add a stage: a + inside the chart. */
+.fc-add {
+  position: absolute; top: 10px; right: 10px; z-index: 5; width: 32px; height: 32px; padding: 0;
+  display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: 10px; background: var(--page); color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.fc-add:hover { border-color: var(--rule); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 20px rgba(0, 0, 0, 0.08); }
+.fc-add:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.fc-add svg { width: 17px; height: 17px; }
+.fc-note { position: absolute; top: 14px; left: 18px; z-index: 5; margin: 0; font-size: 12.5px; color: var(--muted); }
+/* Leads get a strip at the top of the zone for the +. */
+.fc-wrap.has-add .fc-scroll { padding-top: 36px; }
+.fc-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 360px; padding: 32px; border: 1px dashed var(--rule); border-radius: 16px; text-align: center; font-size: 14px; color: var(--muted); }
+.fc-empty b { font-size: 15px; font-weight: 600; color: var(--fg); }
+.fc-empty p { margin: 0; max-width: 52ch; line-height: 1.55; }
 @media (hover: none) {
   .fc-port { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-sizer { transition: none; }
 }
 
 /* The split dialog: each answer and where it leads. */
@@ -2278,53 +2317,83 @@ button.fc-when:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px
 .sp__actions { display: inline-flex; gap: 8px; }
 
 /* ---------------------------------------------------------------------------
-   A stage's page: the strip of stages, its header, its tabs, and the bar
-   that saves the draft. */
-.rs-strip { display: flex; align-items: center; gap: 4px; margin: 0 0 18px; padding-bottom: 2px; overflow-x: auto; scrollbar-width: thin; }
-.rs-strip a { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; color: var(--muted); text-decoration: none; white-space: nowrap; }
-.rs-strip a:hover { color: var(--fg); background: var(--hover); }
-.rs-strip a svg { width: 14px; height: 14px; }
-.rs-strip__back { border: 1px solid var(--hairline); margin-right: 6px; color: var(--fg) !important; }
-.rs-strip__stage.is-on { color: var(--page); background: var(--fg); }
-.rs-strip__stage.is-on:hover { color: var(--page); background: var(--fg); opacity: 0.9; }
-.rs-strip__sep { display: inline-flex; color: var(--rule); flex: none; }
-.rs-strip__sep svg { width: 13px; height: 13px; }
-.rs-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; margin-bottom: 8px; }
-.rs-head__title { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
-.rs-head__title h2 { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
-.rs-head__title .rc-kind-tag { flex: none; }
-.rs-head__numbers { display: flex; gap: 24px; margin: 0; }
-.rs-head__numbers div { display: flex; flex-direction: column-reverse; align-items: flex-end; }
-.rs-head__numbers dt { font-size: 12px; color: var(--muted); }
-.rs-head__numbers dd { margin: 0; font-size: 22px; font-weight: 600; font-variant-numeric: normal; }
-.rs-web { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--muted); }
-.rs-web__state { display: inline-flex; align-items: center; gap: 6px; }
-.rs-web__state svg { width: 14px; height: 14px; }
-.rs-web__state.is-open { color: var(--good); }
-.rs-web__addr { display: inline-flex; align-items: center; gap: 4px; }
-.rs-web__addr a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); font-variant-numeric: tabular-nums; }
-.rs-web__addr a:hover { color: var(--fg); border-bottom-color: var(--fg); }
-.rs-web__addr .icon-btn { width: 28px; height: 28px; }
-.rs-web__addr .icon-btn svg { width: 14px; height: 14px; }
-.rs-tabs { display: flex; gap: 2px; margin: 16px 0 18px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: none; }
-.rs-tabs [role="tab"] { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px 9px; margin-bottom: -1px; font-size: 13.5px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; }
-.rs-tabs [role="tab"]:hover { color: var(--fg); }
-.rs-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
-.rs-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
-.rs-tabs .count { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
-.rs-save { position: sticky; bottom: 12px; z-index: 5; display: flex; justify-content: center; margin-top: 24px; pointer-events: none; }
-.rs-save[hidden] { display: none; }
-.rs-save__inner {
-  pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px;
-  border: 1px solid var(--hairline); border-radius: 14px; background: var(--glass); box-shadow: var(--pop-shadow);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4);
+   A stage's panel: from the right, over the chart, below the top bar. */
+.shell { --rc-side: 268px; }
+.shell.nav-hidden { --rc-side: 0px; }
+@media (max-width: 860px) { .shell { --rc-side: 0px; } }
+.sd-veil { position: fixed; top: 52px; right: 0; bottom: 0; left: var(--rc-side, 0px); z-index: 30; }
+.sd {
+  position: fixed; top: 52px; right: 0; bottom: 0; z-index: 31;
+  width: min(840px, max(600px, 54vw), calc(100vw - var(--rc-side, 0px) - 120px));
+  display: flex; flex-direction: column; background: var(--page); outline: none;
+  border-left: 1px solid var(--hairline); box-shadow: -32px 0 64px -34px rgba(0, 0, 0, 0.28);
 }
-.rs-save__status { font-size: 13px; color: var(--muted); margin-right: 8px; }
-.rs-save__error { font-size: 13px; color: var(--bad); margin-right: 8px; max-width: 46ch; }
+.sd.is-entering { animation: sd-in 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.sd.is-leaving { animation: sd-out 0.17s cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes sd-in { from { transform: translateX(56px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sd-out { from { transform: none; opacity: 1; } to { transform: translateX(56px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sd.is-entering, .sd.is-leaving { animation: none; } }
+@media (max-width: 860px) { .sd { left: 0; width: auto; border-left: 0; } }
+.sd-head { flex: none; padding: 14px 24px 12px; }
+.sd-head__bar { display: flex; align-items: center; gap: 12px; min-height: 32px; }
+.sd-head__bar .rc-kind-tag { flex: none; }
+.sd-head__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
+.sd-head__tools .icon-btn { width: 32px; height: 32px; color: var(--muted); }
+.sd-head__tools .icon-btn:hover { color: var(--fg); }
+.sd-head__tools .icon-btn svg { width: 17px; height: 17px; }
+.sd-head__tools .icon-btn.is-off { opacity: 0.3; pointer-events: none; }
+.sd-web { font-size: 12.5px; color: var(--muted); }
+.sd-web.is-open { color: var(--good); }
+.sd-title { margin: 12px 0 6px; font-size: 22px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.sd-nums { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; min-height: 20px; font-size: 13px; color: var(--muted); }
+.sd-nums b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sd-tabs { flex: none; display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: none; }
+.sd-tabs [role="tab"] { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 8px 8px 10px; margin-bottom: -1px; font-size: 13.5px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; }
+.sd-tabs [role="tab"]:hover { color: var(--fg); }
+.sd-tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+.sd-tabs [role="tab"]:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+.sd-tabs .count { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sd-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px 32px; overscroll-behavior: contain; }
+.sd-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.sd-toolbar__note { font-size: 13px; color: var(--muted); }
+.sd-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 26px; border: 1px dashed var(--rule); border-radius: 14px; font-size: 14px; color: var(--muted); }
+.sd-empty b { font-size: 15px; font-weight: 600; color: var(--fg); }
+.sd-empty p { margin: 0; max-width: 56ch; line-height: 1.55; }
+/* Saving the draft: the panel's foot while there is something to save. */
+.rs-save[hidden] { display: none; }
+.rs-save { flex: none; display: flex; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--hairline); background: var(--page); }
+.rs-save__inner { display: flex; align-items: center; gap: 10px; }
+.rs-save__status { font-size: 13px; color: var(--muted); margin-right: 6px; }
+.rs-save__error { font-size: 13px; color: var(--bad); margin-right: 6px; max-width: 52ch; }
+/* Who is here: which list and a search above, the checklist in the rows. */
+.sd-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 34px; margin: 0 0 12px; }
+.sd-search { position: relative; flex: 0 1 240px; margin-left: auto; }
+.sd-search svg { position: absolute; left: 10px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+.sd-search .text-input { width: 100%; height: 34px; padding-left: 32px; }
+.sd-scroll { overflow-x: auto; }
+.sd-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
+.sd-table td[data-col="person"] { overflow: hidden; }
+/* A text cell reads as text until it is pointed at or focused. */
+.sd-table td .rc-cell-input { margin-left: -10px; border-color: transparent; background: transparent; }
+.sd-table td .rc-cell-input:hover { border-color: var(--hairline); }
+.sd-table td .rc-cell-input:focus { border-color: var(--rule); background: var(--page); }
+.sd-table th { padding: 0 10px 8px; border-bottom: 1px solid var(--hairline); text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.sd-table td { padding: 9px 10px; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+.sd-table tbody tr:hover td { background: color-mix(in srgb, var(--hover) 55%, transparent); }
+.sd-table tr.is-selected td { background: var(--hover); }
+.sd-table .sd-check { width: 34px; padding-left: 2px; padding-right: 0; }
+.sd-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 1px; font-size: 12px; color: var(--faint); }
+.sd-table .rc-person-link { padding: 0; }
+.sd-status { color: var(--fg); }
+.sd-status--accepted { color: var(--good); }
+.sd-status--declined { color: var(--bad); }
+.sd-mark { display: inline-flex; align-items: center; gap: 3px; }
+.sd-mark svg { width: 12px; height: 12px; }
+.sd-empty-row td { padding: 28px 10px; text-align: center; color: var(--muted); }
+.sd-foot { padding: 10px 2px 0; font-size: 12.5px; color: var(--muted); }
 .rs-fieldcol { width: 150px; }
 .rs-fieldcol--check { width: 118px; }
 .rs-fieldcol--note { width: 200px; }
-.sheet.sheet--stage td.rs-fieldcell { overflow: visible; }
 
 /* Checklist values: the same controls in a list cell and on a person's page. */
 .rc-checkfield { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--muted); }
@@ -2366,18 +2435,11 @@ button.rc-star:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px
 .rc-sample-input--note { width: 100%; height: 56px; align-items: flex-start; padding-top: 8px; }
 
 /* ---------------------------------------------------------------------------
-   The form editor: the questions as the applicant sees them, one card each;
-   what the website does with the form beside them. */
-.sf { display: grid; grid-template-columns: minmax(0, 720px) minmax(260px, 320px); gap: 28px; align-items: start; }
-.sf__side { position: sticky; top: 16px; }
-.sf-panel { border: 1px solid var(--hairline); border-radius: 14px; background: var(--page); padding: 6px 18px 10px; }
-.sf-panel .fe__field { margin: 10px 0; }
-.sf-panel__title { margin: 12px 0 6px; font-size: 13.5px; font-weight: 600; color: var(--fg); }
+   The form editor: the questions as the applicant sees them, one card each. */
 .sf-paper { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; margin-bottom: 12px; border: 1px solid var(--hairline); border-top: 4px solid var(--fg); border-radius: 14px; background: var(--page); }
 .sf-paper__title { border: 0; border-bottom: 1px solid transparent; padding: 2px 0; background: transparent; font: inherit; font-size: 22px; font-weight: 600; color: var(--fg); outline: 0; }
 .sf-paper__desc { border: 0; border-bottom: 1px solid transparent; padding: 2px 0; background: transparent; font: inherit; font-size: 14px; line-height: 1.55; color: var(--muted); outline: 0; resize: none; field-sizing: content; min-height: 24px; }
 .sf-paper__title:focus, .sf-paper__desc:focus { border-bottom-color: var(--rule); }
-.fe__view { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; color: var(--muted); font-size: 13px; }
 .fe__field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
 .fe__field .text-input { width: 100%; font-weight: 400; }
 .fe__field textarea.text-input { min-height: 56px; padding: 8px 10px; line-height: 1.5; resize: vertical; field-sizing: content; }
@@ -2459,15 +2521,12 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .fe-switch input:disabled ~ * { opacity: 0.5; cursor: default; }
 .fe__add, .ck__add { margin-top: 14px; }
 .fe-switch--row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; }
-.sf-panel .fe-switch--row:first-of-type { border-top: 0; }
 .fe-switch--row .fe-switch__track { margin-top: 1px; }
 .fe-switch--row .fe-switch__text { display: flex; flex-direction: column; gap: 2px; }
 .fe-switch--row small { font-size: 12.5px; color: var(--faint); }
 /* In a dialog the switch stays beside its text (dialog labels otherwise stack). */
 .modal__body .fe-switch--row { flex-direction: row; }
 .fe-options__cap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 11px 0; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--muted); }
-.sf-panel .fe-options__cap > .fe-switch__text:first-child { flex-basis: 100%; }
-.sf-panel .fe-options__remove { flex-direction: column; align-items: flex-start; }
 .fe-options__n { width: 96px; height: 28px; font-variant-numeric: tabular-nums; }
 .fe-options__n::placeholder { color: var(--faint); }
 .fe-notify { margin: 0 0 12px 42px; }
@@ -2494,10 +2553,8 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .fe-preview__file { display: flex; align-items: center; gap: 8px; margin-top: 8px; border: 1px dashed var(--rule); border-radius: 8px; padding: 18px; font-size: 13px; color: var(--muted); }
 .fe-preview__file svg { width: 15px; height: 15px; }
 
-/* The checklist: its fields as cards, and how reviewers will see them. */
-.ck { display: grid; grid-template-columns: minmax(0, 720px) minmax(260px, 340px); gap: 28px; align-items: start; }
-.ck--read { grid-template-columns: minmax(0, 560px); }
-.ck__side { position: sticky; top: 16px; border: 1px solid var(--hairline); border-radius: 14px; padding: 6px 18px 18px; background: var(--rc-canvas); }
+/* The checklist: its fields as cards. */
+.ck--read .ck__preview { max-width: 560px; }
 .ck-f__icon { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 7px; background: var(--hover); color: var(--muted); }
 .ck-f__icon svg { width: 14px; height: 14px; }
 .ck-f__head .fe-q__label { font-size: 14.5px; }
@@ -2506,10 +2563,21 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .ck-f__scale .dd { min-width: 64px; }
 .ck-empty { padding: 22px; border: 1px dashed var(--rule); border-radius: 14px; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
 
-/* Settings: the name, the kind as four cards, where it leads. */
-.ss { max-width: 760px; display: flex; flex-direction: column; gap: 6px; }
-.ss__group { padding: 6px 0 14px; }
+/* Settings: short groups under hairlines. */
+.ss { display: flex; flex-direction: column; }
+.ss__group { padding: 18px 0; border-top: 1px solid var(--hairline); }
+.ss__group:first-child { padding-top: 2px; border-top: 0; }
+.ss__title { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--fg); }
 .ss__name { max-width: 420px; width: 100%; font-size: 15px; }
+.ss-link { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; font-size: 13px; }
+.ss-link a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--hairline); font-variant-numeric: tabular-nums; }
+.ss-link a:hover { color: var(--fg); border-bottom-color: var(--fg); }
+.ss-link .icon-btn { width: 28px; height: 28px; }
+.ss-link .icon-btn svg { width: 14px; height: 14px; }
+.ss-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin: 12px 0; }
+.ss .fe__field { margin: 0 0 12px; }
+.ss-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--muted); }
+@media (max-width: 640px) { .ss-pair { grid-template-columns: minmax(0, 1fr); } }
 .ss-kinds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .ss-kinds--compact { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .ss-kind { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--page); font: inherit; text-align: left; color: var(--muted); cursor: pointer; min-width: 0; }
@@ -2522,6 +2590,11 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .ss-kind small { font-size: 12px; line-height: 1.4; }
 .ss-kinds--compact .ss-kind { align-items: center; padding: 10px 6px; text-align: center; }
 .ss-kinds--compact .ss-kind__icon { margin: 0; }
+/* In a stage's panel the kind is one slim row. */
+.sd .ss-kinds--compact { display: flex; gap: 6px; }
+.sd .ss-kind { flex: 1; flex-direction: row; justify-content: center; gap: 8px; height: 38px; padding: 0 10px; border-radius: 10px; }
+.sd .ss-kind__icon { width: auto; height: auto; background: none; color: inherit; }
+.sd .ss-kind b { font-weight: 500; color: inherit; }
 .ss-next { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ss-next .rc-check { min-height: 38px; padding: 0 10px; border-radius: 8px; font-size: 14px; }
 .ss-next .rc-check:hover { background: var(--hover); }
@@ -2788,15 +2861,10 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 /* ---------------------------------------------------------------------------
    Narrow screens. */
 @media (max-width: 1100px) {
-  .sf, .ck { grid-template-columns: minmax(0, 1fr); }
-  .sf__side, .ck__side { position: static; }
   .pn-grid { grid-template-columns: minmax(0, 1fr); }
   .pn-side { position: static; }
 }
 @media (max-width: 760px) {
-  .rs-head { grid-template-columns: minmax(0, 1fr); }
-  .rs-head__numbers { gap: 16px; }
-  .rs-head__numbers div { align-items: flex-start; }
   .ri-grid { grid-template-columns: minmax(0, 1fr); }
   .ri-bar { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) minmax(36px, auto); gap: 8px; }
   .pn-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2805,7 +2873,6 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .pn-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .pn-each { grid-column: 1; }
   .ss-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .fc-bar .btn { width: 100%; justify-content: center; }
   .sheet.sheet--recruit table { min-width: 0; width: 100%; }
   .sheet.sheet--recruit table th, .sheet.sheet--recruit table td { display: none; }
   .sheet.sheet--recruit table [data-col="person"],
@@ -2819,18 +2886,19 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .sheet--recruit .interest-row-actions { gap: 0; }
   .rc-mobile-meta { display: block; font-size: 11.5px; line-height: 1.5; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
   /* A stage's people stack: who, then one line per checklist field. */
-  .sheet.sheet--stage table, .sheet.sheet--stage tbody { display: block; }
-  .sheet.sheet--stage thead { display: none; }
-  .sheet.sheet--stage tbody tr:not(.sheet__empty) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
-  .sheet.sheet--stage tbody tr:last-child { border-bottom: 0; }
-  .sheet.sheet--stage tbody tr:not(.sheet__empty) td { border-bottom: 0; }
-  .sheet.sheet--stage td[data-col="check"] { grid-area: 1 / 1; }
-  .sheet.sheet--stage td[data-col="person"] { grid-area: 1 / 2; }
-  .sheet.sheet--stage td[data-col="review"] { grid-area: 1 / 3; }
-  .sheet.sheet--stage td.rs-fieldcell { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 2px 12px 2px 52px; }
-  .sheet.sheet--stage td.rs-fieldcell::before { content: attr(data-label); flex: none; max-width: 45%; font-size: 12.5px; color: var(--muted); white-space: normal; }
-  .sheet.sheet--stage td.rs-fieldcell > * { min-width: 0; }
-  .sheet.sheet--stage td.rs-fieldcell .rc-cell-input { margin-left: 0; text-align: right; }
+  .sd-table, .sd-table tbody { display: block; }
+  .sd-table thead { display: none; }
+  .sd-table tbody tr:not(.sd-empty-row) { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; padding: 4px 0 8px; border-bottom: 1px solid var(--hairline); }
+  .sd-table tbody tr:not(.sd-empty-row) td { border-bottom: 0; }
+  .sd-table td[data-col="check"] { grid-area: 1 / 1; }
+  .sd-table td[data-col="person"] { grid-area: 1 / 2; }
+  .sd-table td.rs-fieldcell { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 2px 4px 2px 44px; }
+  .sd-table td.rs-fieldcell::before { content: attr(data-label); flex: none; max-width: 45%; font-size: 12.5px; color: var(--muted); white-space: normal; }
+  .sd-table td.rs-fieldcell > * { min-width: 0; }
+  .sd-table td.rs-fieldcell .rc-cell-input { margin-left: 0; text-align: right; }
+  .sd-head, .sd-body { padding-left: 16px; padding-right: 16px; }
+  .sd-table tbody tr:hover td { background: none; }
+  .sd-search { flex-basis: 100%; margin-left: 0; }
   .sheet--recruit .sheet__bar { gap: 8px; padding: 10px; }
   .sheet--recruit .sheet__search-wrap { flex-basis: 100%; }
   .rp-bar .sheet__search-wrap { flex-basis: 100%; }
@@ -2839,7 +2907,7 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .fe-switch { min-height: 40px; }
   .fe-q__grip { min-width: 40px; min-height: 40px; }
   .fe-q .dd { min-height: 40px; }
-  .rs-save { bottom: max(10px, env(safe-area-inset-bottom)); }
+  .rs-save { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .rs-save__inner { width: 100%; }
   .rs-save__status { margin-right: auto; }
   .pb-col { flex-basis: 84vw; }
@@ -9170,6 +9238,8 @@ const RECRUIT = {
     if (st.cycle?.data) {
       const panel = recruitActivePanel();
       st.panel = panel?.id || null;
+      // The stage panel marks itself open when it mounts; any other view closes it.
+      if (st.panel !== 'stage') st.mod.drawer = null;
       try { panel?.module.mount?.(st.cycle.data, st.cycle.role, panel.id); } catch (e) { console.error(e); }
     }
     this.sync();
@@ -9792,7 +9862,8 @@ function recruitCycleShellHtml(id) {
     let inner = '';
     try { inner = active.module.view ? String(active.module.view(cycle, role, active.id) ?? '') : ''; } catch (e) { console.error(e); inner = `<p class="sheet__note">Could not draw this view: ${MD.esc(e.message || 'error')}</p>`; }
     // The view fades in when it changes, never on a re-render of the same one.
-    const where = cycle.id + ':' + active.id + ':' + (UI.route?.params?.key || '') + ':' + (UI.route?.params?.email || '');
+    // A stage opens in a panel over the chart, so the chart stays put.
+    const where = cycle.id + ':' + (active.id === 'stage' ? 'flow' : active.id) + ':' + (active.id === 'person' ? UI.route?.params?.email || '' : '');
     const enter = st.paintedPanel !== where;
     st.paintedPanel = where;
     body = `<div class="rc-panel ${enter ? 'rc-panel--enter' : ''}" id="rc-panel-${MD.esc(active.id)}" ${active.tab ? `role="tabpanel" aria-labelledby="rc-tab-${MD.esc(active.id)}"` : ''}>${inner || `<div class="empty">${I.info}<b>Nothing here yet</b></div>`}</div>`;
@@ -10534,21 +10605,33 @@ RECRUIT.register({
 
 /* ============================================================================
    Applications — flow module (client). The cycle's flow chart: every stage a
-   card, top to bottom in the order people meet them, the connections drawn
-   between them, and the people at each stage counted on its card. A split
-   sends people on by an answer they gave; its connections say which answer
-   goes where. Leads add stages, connect them (drag from a card's +, or its
-   menus), split, reorder and remove them; every change saves at once. A card
-   opens its stage's page.
+   card, left to right in the order people meet them (top to bottom on a
+   narrow screen), the connections drawn between them, and the people at
+   each stage counted on its card. A split sends people on by an answer they
+   gave: its branches leave the card together and say which answers take
+   them. Leads add stages (the + in the chart, or a card's own +), connect
+   them (drag from a card's +, or its menus), split, reorder and remove them;
+   every change saves at once. A card opens its stage in a panel over the
+   chart.
    ========================================================================== */
 
 'use strict';
 
 // recruit:flow:start
 
-// Card size and spacing, in CSS pixels. Fixed, so layout needs no measuring;
-// a card with a checklist's progress bar is taller, and so is its row.
-const FC = { W: 256, H: 122, H_METER: 134, GAP_X: 32, GAP_Y: 84, PAD: 28, OUT_H: 52, OUT_MIN: 480, DETOUR: 26 };
+// Sizes, in CSS pixels. Across a wide chart every card is as wide as the
+// chart allows between W_MIN and W_MAX (and as tall as its content needs); columns sit GAP apart (a gap
+// is as wide as the counts and answers on its connections need), and stages
+// that share a column stack STACK apart. A connection that passes a column
+// takes a LANE through it. Down a narrow chart, rows sit V_GAP apart.
+const FC = {
+  W_MIN: 184, W_MAX: 300, PAD: 24,
+  GAP: 56, GAP_MIN: 44, GAP_GROW: 40, GAP_LABEL: 200, ENTRY: 40, WHY: 112,
+  STACK: 28, LANE: 14, LANE_GAP: 14,
+  OUT_W: 112, OUT_H: 150,
+  FORK: 20, BEND: 10, SCALE_MIN: 0.8,
+  NARROW: 700, V_W: 272, V_GAP: 64, V_STACK: 20, V_OUT_H: 52, V_ENTRY: 44,
+};
 const FC_OUTCOME = '__outcome';
 
 // Everything the chart shows about a stage: kind, form, and its counts.
@@ -10557,87 +10640,277 @@ function recruitFlowStats(key) {
   return ins?.stages?.find((s) => s.key === key) || null;
 }
 
-// A point on a connection's curve, t from 0 (the card it leaves) to 1.
-const recruitBezier = (t, p0, p1, p2, p3) => (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3;
-
-// A connection leaves a card's bottom and enters the next card's top on a
-// smooth curve; one that passes stages in between runs down beside them.
-function recruitEdgePath(a, b, { x2 = null, side = null } = {}) {
-  if (!a || !b) return { d: '', mx: 0, my: 0 };
-  const x1 = a.x + a.w / 2, y1 = a.y + a.h, tx = x2 ?? b.x + b.w / 2, ty = b.y;
-  if (side !== null) {
-    const h = Math.min(30, (ty - y1) / 4);
-    return { d: `M${x1} ${y1} C${x1} ${y1 + h}, ${side} ${y1 + h}, ${side} ${y1 + 2 * h} L${side} ${ty - 2 * h} C${side} ${ty - h}, ${tx} ${ty - h}, ${tx} ${ty}`, mx: side, my: (y1 + ty) / 2 };
-  }
-  const dy = Math.max(24, (ty - y1) / 2);
-  // A split's answer sits nearer the card it leads to, clear of its siblings.
-  const t = 0.66;
-  return { d: `M${x1} ${y1} C${x1} ${y1 + dy}, ${tx} ${ty - dy}, ${tx} ${ty}`, mx: recruitBezier(t, x1, x1, tx, tx), my: recruitBezier(t, y1, y1 + dy, ty - dy, ty) };
+// The width the chart fills: its own zone once drawn; before that, the
+// window less the sidebar and the page's margins. The chart lays itself out
+// again once it knows (recruitFlowFit).
+function recruitFlowAvail() {
+  const zone = typeof document !== 'undefined' ? document.querySelector?.('[data-rc="flow"]') : null;
+  const w = Number(zone?.clientWidth) || 0;
+  if (w > 0) return w - 2;   // the zone's border
+  const vw = Number(typeof window !== 'undefined' && window.innerWidth) || 1280;
+  return Math.max(320, vw > 860 ? vw - 268 - 80 : vw - 36);
 }
 
-// Positions for every stage: a row per step along the flow, each row ordered
-// so connections cross as little as one pass over the rows manages, centred;
-// the outcomes span the bottom.
-function recruitFlowLayout(flow, { outcome = true } = {}) {
-  const rows = [];
-  for (const k of flow.keys) (rows[flow.ranks.get(k)] ||= []).push(k);
-  const list = rows.filter(Boolean);
-  const centre = new Map();
-  list.forEach((row, r) => {
-    if (r > 0) {
-      const bary = (k) => { const ins = flow.into.get(k).filter((p) => centre.has(p)); return ins.length ? ins.reduce((a, p) => a + centre.get(p), 0) / ins.length : Infinity; };
-      row.sort((a, b) => bary(a) - bary(b) || flow.order.indexOf(a) - flow.order.indexOf(b));
+// How wide a line of text is in the page's font (12px labels by default,
+// a card's 15px titles): measured where the page can, counted otherwise.
+let recruitMeasure = null;
+function recruitTextWidth(text, { px = 12, weight = 400 } = {}) {
+  const s = String(text || '');
+  try {
+    if (recruitMeasure === null) {
+      const ctx = document.createElement('canvas').getContext?.('2d') || false;
+      recruitMeasure = ctx ? { ctx, family: getComputedStyle(document.body).fontFamily || 'sans-serif' } : false;
     }
-    row.forEach((k, i) => centre.set(k, i - (row.length - 1) / 2));
-  });
-  const withOutcome = outcome && flow.keys.length > 0;
-  const widest = Math.max(1, ...list.map((row) => row.length));
-  const span = Math.max(widest * FC.W + (widest - 1) * FC.GAP_X, withOutcome ? FC.OUT_MIN : 0);
-  const nodes = new Map();
-  const meter = (k) => { const s = flow.sections[k]; return Boolean(s?.done && (s.fields || []).some((f) => f.key === s.done)); };
-  let y = FC.PAD;
-  list.forEach((row, r) => {
-    const width = row.length * FC.W + (row.length - 1) * FC.GAP_X;
-    const h = row.some(meter) ? FC.H_METER : FC.H;
-    row.forEach((k, i) => nodes.set(k, { key: k, row: r, x: FC.PAD + (span - width) / 2 + i * (FC.W + FC.GAP_X), y, w: FC.W, h }));
-    y += h + FC.GAP_Y;
-  });
-  let height = y - FC.GAP_Y;
-  if (withOutcome) {
-    nodes.set(FC_OUTCOME, { key: FC_OUTCOME, row: list.length, x: FC.PAD, y: height + FC.GAP_Y, w: span, h: FC.OUT_H });
-    height += FC.GAP_Y + FC.OUT_H;
+    if (recruitMeasure) { recruitMeasure.ctx.font = `${weight} ${px}px ${recruitMeasure.family}`; return Math.ceil(recruitMeasure.ctx.measureText(s).width); }
+  } catch { recruitMeasure = false; }
+  return Math.ceil(s.length * px * (weight >= 600 ? 0.6 : 0.56));
+}
+
+// How wide a label is once its words wrap at `max` (two lines at most; a
+// longer label is cut).
+function recruitWrapWidth(text, max) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  let widest = 0, line = '';
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (line && recruitTextWidth(next) > max) { widest = Math.max(widest, recruitTextWidth(line)); line = w; } else line = next;
   }
-  let right = FC.PAD + span;
-  const cards = [...nodes.values()].filter((n) => n.key !== FC_OUTCOME);
-  // A connection that would cross a card between its two rows goes around.
-  const sideFor = (a, b, x2) => {
-    const lo = Math.min(a.x + a.w / 2, x2) - 12, hi = Math.max(a.x + a.w / 2, x2) + 12;
-    const between = cards.filter((n) => n.row > a.row && n.row < b.row);
-    if (!between.some((n) => n.x < hi && n.x + n.w > lo)) return null;
-    const side = Math.max(a.x + a.w, ...between.map((n) => n.x + n.w)) + FC.DETOUR;
-    right = Math.max(right, side + FC.DETOUR);
-    return side;
-  };
+  return Math.min(max, Math.max(widest, recruitTextWidth(line)));
+}
+
+// Centres for one column's items, kept in order, as near the wanted centres
+// as the spacing between neighbours allows (least squares, by pooling
+// adjacent violators).
+function recruitSpread(want, gaps) {
+  const off = [0];
+  for (let i = 0; i < gaps.length; i += 1) off.push(off[i] + gaps[i]);
+  const blocks = [];
+  want.forEach((w, i) => {
+    let b = { sum: w - off[i], n: 1, start: i };
+    while (blocks.length && blocks.at(-1).sum / blocks.at(-1).n > b.sum / b.n) {
+      const top = blocks.pop();
+      b = { sum: top.sum + b.sum, n: top.n + b.n, start: top.start };
+    }
+    blocks.push(b);
+  });
+  const out = [];
+  for (const b of blocks) for (let k = 0; k < b.n; k += 1) out.push(b.sum / b.n + off[b.start + k]);
+  return out;
+}
+
+// Where everything goes. Stages sit in a column per step (a row, down a
+// narrow chart). Within a column they are ordered so connections cross as
+// little as a few sweeps manage, then placed as near the stages they
+// connect to as their spacing allows: a split fans out evenly around the
+// stage it leaves, and branches that meet again meet in the middle. A
+// connection that passes a column takes a lane through it, clear of the
+// cards there. Connections run straight, or bend once in a gap with rounded
+// corners: a stage's branches bend together just after it, connections into
+// one stage just before it. Every connection carries a count of the people
+// who passed along it, a split's also the answers that take it; each first
+// stage gets a short arrow in, counting who entered there. The outcomes
+// close the chart: a column across, a bar down. When the chart is still too
+// wide at its smallest cards, it is drawn a little smaller (never below
+// SCALE_MIN) before it scrolls.
+function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } = {}) {
+  const across = width >= FC.NARROW;
+  const ranks = [...new Set(flow.keys.map((k) => flow.ranks.get(k) ?? 0))].sort((a, b) => a - b);
+  const n = ranks.length;
+  const colOf = (k) => ranks.indexOf(flow.ranks.get(k) ?? 0);
+  const withOutcome = outcome && n > 0;
+
+  // Items: a card per stage, and a lane in each column a connection passes.
+  const items = new Map();
+  const add = (id, col, kind, key = null, from = null) => { const it = { id, col, kind, key, from, preds: [], succs: [] }; items.set(id, it); return it; };
+  for (const k of flow.keys) add(k, colOf(k), 'card', k);
   const edges = [];
-  for (const [from, to] of flow.edges) {
-    const split = flow.splits?.get(from);
-    const conditional = split ? recruitSplitTargets(split) : null;
-    for (const k of to) {
-      const a = nodes.get(from), b = nodes.get(k);
-      if (!a || !b) continue;
-      edges.push({ from, to: k, label: conditional?.has(k) ? recruitSplitLabel(split, k) : '', ...recruitEdgePath(a, b, { side: sideFor(a, b, b.x + b.w / 2) }) });
+  const connect = (from, to, extra) => {
+    const last = to === FC_OUTCOME ? n : colOf(to);
+    const chain = [from];
+    for (let c = colOf(from) + 1; c < last; c += 1) chain.push(add(`${from}>${to}@${c}`, c, 'lane', null, from).id);
+    if (to !== FC_OUTCOME) chain.push(to);
+    for (let i = 1; i < chain.length; i += 1) { items.get(chain[i - 1]).succs.push(chain[i]); items.get(chain[i]).preds.push(chain[i - 1]); }
+    edges.push({ from, to, chain, ...extra });
+  };
+  for (const [from, list] of flow.edges) {
+    const split = flow.splits?.get(from) || null;
+    const conditional = recruitSplitTargets(split);
+    for (const to of list) {
+      if (!items.has(to) || colOf(to) <= colOf(from)) continue;
+      connect(from, to, { outcome: false, split: conditional.has(to), label: conditional.has(to) ? recruitSplitLabel(split, to) : '' });
     }
   }
-  if (withOutcome) {
-    const out = nodes.get(FC_OUTCOME);
-    for (const k of flow.keys) {
-      if ((flow.edges.get(k) || []).length) continue;
-      const a = nodes.get(k);
-      const x2 = a.x + a.w / 2;
-      edges.push({ from: k, to: FC_OUTCOME, outcome: true, label: '', ...recruitEdgePath(a, out, { x2, side: sideFor(a, out, x2) }) });
+  if (withOutcome) for (const k of flow.keys) if (!(flow.edges.get(k) || []).length) connect(k, FC_OUTCOME, { outcome: true, split: false, label: '' });
+  const roots = flow.keys.filter((k) => !items.get(k).preds.length);
+
+  // Order within each column: stage order first, then sweeps that sort each
+  // column by where its neighbours sit (ties keep the order).
+  const cols = Array.from({ length: n }, () => []);
+  for (const it of items.values()) cols[it.col].push(it);
+  const seq = (it) => flow.order.indexOf(it.key ?? it.from) + (it.key ? 0 : 0.5);
+  for (const col of cols) col.sort((a, b) => seq(a) - seq(b));
+  const at = new Map();
+  const index = (col) => col.forEach((it, i) => at.set(it.id, i));
+  cols.forEach(index);
+  const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
+  const sortBy = (col, side) => {
+    const bary = new Map(col.map((it) => [it.id, mean(it[side].map((id) => at.get(id))) ?? at.get(it.id)]));
+    col.sort((a, b) => bary.get(a.id) - bary.get(b.id) || at.get(a.id) - at.get(b.id));
+    index(col);
+  };
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (let c = 1; c < n; c += 1) sortBy(cols[c], 'preds');
+    for (let c = n - 2; c >= 0; c -= 1) sortBy(cols[c], 'succs');
+  }
+
+  // Cards are one height: room for the longest title (two lines at most)
+  // and, where a checkbox marks a stage done, its bar.
+  const Wd = Math.min(FC.V_W, Math.max(208, width - 2 * FC.PAD));
+  const meters = flow.keys.some((k) => { const s = flow.sections[k]; return Boolean(s?.done && (s.fields || []).some((f) => f.key === s.done)); });
+  const cardH = (w) => {
+    const lines = flow.keys.some((k) => recruitTextWidth(flow.sections[k].title, { px: 15, weight: 600 }) > w - 32) ? 2 : 1;
+    return Math.ceil(2 + 28 + 20 + 10 + 19.5 * lines + 12 + 22 + (meters ? 36 : 0));
+  };
+  let H = cardH(across ? FC.W_MAX : Wd);
+
+  // Across the flow: centres, relaxed toward each item's neighbours.
+  const size = (it) => (it.kind === 'lane' ? FC.LANE : across ? H : Wd);
+  const apart = (a, b) => size(a) / 2 + (a.kind === 'lane' || b.kind === 'lane' ? FC.LANE_GAP : across ? FC.STACK : FC.V_STACK) + size(b) / 2;
+  const c = new Map();
+  const relax = () => {
+    for (const col of cols) {
+      let y = 0;
+      col.forEach((it, i) => { if (i) y += apart(col[i - 1], it); c.set(it.id, y); });
+      for (const it of col) c.set(it.id, c.get(it.id) - y / 2);
+    }
+    for (let round = 0; round < 24; round += 1) {
+      for (const col of round % 2 ? [...cols].reverse() : cols) {
+        const want = col.map((it) => mean([...it.preds, ...it.succs].map((id) => c.get(id))) ?? c.get(it.id));
+        recruitSpread(want, col.slice(1).map((it, i) => apart(col[i], it))).forEach((v, i) => c.set(col[i].id, v));
+      }
+    }
+  };
+  relax();
+
+  // How each connection enters its last gap, which decides where its count
+  // sits and how wide that gap must be.
+  const outs = new Map(), ins = new Map();
+  for (const e of edges) { outs.set(e.from, (outs.get(e.from) || 0) + 1); if (!e.outcome) ins.set(e.to, (ins.get(e.to) || 0) + 1); }
+  const pillW = (e) => (e.label ? recruitWrapWidth(e.label, FC.WHY) + 6 : 0) + recruitTextWidth('000') + 22;
+  const need = new Array(n + 1).fill(0);   // need[c]: the gap before column c
+  for (const e of edges) {
+    if (e.outcome) continue;
+    const bent = Math.abs(c.get(e.chain.at(-2)) - c.get(e.to)) >= 0.5;
+    e.turn = bent ? (e.chain.length === 2 && outs.get(e.from) > 1 ? 'fork' : ins.get(e.to) > 1 ? 'merge' : 'mid') : 'none';
+    const gap = colOf(e.to);
+    need[gap] = Math.max(need[gap], (e.turn === 'none' ? 0 : FC.FORK + FC.BEND) + pillW(e) + 16);
+  }
+
+  // Along the flow: card width and gaps from the width there is.
+  const gapCount = n - 1 + (withOutcome ? 1 : 0);
+  const entry = across ? FC.ENTRY : FC.V_ENTRY;
+  const gapsWith = (base) => Array.from({ length: gapCount }, (_, i) => Math.max(base, Math.min(FC.GAP_LABEL, need[i + 1])));
+  const fixed = (base) => 2 * FC.PAD + entry + (withOutcome ? FC.OUT_W : 0) + gapsWith(base).reduce((a, b) => a + b, 0);
+  let W = Wd, scale = 1, gaps;
+  if (across) {
+    const base = (width - fixed(FC.GAP)) / n >= FC.W_MIN ? FC.GAP : FC.GAP_MIN;
+    W = Math.floor((width - fixed(base)) / n);
+    if (W < FC.W_MIN) { W = FC.W_MIN; scale = Math.max(FC.SCALE_MIN, width / (fixed(base) + n * W)); }
+    W = Math.min(FC.W_MAX, W);
+    gaps = gapsWith(base);
+    // Width left once the cards are at their widest opens the gaps a little.
+    const extra = width - fixed(base) - n * W;
+    if (scale === 1 && extra > 0 && gapCount) gaps = gaps.map((g) => g + Math.min(FC.GAP_GROW, extra / gapCount));
+  } else gaps = Array.from({ length: gapCount }, (_, i) => Math.max(FC.V_GAP, Math.min(FC.GAP_LABEL, need[i + 1] ? 64 : 0)));
+  if (across && cardH(W) !== H) { H = cardH(W); relax(); }
+  const span = across ? W : H;   // a column's extent along the flow
+  const main = [FC.PAD + entry];
+  for (let i = 0; i < gapCount; i += 1) main.push(main[i] + span + gaps[i]);
+
+  // The outcomes: across, a card as tall as its rows, centred on the
+  // connections that end there (they merge into it); down, a bar the
+  // chart's width.
+  const ends = edges.filter((e) => e.outcome).map((e) => c.get(e.chain.at(-1)));
+  let outLow = 0, outHigh = 0;
+  if (withOutcome && ends.length) {
+    if (across) {
+      const m = (Math.min(...ends) + Math.max(...ends)) / 2;
+      outLow = m - FC.OUT_H / 2; outHigh = m + FC.OUT_H / 2;
+    } else {
+      outLow = Math.min(...[...items.values()].map((it) => c.get(it.id) - size(it) / 2));
+      outHigh = Math.max(...[...items.values()].map((it) => c.get(it.id) + size(it) / 2));
+      if (outHigh - outLow < 300) { const m = (outLow + outHigh) / 2; outLow = m - 150; outHigh = m + 150; }
     }
   }
-  return { nodes, edges, width: right + FC.PAD, height: height + FC.PAD };
+  let low = Infinity, high = -Infinity;
+  for (const it of items.values()) { low = Math.min(low, c.get(it.id) - size(it) / 2); high = Math.max(high, c.get(it.id) + size(it) / 2); }
+  if (withOutcome && ends.length) { low = Math.min(low, outLow); high = Math.max(high, outHigh); }
+  if (!Number.isFinite(low)) { low = 0; high = 0; }
+  const shift = FC.PAD - low;
+  const mid = (id) => c.get(id) + shift;
+
+  const nodes = new Map();
+  for (const it of items.values()) {
+    if (it.kind !== 'card') continue;
+    const m = main[it.col], x0 = mid(it.id);
+    nodes.set(it.key, across ? { key: it.key, col: it.col, x: m, y: x0 - H / 2, w: W, h: H } : { key: it.key, col: it.col, x: x0 - Wd / 2, y: m, w: Wd, h: H });
+  }
+  if (withOutcome && ends.length) {
+    nodes.set(FC_OUTCOME, across
+      ? { key: FC_OUTCOME, col: n, x: main[n], y: outLow + shift, w: FC.OUT_W, h: outHigh - outLow }
+      : { key: FC_OUTCOME, col: n, x: outLow + shift, y: main[n], w: outHigh - outLow, h: FC.V_OUT_H });
+  }
+
+  // Connections, in (along, across) coordinates turned into x and y.
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const P = (along, cross) => (across ? `${r1(along)} ${r1(cross)}` : `${r1(cross)} ${r1(along)}`);
+  const XY = (along, cross) => (across ? { lx: along, ly: cross } : { lx: cross, ly: along });
+  const hop = ([am, ac], [bm, bc], turn) => {
+    if (Math.abs(bc - ac) < 0.5) return `L${P(bm, bc)}`;
+    const s = bc > ac ? 1 : -1;
+    const r = Math.max(0, Math.min(FC.BEND, Math.abs(bc - ac) / 2, turn - am, bm - turn));
+    return `L${P(turn - r, ac)}Q${P(turn, ac)} ${P(turn, ac + s * r)}L${P(turn, bc - s * r)}Q${P(turn, bc)} ${P(turn + r, bc)}L${P(bm, bc)}`;
+  };
+  const drawn = edges.map((e) => {
+    const steps = e.chain.slice(1).map((id) => items.get(id));
+    const total = steps.length + (e.outcome ? 1 : 0);
+    let here = [main[items.get(e.from).col] + span, mid(e.from)];
+    let d = `M${P(...here)}`;
+    let place = null, gap = 0;
+    const cross = (next) => {
+      gap += 1;
+      const fork = gap === 1 && outs.get(e.from) > 1;
+      const merge = gap === total && (e.outcome ? ends.length > 1 : ins.get(e.to) > 1);
+      const turn = fork ? here[0] + FC.FORK : merge ? next[0] - FC.FORK : (here[0] + next[0]) / 2;
+      d += hop(here, next, turn);
+      if (gap === total) {
+        // The count sits on the last straight stretch before the card, or
+        // before the bend where connections merge into it.
+        const level = Math.abs(next[1] - here[1]) < 0.5;
+        const start = level ? (fork ? here[0] + FC.FORK : here[0]) : merge ? here[0] : turn + FC.BEND;
+        const stop = level || !merge ? next[0] : turn - FC.BEND;
+        place = { ...XY((start + stop) / 2, level || !merge ? next[1] : here[1]), lw: across ? stop - start - 10 : Wd - 16 };
+      }
+      here = next;
+    };
+    for (const it of steps) {
+      cross([main[it.col], mid(it.id)]);
+      if (it.kind === 'lane') { here = [main[it.col] + span, mid(it.id)]; d += `L${P(...here)}`; }
+    }
+    if (e.outcome) cross([main[n], across ? outLow + shift + FC.OUT_H / 2 : here[1]]);
+    return { from: e.from, to: e.to, outcome: e.outcome, split: e.split, label: e.label, d, ...(e.outcome ? {} : place) };
+  });
+  // Into each first stage: a short arrow from the chart's edge.
+  for (const k of roots) {
+    const cross = mid(k);
+    drawn.push({ from: null, to: k, entry: true, outcome: false, split: false, label: '', d: `M${P(FC.PAD, cross)}L${P(main[0], cross)}`, ...XY(FC.PAD + entry / 2, cross), lw: across ? entry - 6 : Wd - 16 });
+  }
+
+  const boxes = [...nodes.values()];
+  const far = (b) => (across ? b.x + b.w : b.y + b.h);
+  const extentAlong = Math.max(...boxes.map(far), FC.PAD) + FC.PAD;
+  const extentAcross = high - low + 2 * FC.PAD;
+  return { across, W: across ? W : Wd, H, scale, nodes, edges: drawn, width: across ? extentAlong : extentAcross, height: across ? extentAcross : extentAlong };
 }
 
 /* ------------------------------- drawing --------------------------------- */
@@ -10645,111 +10918,148 @@ function recruitFlowLayout(flow, { outcome = true } = {}) {
 // The kind of a stage as a quiet tag: its icon and its name.
 const recruitKindTagHtml = (kind) => `<span class="rc-kind-tag">${recruitKindIcon(kind)}${MD.esc(recruitKindLabel(kind))}</span>`;
 
+// The stage whose panel is open over the chart, if any.
+const recruitOpenStage = () => (UI.route?.params?.sub === 'stage' ? recruitStageKey() : null);
+
+// A card: the stage's kind, whether its form is on the website, its name,
+// who is here now and, where a checkbox marks it done, how far along they
+// are. How many came in is on the arrows.
 function recruitFlowNodeHtml(cycle, flow, n) {
   const key = n.key;
   const s = flow.sections[key];
   const stats = recruitFlowStats(key);
   const lead = recruitCanEdit(cycle);
   const loading = !recruitState().insights?.data;
-  const num = (v) => (loading ? '–' : recruitNum(v));
-  const landing = recruitLandingKey(cycle) === key;
-  const site = s.form ? `<span class="fc-web ${s.open ? 'is-open' : ''}" title="${s.open ? 'Open on the website' : 'Closed on the website'}">${s.open ? (landing ? 'Open · /apply' : 'Open') : 'Closed'}</span>` : '';
+  const num = (v) => (loading ? '–' : recruitNum(Number(v) || 0));
+  const site = s.form ? `<span class="fc-web ${s.open ? 'is-open' : ''}" title="${s.open ? 'Open on the website' : 'Closed on the website'}">${s.open ? 'Open' : 'Closed'}</span>` : '';
   const doneField = (s.fields || []).find((f) => f.key === s.done);
-  const reached = Number(stats?.reached || 0), done = Number(stats?.done || 0), upNext = Number(stats?.upNext || 0);
-  const pct = reached ? Math.round((done / reached) * 100) : 0;
-  const progress = doneField
-    ? `<span class="fc-node__done"><span class="fc-node__donetext"><b>${num(done)}</b>/${num(reached)} ${MD.esc(doneField.label.toLowerCase())}</span><span class="fc-meter" aria-hidden="true"><span style="width:${pct}%"></span></span></span>`
-    : s.form ? `<span class="fc-node__done"><span class="fc-node__donetext"><b>${num(stats?.responses)}</b> ${stats?.responses === 1 ? 'response' : 'responses'}</span></span>`
-    : `<span class="fc-node__done"><span class="fc-node__donetext"><b>${num(done)}</b> moved on</span></span>`;
-  const label = `${s.title}, ${recruitKindLabel(s.kind)}${loading ? '' : `: ${recruitPlural(stats?.here || 0, 'person', 'people')} here, ${recruitNum(reached)} reached${upNext ? `, ${recruitNum(upNext)} up next` : ''}${doneField ? `, ${recruitNum(done)} ${doneField.label.toLowerCase()}` : ''}`}`;
-  return `<div class="fc-node fc-node--${MD.esc(s.kind)}" data-key="${MD.esc(key)}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px">
-    <a class="fc-node__main" href="${recruitStageHref(key)}" data-key="${MD.esc(key)}" aria-label="${MD.esc(label)}">
+  const reached = Number(stats?.reached || 0), done = Number(stats?.done || 0), here = Number(stats?.here || 0);
+  const meter = doneField ? `<span class="fc-node__done"><span class="fc-node__line"><b>${num(done)}</b> of ${num(reached)} ${MD.esc(doneField.label.toLowerCase())}</span><span class="fc-meter" aria-hidden="true"><span style="width:${reached ? Math.round((done / reached) * 100) : 0}%"></span></span></span>` : '';
+  const label = `${s.title}, ${recruitKindLabel(s.kind)}${loading ? '' : `: ${recruitPlural(here, 'person', 'people')} here now${doneField ? `, ${recruitNum(done)} of ${recruitNum(reached)} ${doneField.label.toLowerCase()}` : ''}`}`;
+  const open = recruitOpenStage() === key;
+  return `<div class="fc-node ${open ? 'is-open' : ''}" data-key="${MD.esc(key)}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px">
+    <a class="fc-node__main" href="${recruitStageHref(key)}" data-key="${MD.esc(key)}" aria-label="${MD.esc(label)}" ${open ? 'aria-current="true"' : ''}>
       <span class="fc-node__top">${recruitKindTagHtml(s.kind)}${site}</span>
       <span class="fc-node__title">${MD.esc(s.title)}</span>
-      <span class="fc-node__stats"><span><b>${num(stats?.here)}</b> here</span><span><b>${num(reached)}</b> reached</span>${upNext ? `<span class="fc-node__next"><b>${recruitNum(upNext)}</b> up next</span>` : ''}</span>
-      ${progress}
+      <span class="fc-node__here ${here || loading ? '' : 'is-none'}"><b>${num(here)}</b><span>here now</span></span>
+      ${meter}
     </a>
     ${lead ? `<button type="button" class="icon-btn fc-node__more" data-action="recruit-flow-menu" data-key="${MD.esc(key)}" aria-label="Options for ${MD.esc(s.title)}" aria-haspopup="menu" title="Options">${I.dots}</button>
     <button type="button" class="fc-port" data-action="recruit-flow-port" data-key="${MD.esc(key)}" aria-label="Add after ${MD.esc(s.title)}, connect or split it" title="Add, connect or split; drag to a stage to connect" aria-haspopup="menu">${I.plus}</button>` : ''}
   </div>`;
 }
 
-// How it ended, along the bottom: each status and how many people have it.
+// How many people passed along a connection (reached both its stages),
+// entered at a first stage, or ended at a last one; null before the counts
+// arrive.
+function recruitFlowCount(e) {
+  const ins = recruitState().insights?.data;
+  if (!ins) return null;
+  if (e.entry) return ins.stages?.find((x) => x.key === e.to)?.reached ?? null;
+  if (e.outcome) return ins.stages?.find((x) => x.key === e.from)?.ended ?? null;
+  const hit = (ins.edges || []).find((x) => x && x.from === e.from && x.to === e.to);
+  return hit ? Number(hit.n) || 0 : null;
+}
+
+// A connection's count, and for a split the answers that take it; a lead
+// opens the split from its label.
+function recruitFlowLabelHtml(e, lead) {
+  if (e.lx === undefined) return '';
+  const n = recruitFlowCount(e);
+  const num = n === null ? '–' : recruitNum(n);
+  const who = n === 1 ? 'person' : 'people';
+  const title = e.entry ? `${num} ${who} entered at ${recruitSectionTitle(e.to)}`
+    : e.outcome ? `${num} ${who} ended at ${recruitSectionTitle(e.from)}`
+    : `${num} ${who} went from ${recruitSectionTitle(e.from)} to ${recruitSectionTitle(e.to)}${e.label ? ` (${e.label})` : ''}`;
+  const style = `left:${Math.round(e.lx)}px;top:${Math.round(e.ly)}px;max-width:${Math.max(40, Math.round(e.lw))}px`;
+  const cls = `fc-flow ${e.split ? 'fc-flow--split' : ''} ${e.outcome ? 'fc-flow--end' : ''} ${n === 0 ? 'is-zero' : ''}`;
+  const data = `data-from="${MD.esc(e.from || '')}" data-to="${MD.esc(e.to)}" style="${style}" title="${MD.esc(title)}"`;
+  const inner = `${e.label ? `<span class="fc-flow__why">${MD.esc(e.label)}</span>` : ''}<b>${num}</b>`;
+  return lead && e.split
+    ? `<button type="button" class="${cls}" data-action="recruit-flow-split" data-key="${MD.esc(e.from)}" ${data} aria-label="${MD.esc(title)}. Edit the split">${inner}</button>`
+    : `<span class="${cls}" ${data}>${inner}</span>`;
+}
+
+// How it ended: each status and how many people have it.
 function recruitFlowOutcomeHtml(n) {
   const ins = recruitState().insights?.data;
   const rows = [['accepted', 'Accepted'], ['waitlisted', 'Waitlisted'], ['declined', 'Declined'], ['withdrew', 'Withdrew']];
   return `<div class="fc-node fc-node--outcome" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px" role="group" aria-label="Outcomes">
-    <ul class="fc-outcome">${rows.map(([k, label]) => `<li><a href="${recruitPanelHref(recruitCycleRow().id, 'people', { status: k })}">${label}<b>${ins ? recruitNum(ins.statuses?.[k]) : '–'}</b></a></li>`).join('')}</ul>
+    <ul class="fc-outcome">${rows.map(([k, label]) => `<li><a href="${recruitPanelHref(recruitCycleRow().id, 'people', { status: k })}"><span>${label}</span><b>${ins ? recruitNum(ins.statuses?.[k]) : '–'}</b></a></li>`).join('')}</ul>
   </div>`;
 }
 
 function recruitFlowCanvasHtml(cycle) {
   const flow = recruitFlow(cycle);
-  if (!flow.keys.length) return `<div class="rc-empty-card"><b>No stages yet</b>${recruitCanEdit(cycle) ? '<p>Add the first stage: a form on the website, a meeting, a review, or any step the team tracks.</p><button class="btn btn--primary" data-action="recruit-stage-new">Add a stage</button>' : ''}</div>`;
-  const layout = recruitFlowLayout(flow);
   const lead = recruitCanEdit(cycle);
-  const edges = layout.edges.map((e) => `<path class="fc-edge ${e.outcome ? 'fc-edge--outcome' : ''} ${e.label ? 'fc-edge--split' : ''}" data-from="${MD.esc(e.from)}" data-to="${MD.esc(e.to)}" d="${e.d}" marker-end="url(#fc-arrow${e.outcome ? '-soft' : ''})"/>`).join('');
-  // A split's connections say which answers take people there.
-  const labels = layout.edges.filter((e) => e.label).map((e) => {
-    const style = `left:${Math.round(e.mx)}px;top:${Math.round(e.my)}px`;
-    const text = MD.esc(e.label);
-    return lead
-      ? `<button type="button" class="fc-when" data-action="recruit-flow-split" data-key="${MD.esc(e.from)}" data-from="${MD.esc(e.from)}" data-to="${MD.esc(e.to)}" style="${style}" title="${text}: edit the split">${text}</button>`
-      : `<span class="fc-when" data-from="${MD.esc(e.from)}" data-to="${MD.esc(e.to)}" style="${style}" title="${text}">${text}</span>`;
-  }).join('');
-  const nodes = [...layout.nodes.values()].map((n) => (n.key === FC_OUTCOME ? recruitFlowOutcomeHtml(n) : recruitFlowNodeHtml(cycle, flow, n))).join('');
-  return `<div class="fc-scroll" data-rc="flow-scroll"><div class="fc-canvas" data-rc="flow-canvas" style="width:${layout.width}px;height:${layout.height}px">
-    <svg class="fc-edges" width="${layout.width}" height="${layout.height}" aria-hidden="true">
-      <defs><marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker>
-      <marker id="fc-arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker></defs>
-      ${edges}<path class="fc-edge fc-edge--draft" data-rc="flow-draft" d=""/>
-    </svg>${nodes}${labels}
-  </div></div>`;
-}
-
-// The numbers above the chart: everyone, where they stand, how it ended.
-function recruitFlowSummaryHtml() {
+  const add = lead && flow.keys.length ? `<button type="button" class="fc-add" data-action="recruit-stage-new" aria-label="Add stage" title="Add stage">${I.plus}</button>` : '';
   const ins = recruitState().insights;
-  const d = ins?.data;
-  if (!d) return `<div class="fc-summary" data-rc="flow-summary"><span class="fc-summary__item">${ins?.error ? `Could not load counts: ${MD.esc(ins.error)} <button class="linklike" data-action="recruit-insights-retry">Retry</button>` : 'Loading counts…'}</span></div>`;
-  const item = (n, label, href) => `<a class="fc-summary__item" href="${href}"><b>${recruitNum(n)}</b>${label}</a>`;
-  const id = recruitCycleRow().id;
-  return `<div class="fc-summary" data-rc="flow-summary">
-    ${item(d.people, d.people === 1 ? 'person' : 'people', recruitPanelHref(id, 'people'))}
-    ${item(d.statuses.active, 'active', recruitPanelHref(id, 'people', { status: 'active' }))}
-    ${item(d.statuses.accepted, 'accepted', recruitPanelHref(id, 'people', { status: 'accepted' }))}
-    ${d.flagged ? item(d.flagged, 'flagged', recruitPanelHref(id, 'people', { review: 'flagged' })) : ''}
-  </div>`;
+  const note = ins?.error && !ins.data ? `<p class="fc-note" role="status">Counts did not load: ${MD.esc(ins.error)} <button class="linklike" data-action="recruit-insights-retry">Retry</button></p>` : '';
+  if (!flow.keys.length) return `<div class="fc-empty"><b>No stages yet</b>${lead ? '<p>Start with a form on the website, a meeting, a review, or any step the team tracks.</p><button class="btn btn--primary" data-action="recruit-stage-new">Add the first stage</button>' : '<p>A lead has not added any stages.</p>'}</div>`;
+  const width = recruitFlowAvail();
+  const layout = recruitFlowLayout(flow, { width });
+  const W = Math.ceil(layout.width), H = Math.ceil(layout.height), k = layout.scale;
+  const edges = layout.edges.map((e) => `<path class="fc-edge ${e.outcome ? 'fc-edge--outcome' : ''} ${e.entry ? 'fc-edge--entry' : ''} ${e.split ? 'fc-edge--split' : ''}" data-from="${MD.esc(e.from || '')}" data-to="${MD.esc(e.to)}" d="${e.d}" marker-end="url(#fc-arrow${e.outcome ? '-soft' : ''})"/>`).join('');
+  const labels = layout.edges.map((e) => recruitFlowLabelHtml(e, lead)).join('');
+  const nodes = [...layout.nodes.values()].map((n) => (n.key === FC_OUTCOME ? recruitFlowOutcomeHtml(n) : recruitFlowNodeHtml(cycle, flow, n))).join('');
+  const focus = recruitOpenStage() ? 'is-focus' : '';
+  return `${add}${note}<div class="fc-scroll" data-rc="flow-scroll"><div class="fc-sizer" data-rc="flow-sizer" style="width:${Math.ceil(W * k)}px;height:${Math.ceil(H * k)}px">
+    <div class="fc-canvas fc-canvas--${layout.across ? 'across' : 'down'} ${focus}" data-rc="flow-canvas" data-width="${Math.round(width)}" data-scale="${k}" style="width:${W}px;height:${H}px${k < 1 ? `;transform:scale(${Math.round(k * 1000) / 1000})` : ''}">
+      <svg class="fc-edges" width="${W}" height="${H}" aria-hidden="true">
+        <defs><marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker>
+        <marker id="fc-arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker></defs>
+        ${edges}<path class="fc-edge fc-edge--draft" data-rc="flow-draft" d=""/>
+      </svg>${nodes}${labels}
+    </div></div></div>`;
 }
 
 function recruitFlowView(cycle) {
   const st = recruitState();
-  const lead = recruitCanEdit(cycle);
   const held = st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
-  return `<div class="fc-bar">${recruitFlowSummaryHtml()}${lead ? `<button class="btn btn--primary" data-action="recruit-stage-new">${I.plus} Add stage</button>` : ''}</div>
-    <div class="fc-wrap" data-rc="flow">${recruitFlowCanvasHtml(cycle)}</div>${held}`;
+  return `<div class="fc-wrap ${recruitCanEdit(cycle) ? 'has-add' : ''}" data-rc="flow">${recruitFlowCanvasHtml(cycle)}</div>${held}`;
 }
 
-// The chart and its numbers repaint in place (counts arrive, a save lands).
+// The chart repaints in place (counts arrive, a save lands, the width
+// changes), keeping where it was scrolled and the panel's focus.
 function recruitPaintFlow() {
   const host = $('[data-rc="flow"]');
   const cycle = recruitCycleRow();
   if (!host || !cycle) return false;
   recruitRepaint(host, recruitFlowCanvasHtml(cycle));
-  const next = $('[data-rc="flow-scroll"]', host);
-  if (next) { recruitFlowPlace(next); recruitFlowFades(next); }
-  const summary = $('[data-rc="flow-summary"]');
-  if (summary) summary.outerHTML = recruitFlowSummaryHtml();
+  recruitFlowSettle();
   return true;
 }
 
-// A chart wider than the page opens on its middle, where the flow starts,
-// and keeps its place when it is drawn again.
+// After the chart is drawn: its scroll place, its edge fades, and the pan
+// that keeps an open stage's card clear of the panel.
+function recruitFlowSettle({ animate = false } = {}) {
+  const scroll = $('[data-rc="flow-scroll"]');
+  if (!scroll) return;
+  recruitFlowPlace(scroll);
+  recruitFlowFades(scroll);
+  if (typeof recruitStageFocusChart === 'function') recruitStageFocusChart({ animate });
+}
+
+// The chart is laid out for the width it was drawn at; when its zone is
+// another width now (the first draw guessed, the window changed), it lays
+// itself out again.
+function recruitFlowFit() {
+  const zone = $('[data-rc="flow"]');
+  const canvas = zone ? $('[data-rc="flow-canvas"]', zone) : null;
+  const now = (Number(zone?.clientWidth) || 0) - 2;
+  if (canvas && now > 0 && Math.abs(now - Number(canvas.dataset.width || 0)) > 4) return recruitPaintFlow();
+  return false;
+}
+
+// A chart wider than its zone opens where the flow starts (the left across,
+// the middle down) and keeps its place when drawn again.
 function recruitFlowPlace(scroll) {
   if (!scroll?.dataset || scroll.dataset.placed) return;
   scroll.dataset.placed = '1';
   const more = (Number(scroll.scrollWidth) || 0) - (Number(scroll.clientWidth) || 0);
-  if (more > 0) scroll.scrollLeft = recruitState().mod.flowLeft ?? Math.round(more / 2);
+  if (more <= 0) return;
+  const down = Boolean(scroll.querySelector?.('.fc-canvas--down'));
+  scroll.scrollLeft = recruitState().mod.flowLeft ?? (down ? Math.round(more / 2) : 0);
 }
 
 // A chart wider than the page fades out at the edge that has more.
@@ -10833,7 +11143,9 @@ function recruitFlowUnlink(from, to) {
   }, `Removed the connection from ${recruitSectionTitle(from)} to ${recruitSectionTitle(to)}`);
 }
 
-// Left or right within its row; the order also sorts stages everywhere else.
+// Earlier or later within its column (up or down across, left or right on
+// a narrow chart); the order also sorts stages everywhere else.
+const recruitFlowAcross = () => recruitFlowAvail() >= FC.NARROW;
 function recruitFlowNudge(key, delta) {
   const flow = recruitFlow();
   const rank = flow.ranks.get(key);
@@ -10843,7 +11155,7 @@ function recruitFlowNudge(key, delta) {
   recruitFlowEdit((e) => {
     const a = e.order.indexOf(key), b = e.order.indexOf(row[j]);
     [e.order[a], e.order[b]] = [e.order[b], e.order[a]];
-  }, `Moved ${recruitSectionTitle(key)} ${delta < 0 ? 'left' : 'right'}`);
+  }, `Moved ${recruitSectionTitle(key)} ${recruitFlowAcross() ? (delta < 0 ? 'up' : 'down') : (delta < 0 ? 'left' : 'right')}`);
 }
 
 // Stages this one could lead to without a loop or a repeat.
@@ -10858,7 +11170,7 @@ function recruitFlowConnectMenu(anchor, from) {
   openMenu(targets.map((k) => ({ label: recruitSectionTitle(k), icon: recruitKindIcon(recruitSections()[k].kind), run: () => recruitFlowConnect(from, k) })), anchor);
 }
 
-// The + under a card: what comes after it.
+// The + on a card: what comes after it.
 function recruitFlowPortMenu(anchor, key) {
   const split = recruitFlow().splits.get(key);
   openMenu([
@@ -10881,7 +11193,7 @@ function recruitFlowNodeMenu(anchor, key) {
     { label: 'Connect to…', icon: RC_ICONS.flow, run: () => recruitFlowConnectMenu(anchor, key) },
     { label: flow.splits.has(key) ? 'Edit split…' : 'Split by an answer…', icon: RC_ICONS.split, run: () => recruitOpenSplit(key) },
     ...(next.length ? [{ label: 'Disconnect from…', icon: I.x, run: () => openMenu(next.map((k) => ({ label: recruitSectionTitle(k), run: () => recruitFlowUnlink(key, k) })), anchor) }] : []),
-    ...(row.length > 1 ? ['-', ...(at > 0 ? [{ label: 'Move left', run: () => recruitFlowNudge(key, -1) }] : []), ...(at < row.length - 1 ? [{ label: 'Move right', run: () => recruitFlowNudge(key, 1) }] : [])] : []),
+    ...(row.length > 1 ? ['-', ...(at > 0 ? [{ label: recruitFlowAcross() ? 'Move up' : 'Move left', run: () => recruitFlowNudge(key, -1) }] : []), ...(at < row.length - 1 ? [{ label: recruitFlowAcross() ? 'Move down' : 'Move right', run: () => recruitFlowNudge(key, 1) }] : [])] : []),
     '-',
     { label: 'Remove stage…', danger: true, run: () => recruitConfirmRemoveStage(key) },
   ];
@@ -11079,7 +11391,7 @@ function recruitFlowDragStart(ev, port) {
   const canvas = port.closest('[data-rc="flow-canvas"]');
   const from = port.dataset.key;
   const flow = recruitFlow();
-  const layout = recruitFlowLayout(flow);
+  const layout = recruitFlowLayout(flow, { width: Number(canvas?.dataset.width) || recruitFlowAvail() });
   const a = layout.nodes.get(from);
   const draft = $('[data-rc="flow-draft"]', canvas);
   if (!canvas || !a || !draft || typeof canvas.getBoundingClientRect !== 'function') return;
@@ -11096,10 +11408,15 @@ function recruitFlowDragStart(ev, port) {
     if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 4) return;
     moved = true;
     const box = canvas.getBoundingClientRect();
-    const x = e.clientX - box.left, y = e.clientY - box.top;
-    const x1 = a.x + a.w / 2, y1 = a.y + a.h;
-    const d = Math.max(24, (y - y1) / 2);
-    draft.setAttribute('d', `M${x1} ${y1} C${x1} ${y1 + d}, ${x} ${y - d}, ${x} ${y}`);
+    const k = Number(canvas.dataset.scale) || 1;
+    const x = (e.clientX - box.left) / k, y = (e.clientY - box.top) / k;
+    if (layout.across) {
+      const x1 = a.x + a.w, y1 = a.y + a.h / 2, d = Math.max(24, Math.abs(x - x1) / 2);
+      draft.setAttribute('d', `M${x1} ${y1} C${x1 + d} ${y1}, ${x - d} ${y}, ${x} ${y}`);
+    } else {
+      const x1 = a.x + a.w / 2, y1 = a.y + a.h, d = Math.max(24, Math.abs(y - y1) / 2);
+      draft.setAttribute('d', `M${x1} ${y1} C${x1} ${y1 + d}, ${x} ${y - d}, ${x} ${y}`);
+    }
     const hit = document.elementFromPoint?.(e.clientX, e.clientY)?.closest?.('.fc-node[data-key]');
     const key = hit?.dataset.key || null;
     if (key !== target) {
@@ -11146,13 +11463,25 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   let timer = null;
   window.addEventListener('resize', () => {
     clearTimeout(timer);
-    timer = setTimeout(() => { const scroll = document.querySelector?.('[data-rc="flow-scroll"]'); if (scroll) recruitFlowFades(scroll); }, 120);
+    timer = setTimeout(() => { if (!recruitFlowFit()) { const scroll = document.querySelector?.('[data-rc="flow-scroll"]'); if (scroll) recruitFlowFades(scroll); } }, 120);
   });
   document.addEventListener?.('scroll', (e) => {
     if (!e.target?.matches?.('[data-rc="flow-scroll"]')) return;
     recruitState().mod.flowLeft = e.target.scrollLeft;
     recruitFlowFades(e.target);
   }, true);
+}
+
+// What the chart needs once it is on the page, whichever view drew it.
+function recruitFlowMounted(cycle, { animate = false } = {}) {
+  const st = recruitState();
+  if (!st.insights || st.insights.key !== st.key + ':' + cycle.id) recruitLoadInsights();
+  if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
+  if (!recruitFlowFit()) recruitFlowSettle({ animate });
+  // A stage's panel just closed: its card takes the focus back.
+  const back = st.mod.returnFocus;
+  st.mod.returnFocus = null;
+  if (back && !recruitOpenStage()) $$('.fc-node__main').find((a) => a.dataset.key === back)?.focus?.({ preventScroll: true });
 }
 
 /* ------------------------------- register -------------------------------- */
@@ -11163,13 +11492,7 @@ RECRUIT.register({
   kernel: true,
   panels: [{ id: 'flow', label: 'Flow', icon: RC_ICONS.flow, order: 1, when: () => true }],
   view: (cycle) => recruitFlowView(cycle),
-  mount(cycle) {
-    const st = recruitState();
-    if (!st.insights || st.insights.key !== st.key + ':' + cycle.id) recruitLoadInsights();
-    if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
-    const scroll = $('[data-rc="flow-scroll"]');
-    if (scroll) { recruitFlowPlace(scroll); recruitFlowFades(scroll); }
-  },
+  mount(cycle) { recruitFlowMounted(cycle); },
   refresh: { load: () => recruitLoadInsights({ quiet: true }), every: RECRUIT_SYNC_MS },
   actions: {
     'recruit-flow-menu': (el) => recruitFlowNodeMenu(el, el.dataset.key),
@@ -11325,62 +11648,81 @@ function recruitStageCtx(el) {
   return { cycle, key, d, m: d.model, i, j, q: d.model.form?.questions?.[i], f: d.model.fields[i], host: $('[data-rc="stage"]') };
 }
 
-/* ------------------------------- the page -------------------------------- */
+/* ------------------------------- the panel ------------------------------- */
 
 const recruitStageTab = () => { const t = UI.route?.params?.tab; return RECRUIT_STAGE_TABS.some((x) => x.id === t) ? t : UI.route?.params?.edit === '1' ? 'form' : 'people'; };
 
-// Every stage in the order people meet them, as a strip to hop between.
-function recruitStageStripHtml(cycle, key, tab) {
-  const flow = recruitFlow(cycle);
-  return `<nav class="rs-strip" aria-label="Stages"><a class="rs-strip__back" href="${recruitPanelHref(cycle.id, 'flow')}">${RC_ICONS.back}<span>Flow</span></a>${flow.keys.map((k, i) => `${i ? `<span class="rs-strip__sep" aria-hidden="true">${RC_ICONS.arrowR}</span>` : ''}<a class="rs-strip__stage ${k === key ? 'is-on' : ''}" href="${recruitStageHref(k, tab === 'settings' && !recruitCanEdit(cycle) ? '' : tab)}" ${k === key ? 'aria-current="page"' : ''}>${recruitKindIcon(flow.sections[k].kind)}<span>${MD.esc(flow.sections[k].title)}</span></a>`).join('')}</nav>`;
-}
-
-function recruitStageHeadHtml(cycle, key) {
-  const s = recruitSections(cycle)[key];
-  const stats = recruitFlowStats(key);
-  const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(key)}/`;
-  const landing = recruitLandingKey(cycle) === key;
-  const lead = recruitCanEdit(cycle);
-  const busy = recruitState().busy.has('open:' + key);
-  const web = s.form
-    ? `<div class="rs-web">${lead ? `<label class="fe-switch"><input type="checkbox" data-action="recruit-stage-open" data-stage="${MD.esc(key)}" ${s.open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Open on the website</span></label>` : `<span class="rs-web__state ${s.open ? 'is-open' : ''}">${RC_ICONS.globe}${s.open ? 'Open on the website' : 'Closed on the website'}</span>`}
-      <span class="rs-web__addr"><a href="${MD.esc(url)}" target="_blank" rel="noopener" title="Open this form's page">${MD.esc(url.replace(RECRUIT_SITE_URL, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button>${s.open && landing ? '<span class="faint">and /apply</span>' : ''}</span></div>`
-    : `<div class="rs-web"><span class="rs-web__state">No form on the website</span></div>`;
-  const numbers = stats ? [
-    [stats.here, 'here now'], [stats.reached, 'reached'],
-    ...(s.done ? [[stats.done, (s.fields.find((f) => f.key === s.done)?.label || 'done').toLowerCase()]] : []),
-    ...(s.form ? [[stats.responses, stats.responses === 1 ? 'response' : 'responses']] : []),
-  ] : [];
-  return `<div class="rs-head">
-    <div class="rs-head__title"><h2>${MD.esc(s.title)}</h2>${recruitKindTagHtml(s.kind)}</div>
-    ${numbers.length ? `<dl class="rs-head__numbers">${numbers.map(([n, label]) => `<div><dt>${MD.esc(label)}</dt><dd>${recruitNum(n)}</dd></div>`).join('')}</dl>` : ''}
-    ${web}
-  </div>`;
-}
-
+// A stage opens in a panel over the flow chart. The chart stays behind it,
+// the stage's card lit and slid clear of the panel where there is room.
 function recruitStageView(cycle) {
-  const key = recruitStageKey();
-  if (!key) return `<div class="empty">${I.info}<b>No such stage</b><p>It may have been removed.</p><a class="btn" href="${recruitPanelHref(cycle.id, 'flow')}" style="text-decoration:none">Back to the flow</a></div>`;
-  const tab = recruitStageTab();
+  return recruitFlowView(cycle) + recruitStageDrawerHtml(cycle, recruitStageKey());
+}
+
+const recruitStageCloseHtml = () => `<button type="button" class="icon-btn sd-close" data-action="recruit-stage-close" aria-label="Close" title="Close (Esc)">${I.x}</button>`;
+
+function recruitStageDrawerHtml(cycle, key) {
+  const st = recruitState();
+  // The panel slides in when it opens, not each time it is drawn again.
+  const enter = st.mod.drawer ? '' : 'is-entering';
+  const veil = `<div class="sd-veil ${enter}" data-action="recruit-stage-close" aria-hidden="true"></div>`;
+  const s = key ? recruitSections(cycle)[key] : null;
+  if (!s) return `${veil}<aside class="sd ${enter}" role="dialog" aria-label="Stage" data-rc="stage" tabindex="-1"><div class="sd-head"><div class="sd-head__bar"><span></span><span class="sd-head__tools">${recruitStageCloseHtml()}</span></div></div><div class="sd-body"><div class="sd-empty"><b>No such stage</b><p>It may have been removed.</p></div></div></aside>`;
   const lead = recruitCanEdit(cycle);
-  const s = recruitSections(cycle)[key];
-  const tabs = RECRUIT_STAGE_TABS.filter((t) => !t.lead || lead);
-  const active = tabs.some((t) => t.id === tab) ? tab : 'people';
-  const count = (id) => id === 'checklist' && s.fields.length ? `<span class="count">${s.fields.length}</span>` : id === 'form' && s.form ? `<span class="count">${s.form.questions.length}</span>` : '';
-  const nav = `<nav class="rs-tabs" role="tablist" aria-label="${MD.esc(s.title)}">${tabs.map((t) => `<a role="tab" href="${recruitStageHref(key, t.id === 'people' ? '' : t.id)}" aria-selected="${t.id === active}" ${t.id === active ? 'aria-current="page"' : ''} tabindex="${t.id === active ? 0 : -1}">${t.label}${count(t.id)}</a>`).join('')}</nav>`;
+  const active = recruitStageActiveTab(cycle);
+  const nav = `<nav class="sd-tabs" role="tablist" aria-label="${MD.esc(s.title)}">${recruitStageTabsHtml(cycle, key)}</nav>`;
   let body = '';
   if (active === 'people') body = recruitStagePeopleHtml(cycle, key);
   else if (active === 'form') body = recruitStageFormHtml(cycle, key);
   else if (active === 'checklist') body = recruitStageChecklistHtml(cycle, key);
   else body = recruitStageSettingsHtml(cycle, key);
   const d = lead && active !== 'people' ? recruitStageDraft(cycle, key) : null;
-  return `<div class="rs" data-rc="stage" data-stage="${MD.esc(key)}">
-    ${recruitStageStripHtml(cycle, key, active === 'people' ? '' : active)}
-    <div data-rc="stage-head">${recruitStageHeadHtml(cycle, key)}</div>
+  return `${veil}<aside class="sd ${enter}" role="dialog" aria-labelledby="sd-title" data-rc="stage" data-stage="${MD.esc(key)}" tabindex="-1">
+    <header class="sd-head" data-rc="stage-head">${recruitStageHeadHtml(cycle, key)}</header>
     ${nav}
-    <div class="rs-body" data-rc="stage-tab" data-tab="${active}">${body}</div>
+    <div class="sd-body" data-rc="stage-tab" data-tab="${active}">${body}</div>
     ${d ? `<div class="rs-save" data-rc="stage-save" ${recruitStageDirty(d) || d.saving || d.error ? '' : 'hidden'}>${recruitStageSaveHtml(d)}</div>` : ''}
-  </div>`;
+  </aside>`;
+}
+
+// The tab showing: the one asked for, where this reader may see it.
+function recruitStageActiveTab(cycle) {
+  const tab = recruitStageTab();
+  return RECRUIT_STAGE_TABS.some((t) => t.id === tab && (!t.lead || recruitCanEdit(cycle))) ? tab : 'people';
+}
+
+function recruitStageTabsHtml(cycle, key) {
+  const s = recruitSections(cycle)[key];
+  const active = recruitStageActiveTab(cycle);
+  const count = (id) => (id === 'checklist' && s.fields.length ? `<span class="count">${s.fields.length}</span>` : id === 'form' && s.form ? `<span class="count">${s.form.questions.length}</span>` : '');
+  return RECRUIT_STAGE_TABS.filter((t) => !t.lead || recruitCanEdit(cycle)).map((t) => `<a role="tab" href="${recruitStageHref(key, t.id === 'people' ? '' : t.id)}" aria-selected="${t.id === active}" ${t.id === active ? 'aria-current="page"' : ''} tabindex="${t.id === active ? 0 : -1}">${t.label}${count(t.id)}</a>`).join('');
+}
+
+// The panel's head: the stage's kind, whether its form is on the website,
+// its name and numbers, and the stages before and after it.
+function recruitStageHeadHtml(cycle, key) {
+  const flow = recruitFlow(cycle);
+  const s = flow.sections[key];
+  const stats = recruitFlowStats(key);
+  const lead = recruitCanEdit(cycle);
+  const busy = recruitState().busy.has('open:' + key);
+  const tab = recruitStageTab();
+  const at = flow.keys.indexOf(key);
+  const keep = tab === 'people' || (tab === 'settings' && !lead) ? '' : tab;
+  const step = (k, label, icon) => (k
+    ? `<a class="icon-btn" href="${recruitStageHref(k, keep)}" aria-label="${label}: ${MD.esc(flow.sections[k].title)}" title="${label}: ${MD.esc(flow.sections[k].title)}">${icon}</a>`
+    : `<span class="icon-btn is-off" aria-hidden="true">${icon}</span>`);
+  const web = !s.form ? ''
+    : lead ? `<label class="fe-switch sd-web"><input type="checkbox" data-action="recruit-stage-open" data-stage="${MD.esc(key)}" ${s.open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">On the website</span></label>`
+    : `<span class="sd-web ${s.open ? 'is-open' : ''}">${s.open ? 'Open on the website' : 'Closed on the website'}</span>`;
+  const doneLabel = (s.fields.find((f) => f.key === s.done)?.label || 'done').toLowerCase();
+  const nums = stats ? [
+    [stats.here, 'here now'], [stats.reached, 'reached'],
+    ...(s.done ? [[stats.done, doneLabel]] : s.form ? [[stats.responses, Number(stats.responses) === 1 ? 'response' : 'responses']] : []),
+  ] : [];
+  const waiting = !stats && !recruitState().insights?.error;
+  return `<div class="sd-head__bar">${recruitKindTagHtml(s.kind)}${web}<span class="sd-head__tools">${step(flow.keys[at - 1], 'Previous stage', RC_ICONS.back)}${step(flow.keys[at + 1], 'Next stage', RC_ICONS.arrowR)}${recruitStageCloseHtml()}</span></div>
+    <h2 class="sd-title" id="sd-title">${MD.esc(s.title)}</h2>
+    <p class="sd-nums">${nums.map(([n, label]) => `<span><b>${recruitNum(Number(n) || 0)}</b> ${MD.esc(label)}</span>`).join('')}${waiting ? '<span>Loading counts…</span>' : ''}</p>`;
 }
 
 function recruitStageSaveHtml(d) {
@@ -11391,10 +11733,13 @@ function recruitStageSaveHtml(d) {
     <button type="button" class="btn btn--primary" data-action="recruit-stage-save" ${dirty && !d.saving ? '' : 'disabled'}>Save</button></div>`;
 }
 
+// Only a changed bar is drawn again: leaving a field fires its change as the
+// pointer goes down on Save, and a redrawn button would lose that click.
 function recruitPaintStageSave(c) {
   const bar = $('[data-rc="stage-save"]');
   if (!bar || !c?.d) return;
-  recruitRepaint(bar, recruitStageSaveHtml(c.d));
+  const html = recruitStageSaveHtml(c.d);
+  if (bar.rcHtml !== html) { recruitRepaint(bar, html); bar.rcHtml = html; }
   bar.hidden = !(recruitStageDirty(c.d) || c.d.saving || c.d.error);
 }
 
@@ -11409,14 +11754,62 @@ function recruitPaintStageTab(c, { list = null } = {}) {
     const html = list === 'questions' ? recruitQuestionCardsHtml(c.d) : recruitFieldCardsHtml(c.d);
     recruitRepaint(listEl, html);
     recruitFlip(listEl, before);
-    const preview = $('[data-rc="checklist-preview"]', tab);
-    if (preview) recruitRepaint(preview, recruitChecklistPreviewHtml(c.d));
   } else {
     const t = tab.dataset.tab;
     const html = t === 'form' ? recruitStageFormHtml(c.cycle, c.key) : t === 'checklist' ? recruitStageChecklistHtml(c.cycle, c.key) : t === 'settings' ? recruitStageSettingsHtml(c.cycle, c.key) : '';
     recruitRepaint(tab, html);
   }
   recruitPaintStageSave(c);
+}
+
+// With a stage open, the chart slides so the stage's card sits clear of the
+// panel, where there is room beside it; closed, it slides back.
+function recruitStageFocusChart({ animate = false } = {}) {
+  const canvas = $('[data-rc="flow-sizer"]');
+  if (!canvas?.style) return;
+  const key = recruitOpenStage();
+  const panel = key ? $('.sd') : null;
+  const card = panel ? $$('.fc-node[data-key]', canvas).find((el) => el.dataset.key === key) : null;
+  const zone = canvas.closest?.('[data-rc="flow"]');
+  const now = Number(canvas.dataset.pan || 0);
+  let pan = 0;
+  if (card && [card, panel, zone].every((el) => typeof el?.getBoundingClientRect === 'function')) {
+    // Where the panel comes to rest, not where its slide has got to.
+    const edge = (Number(window.innerWidth) || 0) - (Number(panel.offsetWidth) || 0);
+    const box = card.getBoundingClientRect(), area = zone.getBoundingClientRect();
+    const left = box.left + now;   // where the card sits unmoved
+    const room = edge - area.left;
+    if (room >= box.width + 64 && left + box.width > edge - 24) pan = Math.max(0, Math.round(left + box.width / 2 - (area.left + room / 2)));
+  }
+  if (pan === now) return;
+  canvas.dataset.pan = String(pan);
+  const set = () => { canvas.style.transform = pan ? `translateX(${-pan}px)` : ''; };
+  if (animate && !recruitReducedMotion() && typeof requestAnimationFrame === 'function') { requestAnimationFrame(() => requestAnimationFrame(set)); return; }
+  canvas.classList.add('is-still');
+  set();
+  void canvas.offsetWidth;
+  canvas.classList.remove('is-still');
+}
+
+// Closing slides the panel away and the chart back, then shows the flow.
+// Unsaved changes stay in the stage's draft until they are saved or dropped.
+function recruitStageClose() {
+  const cycle = recruitCycleRow();
+  if (!cycle || UI.route?.params?.sub !== 'stage') return;
+  const st = recruitState();
+  const key = recruitStageKey();
+  const d = key ? st.stageDrafts?.[`${cycle.id}:${key}`] : null;
+  if (d && recruitStageDirty(d)) toast(`Unsaved changes to ${recruitSectionTitle(key)} are kept for when you reopen it`);
+  st.mod.returnFocus = key;
+  const go = () => nav(recruitPanelHref(cycle.id, 'flow'));
+  const panel = $('.sd');
+  if (!panel?.classList || recruitReducedMotion()) { go(); return; }
+  panel.classList.add('is-leaving');
+  $('.sd-veil')?.classList.add('is-leaving');
+  $('[data-rc="flow-canvas"]')?.classList?.remove('is-focus');
+  const sizer = $('[data-rc="flow-sizer"]');
+  if (sizer?.style) { sizer.style.transform = ''; sizer.dataset.pan = '0'; }
+  setTimeout(go, 170);
 }
 
 /* ------------------------------- people here ----------------------------- */
@@ -11470,69 +11863,76 @@ async function recruitLoadStagePeople(more = false) {
   recruitPaintStagePeople();
 }
 
+// Who is here, with the stage's checklist right in the list.
 function recruitStagePeopleHtml(cycle, key) {
   const sp = recruitStagePeopleState(cycle, key);
   const s = recruitSections(cycle)[key];
-  return `<div class="sheet sheet--recruit sheet--stage">
-    <div class="sheet__bar">
-      <div class="sheet__search-wrap">${I.search}<input class="text-input sheet__search" data-m="recruit-stage-q" type="search" placeholder="Search people…" value="${MD.esc(sp.q)}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></div>
-      <div class="rc-chips" role="group" aria-label="Show" data-rc="stage-chips">${recruitStageChipsHtml(cycle, key, sp)}</div>
-      <div class="sheet__actions" data-rc="stage-bulk">${recruitStageBulkHtml(sp)}</div>
-    </div>
-    <div class="sheet__scroll"><table aria-label="People at ${MD.esc(s.title)}">
+  return `<div class="sd-people">
+    <div class="sd-bar" data-rc="stage-bar">${recruitStageBarHtml(cycle, key, sp)}</div>
+    <div class="sd-scroll"><table class="sd-table" aria-label="People at ${MD.esc(s.title)}">
       <thead data-rc="stage-people-head">${recruitStagePeopleHeadHtml(cycle, key, sp)}</thead>
       <tbody data-rc="stage-people-rows">${recruitStagePeopleRowsHtml(cycle, key, sp)}</tbody>
     </table></div>
-    <div class="sheet__foot" role="status" data-rc="stage-people-foot">${recruitStagePeopleFootHtml(sp)}</div>
+    <div class="sd-foot" role="status" data-rc="stage-people-foot">${recruitStagePeopleFootHtml(sp)}</div>
   </div>`;
 }
 
-// Who to show, with how many each choice holds.
-function recruitStageChipsHtml(cycle, key, sp) {
+// Which people and a search; with people selected, what to do with them.
+function recruitStageBarHtml(cycle, key, sp) {
+  if (sp.selected.size) return recruitStageBulkHtml(sp);
+  return `${recruitStageShowHtml(cycle, key, sp)}<label class="sd-search">${I.search}<input class="text-input" data-m="recruit-stage-q" type="search" placeholder="Search" value="${MD.esc(sp.q)}" aria-label="Search by name or email" autocomplete="off" spellcheck="false"></label>`;
+}
+
+// The list to show, with how many each holds.
+function recruitStageShowHtml(cycle, key, sp) {
   const s = recruitSections(cycle)[key];
   const stats = recruitFlowStats(key);
   const counts = stats ? { reached: stats.reached, here: stats.here, done: stats.done, notdone: stats.notDone, next: stats.upNext } : {};
   // Up next: people whose path comes here once they finish where they are.
   const into = (recruitFlow(cycle).into.get(key) || []).length > 0;
   const filters = RECRUIT_STAGE_FILTERS.filter((f) => (f.id === 'next' ? into : (f.id !== 'done' && f.id !== 'notdone') || s.done || s.form));
-  return filters.map((f) => `<button type="button" class="rc-chip" data-action="recruit-stage-filter" data-filter="${f.id}" aria-pressed="${sp.filter === f.id}">${MD.esc(f.label)}${counts[f.id] !== undefined ? `<span class="count">${recruitNum(counts[f.id])}</span>` : ''}</button>`).join('');
+  const options = filters.map((f) => ({ value: f.id, label: counts[f.id] !== undefined ? `${f.label} · ${recruitNum(counts[f.id])}` : f.label }));
+  return recruitDd('recruit-stage-filter', options, filters.some((f) => f.id === sp.filter) ? sp.filter : 'reached', 'aria-label="Show" data-rc="stage-show"');
 }
 
 const recruitStageSelectable = () => recruitCanEdit();
 
 function recruitStagePeopleHeadHtml(cycle, key, sp) {
   const s = recruitSections(cycle)[key];
-  const th = (id, label, extra = '') => `<th data-col="${MD.esc(id)}" ${extra}><span class="sheet__sort sheet__sort--static">${MD.esc(label)}</span></th>`;
+  const th = (id, label, extra = '') => `<th data-col="${MD.esc(id)}" ${extra}>${MD.esc(label)}</th>`;
   const visible = sp.rows.length, picked = sp.rows.filter((r) => sp.selected.has(r.email)).length;
   return `<tr>
-    ${recruitStageSelectable() ? `<th class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-stage-select-all" aria-label="Select everyone listed" ${visible && picked === visible ? 'checked' : ''} ${visible ? '' : 'disabled'}></label></th>` : ''}
-    ${th('person', 'Person')}${th('status', 'Status')}${s.form ? th('sent', 'Sent') : ''}
+    ${recruitStageSelectable() ? `<th class="sd-check" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-stage-select-all" aria-label="Select everyone listed" ${visible && picked === visible ? 'checked' : ''} ${visible ? '' : 'disabled'}></label></th>` : ''}
+    ${th('person', 'Person')}
     ${s.fields.map((f) => th('f-' + f.key, f.label + (f.each ? ' · each' : ''), `class="rs-fieldcol rs-fieldcol--${f.type}"`)).join('')}
-    ${th('review', 'Review')}
   </tr>`;
 }
 
 function recruitStagePeopleRowsHtml(cycle, key, sp) {
   const s = recruitSections(cycle)[key];
-  const span = 4 + s.fields.length + (s.form ? 1 : 0);
-  if (!sp.loaded && (sp.loading || !sp.error)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
-  if (sp.error && !sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(sp.error)}. <button class="linklike" data-action="recruit-stage-people-retry">Retry</button></td></tr>`;
-  if (!sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${sp.q.trim() ? 'No one matches.' : sp.filter === 'here' ? 'No one is here now.' : sp.filter === 'next' ? 'No one is on their way here.' : sp.filter === 'done' ? 'No one yet.' : sp.filter === 'notdone' ? 'Everyone here is done.' : 'No one has reached this stage yet.'}</td></tr>`;
+  const span = 2 + s.fields.length;
+  const row = (text) => `<tr class="sd-empty-row"><td colspan="${span}">${text}</td></tr>`;
+  if (!sp.loaded && (sp.loading || !sp.error)) return row('Loading…');
+  if (sp.error && !sp.rows.length) return row(`Could not load: ${MD.esc(sp.error)}. <button class="linklike" data-action="recruit-stage-people-retry">Retry</button>`);
+  if (!sp.rows.length) return row(sp.q.trim() ? 'No one matches.' : sp.filter === 'here' ? 'No one is here now.' : sp.filter === 'next' ? 'No one is on their way here.' : sp.filter === 'done' ? 'No one yet.' : sp.filter === 'notdone' ? 'Everyone here is done.' : 'No one has reached this stage yet.');
   return sp.rows.map((r) => recruitStagePersonRowHtml(cycle, key, r, sp)).join('');
 }
 
+// A person: name and email, then only what differs from the usual (another
+// status, somewhere else now, a flag, comments), then the checklist.
 function recruitStagePersonRowHtml(cycle, key, r, sp) {
   const s = recruitSections(cycle)[key];
   const picked = sp.selected.has(r.email);
-  const here = r.stage === key;
-  const sent = r.sections?.[key]?.ts;
+  const meta = [
+    r.status && r.status !== 'active' ? `<span class="sd-status sd-status--${MD.esc(r.status)}">${MD.esc(recruitStatusLabel(r.status))}</span>` : '',
+    r.stage !== key ? `<span>Now at ${MD.esc(r.stage ? recruitSectionTitle(r.stage) : '—')}</span>` : '',
+    r.flagged ? `<span class="sd-mark" title="Flagged">${RC_ICONS.flag}</span>` : '',
+    r.comments ? `<span class="sd-mark" title="${MD.esc(recruitPlural(r.comments, 'comment'))}">${RC_ICONS.comment}${recruitNum(r.comments)}</span>` : '',
+  ].filter(Boolean).join('');
   return `<tr data-email="${MD.esc(r.email)}" class="${picked ? 'is-selected' : ''}">
-    ${recruitStageSelectable() ? `<td class="sheet__check-cell" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-stage-select" data-email="${MD.esc(r.email)}" aria-label="Select ${MD.esc(r.name)}" ${picked ? 'checked' : ''}></label></td>` : ''}
-    <td data-col="person"><a class="rc-person-link" href="${recruitPersonHref(r.email)}" data-action="recruit-person-go" data-email="${MD.esc(r.email)}" data-list="stage"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></a>${here ? '' : `<span class="rc-where">Now at ${MD.esc(r.stage ? recruitSectionTitle(r.stage) : '—')}</span>`}</td>
-    <td data-col="status">${recruitStatusPill(r.status)}</td>
-    ${s.form ? `<td data-col="sent" class="interest-when">${sent ? MD.esc(recruitDate(Number(sent))) : '<span class="faint">—</span>'}</td>` : ''}
+    ${recruitStageSelectable() ? `<td class="sd-check" data-col="check"><label class="sheet__check"><input type="checkbox" data-action="recruit-stage-select" data-email="${MD.esc(r.email)}" aria-label="Select ${MD.esc(r.name)}" ${picked ? 'checked' : ''}></label></td>` : ''}
+    <td data-col="person"><a class="rc-person-link" href="${recruitPersonHref(r.email)}" data-action="recruit-person-go" data-email="${MD.esc(r.email)}" data-list="stage"><b>${MD.esc(r.name)}</b><span class="mail">${MD.esc(r.email)}</span></a>${meta ? `<span class="sd-meta">${meta}</span>` : ''}</td>
     ${s.fields.map((f) => `<td data-col="f-${MD.esc(f.key)}" class="rs-fieldcell" data-label="${MD.esc(f.label)}">${recruitFieldCellHtml(f, r.fields?.[key]?.[f.key], { email: r.email, stage: key, name: r.name })}</td>`).join('')}
-    ${recruitPersonReviewCellHtml(r)}
   </tr>`;
 }
 
@@ -11547,10 +11947,17 @@ function recruitStageBulkHtml(sp) {
   const n = sp.selected.size;
   if (!n) return '';
   return `<span class="rc-bulk__count" role="status">${recruitNum(n)} selected</span>
-    <button class="btn" data-action="recruit-bulk-move" data-list="stage" aria-haspopup="menu">Move to…</button>
-    <button class="btn" data-action="recruit-bulk-status" data-list="stage" aria-haspopup="menu">Set status…</button>
-    <button class="btn" data-action="recruit-bulk-copy" data-list="stage">${I.copy} Copy emails</button>
+    <button class="btn btn--sm" data-action="recruit-bulk-move" data-list="stage" aria-haspopup="menu">Move to…</button>
+    <button class="btn btn--sm" data-action="recruit-bulk-status" data-list="stage" aria-haspopup="menu">Set status…</button>
+    <button class="btn btn--sm" data-action="recruit-bulk-copy" data-list="stage">${I.copy} Copy emails</button>
     <button class="icon-btn" data-action="recruit-stage-clear" aria-label="Clear selection" title="Clear selection">${I.x}</button>`;
+}
+
+function recruitPaintStageBar() {
+  const cycle = recruitCycleRow();
+  const sp = recruitState().stagePeople;
+  const bar = $('[data-rc="stage-bar"]');
+  if (cycle && sp && bar) recruitRepaint(bar, recruitStageBarHtml(cycle, sp.key, sp));
 }
 
 function recruitPaintStagePeople() {
@@ -11563,8 +11970,9 @@ function recruitPaintStagePeople() {
   if (head) recruitRepaint(head, recruitStagePeopleHeadHtml(cycle, sp.key, sp));
   const foot = $('[data-rc="stage-people-foot"]');
   if (foot) foot.innerHTML = recruitStagePeopleFootHtml(sp);
-  const bulk = $('[data-rc="stage-bulk"]');
-  if (bulk) recruitRepaint(bulk, recruitStageBulkHtml(sp));
+  // The bar changes only between the filters and the selection's actions.
+  const bar = $('[data-rc="stage-bar"]');
+  if (bar && Boolean($('[data-action="recruit-stage-clear"]', bar)) !== sp.selected.size > 0) recruitPaintStageBar();
   return true;
 }
 
@@ -11593,47 +12001,44 @@ function recruitStageFormHtml(cycle, key) {
   const lead = recruitCanEdit(cycle);
   if (!lead) {
     const s = recruitSections(cycle)[key];
-    if (!s.form) return `<div class="rc-empty-card"><b>No form on the website</b><p>People reach this stage when the team moves them here.</p></div>`;
+    if (!s.form) return `<div class="sd-empty"><b>No form</b><p>People reach this stage when the team moves them here.</p></div>`;
     return recruitFormPreviewHtml(recruitStageModel(s, key, cycle), true);
   }
   const d = recruitStageDraft(cycle, key);
   const m = d.model;
   if (!m.form) {
-    return `<div class="rc-empty-card"><b>No form on the website</b><p>People reach this stage when the team moves them here. A form gives it a page on the website that anyone can fill in.</p><button class="btn" data-action="recruit-sf-add-form">${I.plus} Add a form</button></div>`;
+    return `<div class="sd-empty"><b>No form</b><p>People reach this stage when the team moves them here. A form gives it a page on the website that anyone can fill in.</p><button class="btn" data-action="recruit-sf-add-form">${I.plus} Add a form</button></div>`;
   }
-  if (d.preview) return `<div class="fe__view"><span>Preview of the draft</span><button class="btn" type="button" data-action="recruit-sf-preview">${I.edit} Back to editing</button></div>${recruitFormPreviewHtml(m)}`;
-  return `<div class="sf">
-    <div class="sf__main">
-      <div class="fe__view"><span></span><button class="btn" type="button" data-action="recruit-sf-preview">${RC_ICONS.eye} Preview</button></div>
-      <div class="sf-paper">
-        <input class="sf-paper__title" data-m="recruit-sf-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
-        <textarea class="sf-paper__desc" data-m="recruit-sf-desc" rows="2" placeholder="A line or two shown above the questions" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
-      </div>
-      <ol class="fe__list" data-sortable="questions">${recruitQuestionCardsHtml(d)}</ol>
-      <div class="fe__add"><button type="button" class="btn" data-action="recruit-sf-add">${I.plus} Add question</button></div>
+  if (d.preview) return `<div class="sd-toolbar"><span class="sd-toolbar__note">Preview</span><button class="btn btn--sm" type="button" data-action="recruit-sf-preview">${I.edit} Edit</button></div>${recruitFormPreviewHtml(m)}`;
+  return `<div class="sd-form">
+    <div class="sd-toolbar"><span></span><button class="btn btn--sm" type="button" data-action="recruit-sf-preview">${RC_ICONS.eye} Preview</button></div>
+    <div class="sf-paper">
+      <input class="sf-paper__title" data-m="recruit-sf-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
+      <textarea class="sf-paper__desc" data-m="recruit-sf-desc" rows="2" placeholder="A line or two shown above the questions" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
     </div>
-    <aside class="sf__side" aria-label="On the website">${recruitFormSettingsHtml(d)}</aside>
+    <ol class="fe__list" data-sortable="questions">${recruitQuestionCardsHtml(d)}</ol>
+    <div class="fe__add"><button type="button" class="btn" data-action="recruit-sf-add">${I.plus} Add question</button></div>
   </div>`;
 }
 
-// What happens around the form: whether the site shows it, whether it is
-// the one at /apply, its buttons and closing words, who hears about a
-// response, and a cap.
-function recruitFormSettingsHtml(d) {
+// How the website treats the form (opening and closing it is in the panel's
+// head): its address, whether it is the one at /apply, its button and
+// closing words, who hears about a response, a cap, and taking it away.
+function recruitStageWebHtml(d) {
   const m = d.model;
+  const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(d.key)}/`;
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
   const responses = Number(recruitFlowStats(d.key)?.responses ?? recruitState().cycle?.counts?.bySection?.[d.key] ?? 0);
-  return `<div class="sf-panel">
-    <h3 class="sf-panel__title">On the website</h3>
-    ${sw('recruit-sf-open', m.open, 'Open on the website')}
+  return `<div class="ss-link"><a href="${MD.esc(url)}" target="_blank" rel="noopener">${MD.esc(url.replace(RECRUIT_SITE_URL, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button></div>
     ${sw('recruit-sf-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
-    <label class="fe__field"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-sf-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80"></label>
-    <label class="fe__field"><span class="fe__field-label">Heading after sending</span><input class="text-input" data-m="recruit-sf-success-label" value="${MD.esc(m.successLabel)}" maxlength="80"></label>
+    <div class="ss-pair">
+      <label class="fe__field"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-sf-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80"></label>
+      <label class="fe__field"><span class="fe__field-label">Heading after sending</span><input class="text-input" data-m="recruit-sf-success-label" value="${MD.esc(m.successLabel)}" maxlength="80"></label>
+    </div>
     <label class="fe__field"><span class="fe__field-label">Message after sending</span><textarea class="text-input" data-m="recruit-sf-thanks" rows="2" maxlength="300" placeholder="Thanks. We read every one of these.">${MD.esc(m.thanks || '')}</textarea></label>
     ${recruitFormNotifyHtml(d)}
     <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-sf-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
-    <div class="fe-options__remove"><span class="fe-switch__text">Take the form off this stage${responses ? `<small>${MD.esc(recruitPlural(responses, 'response'))} so far. Close it instead; a form with responses stays.</small>` : ''}</span><button type="button" class="btn btn--sm ${responses ? '' : 'btn--danger'}" data-action="recruit-sf-remove-form" ${responses ? 'disabled' : ''}>Remove form</button></div>
-  </div>`;
+    <div class="fe-options__remove"><span class="fe-switch__text">Take the form off this stage${responses ? `<small>${MD.esc(recruitPlural(responses, 'response'))} so far. Close it instead; a form with responses stays.</small>` : ''}</span><button type="button" class="btn btn--sm ${responses ? '' : 'btn--danger'}" data-action="recruit-sf-remove-form" ${responses ? 'disabled' : ''}>Remove form</button></div>`;
 }
 
 // Who hears about a response: only the addresses the form lists.
@@ -11719,15 +12124,12 @@ function recruitStageChecklistHtml(cycle, key) {
     const s = recruitSections(cycle)[key];
     return s.fields.length
       ? `<div class="ck ck--read"><div class="ck__preview">${recruitChecklistPreviewHtml({ model: recruitStageModel(s, key, cycle) })}</div></div>`
-      : `<div class="rc-empty-card"><b>No checklist</b><p>A lead can add fields the team fills in for each person here.</p></div>`;
+      : `<div class="sd-empty"><b>No checklist</b><p>A lead can add fields the team fills in for each person here.</p></div>`;
   }
   const d = recruitStageDraft(cycle, key);
   return `<div class="ck">
-    <div class="ck__main">
-      <ol class="ck__list" data-sortable="fields">${recruitFieldCardsHtml(d)}</ol>
-      <div class="ck__add"><button type="button" class="btn" data-action="recruit-ck-add" aria-haspopup="menu">${I.plus} Add field</button></div>
-    </div>
-    <aside class="ck__side"><h3 class="sf-panel__title">What reviewers see</h3><div class="ck__preview" data-rc="checklist-preview">${recruitChecklistPreviewHtml(d)}</div></aside>
+    <ol class="ck__list" data-sortable="fields">${recruitFieldCardsHtml(d)}</ol>
+    <div class="ck__add"><button type="button" class="btn" data-action="recruit-ck-add" aria-haspopup="menu">${I.plus} Add field</button></div>
   </div>`;
 }
 
@@ -11807,17 +12209,15 @@ function recruitStageSettingsHtml(cycle, key) {
   const asked = split ? recruitSplitQuestion(split, flow.sections) : null;
   const splitRow = others.length ? `<div class="ss-split">${split ? `<span>Split by ${MD.esc(asked?.label || split.q)}${split.stage !== key ? ` on ${MD.esc(recruitSectionTitle(split.stage, cycle))}` : ''}</span>` : ''}<button type="button" class="btn btn--sm" data-action="recruit-flow-split" data-key="${MD.esc(key)}">${RC_ICONS.split}${split ? 'Edit split…' : 'Split by an answer…'}</button></div>` : '';
   const from = (flow.into.get(key) || []).map((k) => MD.esc(flow.sections[k].title));
+  const group = (title, body, cls = '') => `<section class="ss__group ${cls}"><h3 class="ss__title">${title}</h3>${body}</section>`;
   return `<div class="ss">
-    <section class="ss__group"><h3 class="sf-panel__title">Name</h3>
-      <input class="text-input ss__name" data-m="recruit-ss-title" value="${MD.esc(m.title)}" maxlength="80" aria-label="Stage name" autocomplete="off" spellcheck="false"></section>
-    <section class="ss__group"><h3 class="sf-panel__title">Kind</h3>
-      <div class="ss-kinds" role="radiogroup" aria-label="Kind">${RECRUIT_STAGE_KINDS.map((k) => `<button type="button" role="radio" class="ss-kind" data-action="recruit-ss-kind" data-kind="${k.value}" aria-checked="${m.kind === k.value}"><span class="ss-kind__icon">${recruitKindIcon(k.value)}</span><b>${k.label}</b><small>${MD.esc(k.note)}</small></button>`).join('')}</div></section>
-    <section class="ss__group"><h3 class="sf-panel__title">Leads to</h3>
-      ${others.length ? `<ul class="ss-next">${leads}</ul>` : '<p class="faint">Add another stage to connect this one.</p>'}
+    ${group('Name', `<input class="text-input ss__name" data-m="recruit-ss-title" value="${MD.esc(m.title)}" maxlength="80" aria-label="Stage name" autocomplete="off" spellcheck="false">`)}
+    ${group('Kind', `<div class="ss-kinds ss-kinds--compact" role="radiogroup" aria-label="Kind">${RECRUIT_STAGE_KINDS.map((k) => `<button type="button" role="radio" class="ss-kind" data-action="recruit-ss-kind" data-kind="${k.value}" aria-checked="${m.kind === k.value}" title="${MD.esc(k.note)}"><span class="ss-kind__icon">${recruitKindIcon(k.value)}</span><b>${k.label}</b></button>`).join('')}</div>`)}
+    ${group('On the website', m.form ? recruitStageWebHtml(d) : `<div class="ss-row"><span class="ss-row__text">No form. People reach this stage when the team moves them here.</span><button type="button" class="btn btn--sm" data-action="recruit-sf-add-form">${I.plus} Add a form</button></div>`)}
+    ${group('Leads to', `${others.length ? `<ul class="ss-next">${leads}</ul>` : '<p class="faint">Add another stage to connect this one.</p>'}
       ${splitRow}
-      <p class="rc-set__note">${from.length ? `Comes after ${from.join(' and ')}.` : 'Nothing leads here; people start at this stage.'} Where nothing is checked, this stage ends the flow.</p></section>
-    <section class="ss__group ss__danger"><h3 class="sf-panel__title">Remove</h3>
-      <div class="fe-options__remove"><span class="fe-switch__text">Remove ${MD.esc(recruitSectionTitle(key, cycle))}<small>A stage with form responses, people placed there or checklist entries stays until they move.</small></span><button type="button" class="btn btn--sm btn--danger" data-action="recruit-stage-remove">Remove stage…</button></div></section>
+      <p class="rc-set__note">${from.length ? `Comes after ${from.join(' and ')}.` : 'Nothing leads here; people start at this stage.'} Where nothing is checked, this stage ends the flow.</p>`)}
+    ${group('Remove', `<div class="fe-options__remove"><span class="fe-switch__text">Remove ${MD.esc(recruitSectionTitle(key, cycle))}<small>A stage with form responses, people placed there or checklist entries stays until they move.</small></span><button type="button" class="btn btn--sm btn--danger" data-action="recruit-stage-remove">Remove stage…</button></div>`, 'ss__danger')}
   </div>`;
 }
 
@@ -11947,9 +12347,11 @@ async function recruitSaveStage(el) {
     recruitPaintStageTab(c);
     const head = $('[data-rc="stage-head"]');
     if (head) recruitRepaint(head, recruitStageHeadHtml(recruitCycleRow(), key));
+    // The tabs' counts and the chart's card follow a saved name, form or checklist.
     if (!d.error) {
-      const strip = $('.rs-strip');
-      if (strip) strip.outerHTML = recruitStageStripHtml(recruitCycleRow(), key, recruitStageTab() === 'people' ? '' : recruitStageTab());
+      const tabs = $('.sd-tabs');
+      if (tabs) recruitRepaint(tabs, recruitStageTabsHtml(recruitCycleRow(), key));
+      recruitPaintFlow();
     }
   }
 }
@@ -11973,8 +12375,7 @@ async function recruitToggleStageOpen(el) {
     st.busy.delete('open:' + key);
     const head = $('[data-rc="stage-head"]');
     if (head) recruitRepaint(head, recruitStageHeadHtml(recruitCycleRow(), key));
-    const c = recruitStageCtx($('[data-rc="stage"]'));
-    if (c && recruitStageTab() === 'form') recruitPaintStageTab(c);
+    recruitPaintFlow();
   }
 }
 
@@ -12180,7 +12581,13 @@ RECRUIT.register({
   mount(cycle) {
     const st = recruitState();
     const key = recruitStageKey();
-    if (!st.insights || st.insights.key !== st.key + ':' + cycle.id) recruitLoadInsights();
+    const entering = !st.mod.drawer;
+    st.mod.drawer = key || 'none';
+    recruitFlowMounted(cycle, { animate: entering });
+    // Opening moves focus into the panel (closing returns it to the card);
+    // a tab or a step to the next stage keeps it on the panel's tabs.
+    if (entering) $('.sd')?.focus?.({ preventScroll: true });
+    else if (!document.activeElement || document.activeElement === document.body) $('.sd-tabs [aria-selected="true"]')?.focus?.({ preventScroll: true });
     if (key && recruitStageTab() === 'people') {
       const sp = recruitStagePeopleState(cycle, key);
       if (!sp.loaded && !sp.loading) recruitLoadStagePeople();
@@ -12192,8 +12599,9 @@ RECRUIT.register({
     const cycle = recruitCycleRow(), key = recruitStageKey();
     const head = $('[data-rc="stage-head"]');
     if (head && cycle && key) recruitRepaint(head, recruitStageHeadHtml(cycle, key));
-    const chips = $('[data-rc="stage-chips"]');
-    if (chips && cycle && key) recruitRepaint(chips, recruitStageChipsHtml(cycle, key, recruitStagePeopleState(cycle, key)));
+    const show = $('[data-rc="stage-show"]');
+    const sp = recruitState().stagePeople;
+    if (show && cycle && key && sp?.key === key && !show.contains(document.activeElement)) show.outerHTML = recruitStageShowHtml(cycle, key, sp);
   },
   actions: {
     'recruit-stage-new': () => recruitOpenStageNew(),
@@ -12214,17 +12622,12 @@ RECRUIT.register({
     'recruit-stage-open': (el) => recruitToggleStageOpen(el),
     'recruit-copy-link': (el) => recruitCopy(el.dataset.link || '', 'Link copied'),
     // People here
-    'recruit-stage-filter': (el) => {
-      const sp = recruitState().stagePeople; if (!sp) return;
-      sp.filter = el.dataset.filter; sp.selected = new Set();
-      for (const b of $$('.sheet--stage [data-action="recruit-stage-filter"]')) b.setAttribute('aria-pressed', String(b.dataset.filter === sp.filter));
-      recruitLoadStagePeople();
-    },
     'recruit-stage-people-more': () => recruitLoadStagePeople(true),
     'recruit-stage-people-retry': () => recruitLoadStagePeople(),
-    'recruit-stage-select': (el) => { const sp = recruitState().stagePeople; if (!sp) return; if (el.checked) sp.selected.add(el.dataset.email); else sp.selected.delete(el.dataset.email); el.closest('tr')?.classList.toggle('is-selected', el.checked); recruitRepaint($('[data-rc="stage-bulk"]'), recruitStageBulkHtml(sp)); recruitRepaint($('[data-rc="stage-people-head"]'), recruitStagePeopleHeadHtml(recruitCycleRow(), sp.key, sp)); },
-    'recruit-stage-select-all': (el) => { const sp = recruitState().stagePeople; if (!sp) return; sp.selected = el.checked ? new Set(sp.rows.map((r) => r.email)) : new Set(); recruitPaintStagePeople(); },
-    'recruit-stage-clear': () => { const sp = recruitState().stagePeople; if (!sp) return; sp.selected = new Set(); recruitPaintStagePeople(); },
+    'recruit-stage-select': (el) => { const sp = recruitState().stagePeople; if (!sp) return; if (el.checked) sp.selected.add(el.dataset.email); else sp.selected.delete(el.dataset.email); el.closest('tr')?.classList.toggle('is-selected', el.checked); recruitPaintStageBar(); recruitRepaint($('[data-rc="stage-people-head"]'), recruitStagePeopleHeadHtml(recruitCycleRow(), sp.key, sp)); },
+    'recruit-stage-select-all': (el) => { const sp = recruitState().stagePeople; if (!sp) return; sp.selected = el.checked ? new Set(sp.rows.map((r) => r.email)) : new Set(); recruitPaintStagePeople(); recruitPaintStageBar(); },
+    'recruit-stage-clear': () => { const sp = recruitState().stagePeople; if (!sp) return; sp.selected = new Set(); recruitPaintStagePeople(); recruitPaintStageBar(); },
+    'recruit-stage-close': () => recruitStageClose(),
     // The form
     'recruit-sf-preview': recruitEdit((c) => { c.d.preview = !c.d.preview; }, 'tab'),
     'recruit-sf-add-form': recruitEdit((c) => { c.m.form = { questions: [{ _id: recruitItemId(), key: 'name', type: 'short', label: 'Name', help: '', required: true, fixed: true, max: 100 }, { _id: recruitItemId(), key: 'email', type: 'email', label: 'Email', help: '', required: true, fixed: true, max: 200 }] }; }, 'tab'),
@@ -12331,13 +12734,28 @@ RECRUIT.register({
     },
     'recruit-ck-max': (host, value) => { if (value === undefined) return undefined; recruitEdit((c) => { if (!c.f) return false; c.f.max = Number(value); }, 'fields')(host); },
     'recruit-stage-new-after': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-stage-new') UI.modal.after = value; },
+    'recruit-stage-filter': (host, value) => {
+      if (value === undefined) return undefined;
+      const sp = recruitState().stagePeople;
+      if (!sp || value === sp.filter) return;
+      sp.filter = value; sp.selected = new Set();
+      recruitLoadStagePeople();
+    },
   },
   modals: { 'recruit-stage-new': recruitStageNewModalHtml },
   keydown(ev) {
+    // Arrow keys move a card by its grip.
     const grip = typeof ev.target?.matches === 'function' && ev.target.matches('[data-sortable] .rc-grip') ? ev.target : null;
-    if (!grip || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return false;
+    if (grip && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+      ev.preventDefault();
+      recruitMoveCard(grip, ev.key === 'ArrowUp' ? -1 : 1);
+      return true;
+    }
+    // Escape leaves a text box first, then closes the panel.
+    if (ev.key !== 'Escape' || UI.modal || UI.menu || UI.route?.params?.sub !== 'stage') return false;
+    if (typeof ev.target?.matches === 'function' && ev.target.matches('input, textarea') && ev.target.type !== 'checkbox') { ev.target.blur?.(); return true; }
     ev.preventDefault();
-    recruitMoveCard(grip, ev.key === 'ArrowUp' ? -1 : 1);
+    recruitStageClose();
     return true;
   },
   cycleChanged() { const st = recruitState(); if (st.stagePeople) st.stagePeople.loaded = false; },

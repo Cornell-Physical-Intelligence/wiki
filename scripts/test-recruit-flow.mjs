@@ -109,6 +109,10 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     assert.deepEqual(ins.subteams, [{ name: 'Software', n: 2 }, { name: 'Undecided', n: 1 }]);
     assert.equal(ins.daily.length, 1);
     assert.deepEqual(ins.daily[0].counts, { interest: 3, coffee: 2 });
+    // Along each connection: everyone who reached both of its stages.
+    assert.deepEqual(ins.edges.find((e) => e.from === 'interest' && e.to === 'coffee'), { from: 'interest', to: 'coffee', n: 2 });
+    assert.equal(ins.edges.find((e) => e.from === 'coffee' && e.to === 'application').n, 0, 'nobody reached the application');
+    assert.deepEqual([coffee.ended, ins.stages.find((s) => s.key === 'interview').ended], [1, 1], 'a decision made at a stage ends there');
     console.log('PASS: flow model — edges, loops, columns, fields, values, positions, stage states, summaries and insights');
   }
 
