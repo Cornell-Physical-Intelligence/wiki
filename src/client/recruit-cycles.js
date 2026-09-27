@@ -24,7 +24,7 @@ function recruitCycleRowHtml(c, intakeCycleId) {
   ].filter(Boolean).join(' · ');
   return `<a class="rc-cycle-card" href="${recruitPanelHref(c.id, '')}" data-id="${MD.esc(c.id)}">
     <span class="rc-cycle-card__head"><span class="rc-cycle-card__name">${MD.esc(c.name)}</span>
-      <span class="rc-cycle-state rc-cycle-state--${MD.esc(c.status)}"><span class="rc-cycle-state__dot"></span>${MD.esc(recruitStatusText(c, intakeCycleId).replace(" · receives the website's forms", ''))}</span>
+      <span class="rc-cycle-state rc-cycle-state--${MD.esc(c.status)}">${MD.esc(recruitStatusText(c, intakeCycleId).replace(" · receives the website's forms", ''))}</span>
       ${receiving ? `<span class="rc-cycle-card__live">${RC_ICONS.globe}Website</span>` : ''}</span>
     ${meta ? `<span class="rc-cycle-card__meta">${MD.esc(meta)}</span>` : ''}
     <span class="rc-cycle-card__stages">${stages.map((s) => `<span class="rc-cycle-card__stage"><span class="rc-cycle-card__bar"><span style="width:${Math.round((s.n / max) * 100)}%"></span></span><span class="rc-cycle-card__label">${MD.esc(s.title)}</span><span class="rc-cycle-card__n">${recruitNum(s.n)}</span></span>`).join('')}</span>
@@ -536,7 +536,7 @@ function recruitParseDate(text, endOfDay = false) {
 }
 
 function recruitFormField(label, inner, note) {
-  return `<label class="rc-field">${MD.esc(label)}${inner}${note ? `<span class="sub">${MD.esc(note)}</span>` : ''}</label>`;
+  return `<label class="rc-label">${MD.esc(label)}${inner}${note ? `<span class="sub">${MD.esc(note)}</span>` : ''}</label>`;
 }
 
 const RECRUIT_SETTINGS = [

@@ -366,16 +366,19 @@ function recruitSectionTitle(key, cycle = recruitCycleRow()) {
 
 // The flow as the server reads it (lib/recruit/flow.js): a stage with a
 // saved `next` leads exactly there, one without leads to the stage after it
-// in the cycle's order; columns sit one past the furthest stage leading in;
-// stages meet people by column, then by order.
+// in the cycle's order; rows sit one below the furthest stage leading in;
+// stages meet people by row, then by order.
 function recruitFlowOf(sections) {
   const keys = Object.keys(sections || {});
   const live = new Set(keys);
   const edges = new Map();
+  const splits = new Map();
   keys.forEach((key, i) => {
     const s = sections[key];
+    const split = recruitSplitOf(s, live);
+    if (split) splits.set(key, split);
     const list = Array.isArray(s?.next) ? s.next : i + 1 < keys.length ? [keys[i + 1]] : [];
-    edges.set(key, [...new Set(list.map(String))].filter((k) => k !== key && live.has(k)));
+    edges.set(key, [...new Set([...list.map(String), ...recruitSplitTargets(split)])].filter((k) => k !== key && live.has(k)));
   });
   const indegree = new Map(keys.map((k) => [k, 0]));
   for (const to of edges.values()) for (const k of to) indegree.set(k, indegree.get(k) + 1);
@@ -395,9 +398,44 @@ function recruitFlowOf(sections) {
   const ordered = keys.map((k, i) => ({ k, i, r: ranks.get(k) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.k);
   const into = new Map(keys.map((k) => [k, []]));
   for (const [from, to] of edges) for (const k of to) into.get(k).push(from);
-  return { sections: sections || {}, keys: ordered, order: keys, edges, into, ranks };
+  return { sections: sections || {}, keys: ordered, order: keys, edges, into, ranks, splits };
 }
 const recruitFlow = (cycle = recruitCycleRow()) => recruitFlowOf(recruitSections(cycle));
+
+/* ------------------------------- splits ---------------------------------- */
+
+// A stage can send people on by their answer to one question of a form they
+// have sent by then (lib/recruit/flow.js): { stage, q, routes: { <answer>:
+// <stage> }, otherwise }. The split's stages are among its connections.
+const RECRUIT_SPLIT_TYPES = ['single', 'multi', 'checkbox'];
+const recruitSplitTargets = (split) => new Set([...Object.values(split?.routes || {}), ...(split?.otherwise ? [split.otherwise] : [])]);
+function recruitSplitOf(stage, live) {
+  const raw = stage?.split;
+  if (!raw || typeof raw !== 'object' || !raw.stage || !raw.q) return null;
+  const routes = Object.fromEntries(Object.entries(raw.routes || {}).filter(([, to]) => live.has(to)));
+  if (!Object.keys(routes).length) return null;
+  return { stage: raw.stage, q: raw.q, routes, otherwise: raw.otherwise && live.has(raw.otherwise) ? raw.otherwise : null };
+}
+// The answers a question offers to split by.
+const recruitSplitOptions = (question) => (question?.type === 'checkbox' ? ['Yes', 'No'] : Array.isArray(question?.options) ? question.options.map(String) : []);
+// The question a split reads, as its form asks it.
+const recruitSplitQuestion = (split, sections = recruitSections()) => (sections[split?.stage]?.form?.questions || []).find((q) => q.key === split?.q) || null;
+// What a connection out of a split says: the answers that take people there.
+function recruitSplitLabel(split, to) {
+  if (!split) return '';
+  const answers = Object.entries(split.routes).filter(([, t]) => t === to).map(([a]) => a);
+  if (split.otherwise === to) answers.push('Anyone else');
+  return answers.join(', ');
+}
+// A split once some of its stages are no longer connected: answers that led
+// there are dropped, and with no answer left the split goes.
+function recruitPruneSplit(split, next) {
+  if (!split) return null;
+  const keep = new Set(next);
+  const routes = Object.fromEntries(Object.entries(split.routes).filter(([, to]) => keep.has(to)));
+  if (!Object.keys(routes).length) return null;
+  return { ...split, routes, otherwise: split.otherwise && keep.has(split.otherwise) ? split.otherwise : null };
+}
 
 // Whether `to` can already reach `from`: a connection from → to would loop.
 function recruitReaches(flow, from, to) {
@@ -428,10 +466,15 @@ const recruitStatusLabel = (s) => (RECRUIT_STATUSES.find((x) => x.value === s) |
 const recruitStatusPill = (s) => `<span class="rc-status rc-status--${MD.esc(s || 'active')}">${MD.esc(recruitStatusLabel(s))}</span>`;
 
 // Where a person is on each stage, as dots in flow order.
-const RECRUIT_STATE_LABELS = { current: 'Here now', done: 'Done', open: 'Not done', skipped: 'Skipped', ahead: 'Not yet' };
+const RECRUIT_STATE_LABELS = { current: 'Here now', done: 'Done', open: 'Not done', skipped: 'Skipped', ahead: 'Not yet', next: 'Up next', offpath: 'Not on their path' };
+// Stages a split sent someone away from are left out of their progress.
+const recruitTheirKeys = (person, flow = recruitFlow()) => flow.keys.filter((k) => person?.states?.[k] !== 'offpath');
+// A stage's state for someone, with the stages they go to next marked.
+const recruitStateOf = (person, key) => { const state = person?.states?.[key] || 'ahead'; return state === 'ahead' && person?.next?.includes(key) ? 'next' : state; };
 function recruitTrackHtml(person, flow = recruitFlow()) {
   const states = person?.states || {};
-  return `<span class="rc-track" role="img" aria-label="${MD.esc(flow.keys.map((k) => `${recruitSectionTitle(k)}: ${RECRUIT_STATE_LABELS[states[k]] || 'Not yet'}${states[k] === 'current' && person?.done?.[k] ? ', done' : ''}`).join('; '))}">${flow.keys.map((k) => {
+  const keys = recruitTheirKeys(person, flow);
+  return `<span class="rc-track" role="img" aria-label="${MD.esc(keys.map((k) => `${recruitSectionTitle(k)}: ${RECRUIT_STATE_LABELS[states[k]] || 'Not yet'}${states[k] === 'current' && person?.done?.[k] ? ', done' : ''}`).join('; '))}">${keys.map((k) => {
     const state = states[k] || 'ahead';
     return `<span class="rc-track__dot rc-track__dot--${state}${state === 'current' && person?.done?.[k] ? ' is-done' : ''}" title="${MD.esc(recruitSectionTitle(k) + ': ' + (RECRUIT_STATE_LABELS[state] || ''))}"></span>`;
   }).join('')}</span>`;
@@ -469,6 +512,7 @@ const RC_ICONS = {
   back: rcIcon('<path d="m15 18-6-6 6-6"/>', 1.9),
   sort: rcIcon('<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>'),
   filter: rcIcon('<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>'),
+  split: rcIcon('<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3"/><path d="m15 9 6-6"/>'),
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
 };
 const recruitKindIcon = (kind) => RC_ICONS[kind] || RC_ICONS.step;
@@ -579,6 +623,8 @@ function recruitPutSite(settings) {
     if (!cycle) throw new Error('Open a cycle first.');
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/settings/site`, { method: 'PUT', body: JSON.stringify({ version: cycle.version, settings }) });
     recruitAdoptCycle(out.cycle, out.sections);
+    // Counts follow the flow: who is up next where, what each card shows.
+    if (typeof recruitLoadInsights === 'function') recruitLoadInsights({ quiet: true, again: true });
     return out;
   };
   const next = (st.saving || Promise.resolve()).catch(() => {}).then(run);
@@ -683,8 +729,10 @@ function recruitPaintCounts() {
 
 /* ------------------------------- shell ----------------------------------- */
 
-function recruitShellHtml(crumbHtml, inner, right, wide = false) {
-  return topbar(crumbHtml, right) + `<div class="content"><div class="page-wrap page-wrap--wide ${wide ? 'rc-wrap--full' : ''}"><div class="page-col page-col--wide ${wide ? 'rc-col--full' : ''}">${inner}</div></div></div>`;
+// Every Applications page shares one width and keeps its scrollbar's room,
+// so moving between the views never shifts the page.
+function recruitShellHtml(crumbHtml, inner, right) {
+  return topbar(crumbHtml, right) + `<div class="content rc-content"><div class="page-wrap page-wrap--wide rc-wrap--full"><div class="page-col page-col--wide rc-col--full">${inner}</div></div></div>`;
 }
 
 const RECRUIT_CRUMBS_INDEX = `<a href="#/home">Wiki</a><span class="crumbs__sep">/</span><span class="crumbs__here">Applications</span>`;
@@ -737,7 +785,7 @@ function recruitCycleMetaHtml(cycle) {
   const st = recruitState();
   const receiving = st.cycles?.intakeCycleId === cycle.id && cycle.status === 'open';
   const parts = [
-    `<span class="rc-cycle-state rc-cycle-state--${MD.esc(cycle.status)}"><span class="rc-cycle-state__dot"></span>${MD.esc(cycle.status.charAt(0).toUpperCase() + cycle.status.slice(1))}</span>`,
+    `<span class="rc-cycle-state rc-cycle-state--${MD.esc(cycle.status)}">${MD.esc(cycle.status.charAt(0).toUpperCase() + cycle.status.slice(1))}</span>`,
     receiving ? `<span>${RC_ICONS.globe}Receives the website's forms</span>` : '',
     cycle.closesAt ? `<span>Deadline ${MD.esc(recruitDay(cycle.closesAt))}</span>` : '',
   ].filter(Boolean);
@@ -787,7 +835,7 @@ function recruitCycleShellHtml(id) {
     ? crumbs(`<a href="${recruitPanelHref(cycle.id, '')}">${MD.esc(cycle.name)}</a><span class="crumbs__sep">/</span><span class="crumbs__here">${here}</span>`)
     : crumbs(`<span class="crumbs__here">${MD.esc(cycle.name)}</span>`);
   const head = `<header class="rc-cycle-head"><div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>${recruitCycleMetaHtml(cycle)}${nav}</header>`;
-  return recruitShellHtml(crumbHtml, head + body, right, Boolean(active?.module.wide?.(active.id)));
+  return recruitShellHtml(crumbHtml, head + body, right);
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {

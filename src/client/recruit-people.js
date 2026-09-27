@@ -419,7 +419,6 @@ RECRUIT.register({
   kernel: true,
   panels: [{ id: 'people', label: 'People', icon: RC_ICONS.people, order: 2, when: () => true }],
   view: (cycle) => recruitPeopleView(cycle),
-  wide: () => recruitState().people?.view === 'board',
   mount(cycle) {
     const p = recruitPeopleState(cycle);
     const changed = recruitApplyRouteFilters(p);

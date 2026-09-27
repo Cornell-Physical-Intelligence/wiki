@@ -142,6 +142,70 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     console.log('PASS: stage shape — legacy coffee chats gain the checklist, formless stages stay off the website, connections validate');
   }
 
+  /* ------------------------------- splits --------------------------------- */
+  {
+    const live = new Set(['app', 'cs', 'mech', 'gen']);
+    assert.equal(flow.cleanSplit(null), null);
+    assert.throws(() => flow.cleanSplit({ stage: 'app', q: 'team', routes: {} }, { live }), /at least one answer/);
+    assert.throws(() => flow.cleanSplit({ stage: 'app', q: 'team', routes: { CS: 'ghost' } }, { live }), /does not have/);
+    assert.deepEqual(flow.cleanSplit({ stage: 'app', q: 'team', routes: { CS: 'ghost', Mech: 'mech' } }, { live, lenient: true }), { stage: 'app', q: 'team', routes: { Mech: 'mech' }, otherwise: null }, 'reading drops answers that lead nowhere');
+    const sections = {
+      app: { form: { questions: [{ key: 'team', type: 'multi', options: ['Software', 'Electrical', 'Mechanical'] }, { key: 'ok', type: 'checkbox' }] }, split: { stage: 'app', q: 'team', routes: { Software: 'cs', Electrical: 'cs', Mechanical: 'mech' }, otherwise: 'gen' }, next: [] },
+      cs: { next: [] }, mech: { next: [] }, gen: { next: [] },
+    };
+    const f = flow.flowOf(sections);
+    assert.deepEqual(f.edges.get('app'), ['cs', 'mech', 'gen'], 'a split\'s stages are always connections');
+    const sub = (answers, section = 'app', ts = 1) => [{ section, ts, answers }];
+    const split = f.splits.get('app');
+    assert.equal(flow.routeOf(split, []), null, 'no answer yet: undecided');
+    assert.deepEqual([...flow.routeOf(split, sub({ team: ['Electrical'] }))], ['cs']);
+    assert.deepEqual([...flow.routeOf(split, sub({ team: ['Software', 'Mechanical'] }))].sort(), ['cs', 'mech'], 'several answers, several ways');
+    assert.deepEqual([...flow.routeOf(split, sub({ team: ['Creative'] }))], ['gen'], 'anyone else');
+    assert.deepEqual([...flow.routeOf(split, sub({ team: ' software ' }))], ['cs'], 'an answer matches whatever its case or spacing');
+    assert.deepEqual([...flow.routeOf(split, [{ section: 'app', ts: 1, answers: { team: ['Mechanical'] } }, { section: 'app', ts: 2, answers: { team: ['Software'] } }])], ['cs'], 'the newest answer counts');
+    // A person's path: the other ways are not theirs.
+    const pf = flow.personFlow(f, sub({ team: ['Mechanical'] }), {});
+    assert.equal(pf.stage, 'app');
+    assert.deepEqual([pf.states.cs, pf.states.mech, pf.states.gen], ['offpath', 'ahead', 'offpath']);
+    assert.deepEqual(pf.next, ['mech']);
+    const undecided = flow.personFlow(f, [{ section: 'app', ts: 1, answers: {} }], {});
+    assert.deepEqual([undecided.states.cs, undecided.states.mech], ['ahead', 'ahead'], 'before they answer, every way is still ahead');
+    assert.deepEqual(undecided.next, [], 'and none of them is theirs yet');
+    const moved = flow.personFlow(f, sub({ team: ['Mechanical'] }), { stage: 'cs', stageAt: 5 });
+    assert.deepEqual([moved.stage, moved.states.cs], ['cs', 'current'], 'the team\'s move wins over the split');
+    const yes = flow.flowOf({ ...sections, app: { ...sections.app, split: { stage: 'app', q: 'ok', routes: { Yes: 'cs', No: 'mech' } } } });
+    assert.deepEqual([...flow.routeOf(yes.splits.get('app'), sub({ ok: false }))], ['mech'], 'a checkbox splits by Yes and No');
+    const ins = flow.insightsFor(f, [{ email: 'a@x.co', submissions: sub({ team: ['Software'] }), track: {} }, { email: 'b@x.co', submissions: sub({ team: ['Mechanical'] }), track: {} }, { email: 'c@x.co', submissions: sub({ team: ['Software'] }), track: { status: 'declined' } }], { now: 1789600000000 });
+    assert.deepEqual(ins.stages.map((x) => [x.key, x.upNext]), [['app', 0], ['cs', 1], ['mech', 1], ['gen', 0]], 'insights count who is up next; a declined person is nobody\'s');
+
+    // Saving a split: a choice or checkbox on a form people have sent by then.
+    const teamQ = { key: 'team', type: 'single', label: 'Team', required: false, options: ['Software', 'Mechanical'] };
+    const base = { id: 'cy-s', doc: { site: { sections: {
+      application: { form: { questions: [...S.defaultQuestions(), teamQ, { key: 'why', type: 'long', label: 'Why' }] } },
+      cs: { title: 'CS form', form: { questions: S.defaultQuestions() } }, mech: { title: 'Mech form', form: { questions: S.defaultQuestions() } },
+    }, order: ['interest', 'coffee', 'application', 'cs', 'mech'] } } };
+    const byTeam = { stage: 'application', q: 'team', routes: { Software: 'cs', Mechanical: 'mech' } };
+    const saved = S.validateSite({ sections: { application: { split: byTeam, next: [] }, cs: { next: [] }, mech: { next: [] } } }, base);
+    assert.deepEqual(saved.sections.application.next, ['cs', 'mech'], 'the split\'s stages become its connections');
+    assert.deepEqual(saved.sections.application.split, { ...byTeam, otherwise: null });
+    const withSplit = { ...base, doc: { site: saved } };
+    assert.deepEqual(S.sectionsFor(withSplit).application.split, { ...byTeam, otherwise: null });
+    assert.throws(() => S.validateSite({ sections: { application: { split: { ...byTeam, q: 'why' } } } }, base), /choice or a checkbox/);
+    assert.throws(() => S.validateSite({ sections: { application: { split: { ...byTeam, q: 'nope' } } } }, base), /choice or a checkbox/);
+    assert.throws(() => S.validateSite({ sections: { application: { split: { ...byTeam, routes: { Creative: 'cs' } } } } }, base), /"Creative" is not an answer to Team/);
+    assert.throws(() => S.validateSite({ sections: { application: { split: { ...byTeam, routes: { Software: 'ghost' } } } } }, base), /does not have/);
+    assert.throws(() => S.validateSite({ sections: { application: { split: { ...byTeam, routes: { Software: 'application' } } } } }, base), /cannot lead to itself/);
+    assert.throws(() => S.validateSite({ sections: { interest: { split: byTeam } } }, base), /answer before they reach it/);
+    const unlinked = S.validateSite({ sections: { application: { next: ['cs'] } } }, withSplit);
+    assert.deepEqual(unlinked.sections.application.split.routes, { Software: 'cs' }, 'disconnecting a stage drops the answers that led there');
+    assert.equal(S.validateSite({ remove: ['cs', 'mech'] }, withSplit).sections.application.split, undefined, 'with no answer left, the split goes');
+    const cleared = S.validateSite({ sections: { application: { split: null } } }, withSplit);
+    assert.equal(cleared.sections.application.split, undefined);
+    assert.deepEqual(cleared.sections.application.next, ['cs', 'mech'], 'removing a split keeps its connections, for everyone');
+    assert.ok(S.publicSections(withSplit).every((x) => !('split' in x) && !('next' in x)), 'the website never sees a split');
+    console.log('PASS: splits — answers pick the way, undecided until answered, several answers several ways, anyone else, off-path stages, up next, strict saves and lenient reads');
+  }
+
   /* ------------------------------- the routes ----------------------------- */
   const R = await lib('recruit/index.js');
   const USERS = { 'admin@example.com': 'admin', 'lead@example.com': 'member', 'rev@example.com': 'member', 'sub@example.com': 'member', 'outsider@example.com': 'member' };
@@ -345,6 +409,51 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   ok(await site({ sections: { evil: { title: '=Evil', form: null, kind: 'step', fields: [{ key: 'cmd', type: 'text', label: '@cmd' }], next: [] } }, order: ['interest', 'coffee', 'application', 'interview', 'evil'] }), 'a stage named like a formula');
   const guarded = String((await call('GET', `/recruit/cycles/${id}/people.csv?columns=full`, null, 'lead@example.com')).body).replace(/^\uFEFF/, '').split('\r\n')[0];
   assert.match(guarded, /"'=Evil","/); assert.match(guarded, /"'=Evil: @cmd"/);
+
+  // A split at the application: each subteam's form, by the answer given.
+  const splitCycle = ok(await call('POST', '/recruit/cycles', { requestId: rq(), name: 'Spring 2028', term: 'Spring 2028' }), 'create split cycle').cycle;
+  const sid = splitCycle.id;
+  let sc = ok(await call('GET', `/recruit/cycles/${sid}`), 'split cycle');
+  const put = (settings) => call('PUT', `/recruit/cycles/${sid}/settings/site`, { version: sc.cycle.version, settings });
+  sc = { ...sc, ...ok(await put({ sections: {
+    'cs-form': { title: 'CS form', kind: 'form', form: { questions: S.defaultQuestions() }, next: [] },
+    'mech-form': { title: 'Mech form', kind: 'form', form: { questions: S.defaultQuestions() }, next: [] },
+  }, order: ['interest', 'coffee', 'application', 'interview', 'cs-form', 'mech-form'] }), 'add subteam forms') };
+  const teams = sc.sections.application.form.questions.find((qq) => qq.key === 'subteam').options;
+  assert.ok(teams.includes('Software') && teams.includes('Mechanical'), 'the application asks for a subteam');
+  sc = ok(await call('GET', `/recruit/cycles/${sid}`), 'reload split cycle');
+  const refusedSplit = await put({ sections: { application: { split: { stage: 'application', q: 'why', routes: { Software: 'cs-form' } } } } });
+  assert.equal(refusedSplit.status, 400, 'a long answer cannot split');
+  sc = { ...sc, ...ok(await put({ sections: { application: { split: { stage: 'application', q: 'subteam', routes: { Software: 'cs-form', Electrical: 'cs-form', Mechanical: 'mech-form' }, otherwise: 'interview' }, next: [] } } }), 'split by subteam') };
+  sc = ok(await call('GET', `/recruit/cycles/${sid}`), 'reload split cycle');
+  assert.deepEqual(sc.sections.application.next, ['cs-form', 'mech-form', 'interview']);
+  const scyc = await kit.cycles.get(sid);
+  const apply = async (email, name, section, answers) => { tick(); return kit.apps.create(scyc, { name, email, cornell: true, section, answers, by: 'test', subteam: answers.subteam || '' }); };
+  await apply('sw@cornell.edu', 'Sid', 'application', { subteam: 'Software', year: 'Junior', why: 'Robots' });
+  await apply('me@cornell.edu', 'Meg', 'application', { subteam: 'Mechanical', year: 'Senior', why: 'Gears' });
+  await apply('cr@cornell.edu', 'Cara', 'application', { subteam: 'Creative', year: 'Grad', why: 'Renders' });
+  await apply('new@cornell.edu', 'Nia', 'interest', { subteam: 'Software' });
+  const splitPeople = byEmail(ok(await call('GET', `/recruit/cycles/${sid}/people?limit=100`), 'split people').rows);
+  assert.deepEqual([splitPeople['sw@cornell.edu'].states['mech-form'], splitPeople['sw@cornell.edu'].next], ['offpath', ['cs-form']], 'software goes to the CS form, never the mechanical one');
+  assert.deepEqual(splitPeople['me@cornell.edu'].next, ['mech-form']);
+  assert.deepEqual(splitPeople['cr@cornell.edu'].next, ['interview'], 'anyone else goes where the split says');
+  assert.deepEqual([splitPeople['new@cornell.edu'].states['cs-form'], splitPeople['new@cornell.edu'].states['mech-form']], ['ahead', 'ahead'], 'before the application, both forms are still ahead');
+  const upNext = ok(await call('GET', `/recruit/cycles/${sid}/people?next=cs-form`), 'up next').rows.map((p) => p.email);
+  assert.deepEqual(upNext, ['sw@cornell.edu'], 'a stage lists who is up next');
+  assert.equal((await call('GET', `/recruit/cycles/${sid}/people?next=ghost`)).status, 400);
+  const splitInsights = ok(await call('GET', `/recruit/cycles/${sid}/insights`), 'split insights');
+  assert.deepEqual(['cs-form', 'mech-form', 'interview'].map((k) => splitInsights.stages.find((x) => x.key === k).upNext), [1, 1, 1]);
+  const megDetail = ok(await call('GET', `/recruit/cycles/${sid}/people/me%40cornell.edu`), 'detail').person;
+  assert.deepEqual([megDetail.next, megDetail.states['cs-form']], [['mech-form'], 'offpath']);
+  // The website learns which open form comes next for the answers just sent.
+  sc = ok(await call('GET', `/recruit/cycles/${sid}`), 'reload split cycle');
+  sc = { ...sc, cycle: ok(await call('POST', `/recruit/cycles/${sid}/status`, { version: sc.cycle.version, status: 'open' }), 'open split cycle').cycle };
+  ok(await call('POST', `/recruit/cycles/${sid}/intake`, { version: (await kit.cycles.settings()).version, on: true }), 'split cycle receives the website');
+  sc = { ...sc, ...ok(await put({ sections: { application: { open: true }, 'cs-form': { open: true }, 'mech-form': { open: true } } }), 'open the forms') };
+  const sent = ok(await call('POST', '/recruit/site/application', { answers: { name: 'Eli', email: 'eli@cornell.edu', year: 'Junior', subteam: 'Electrical', why: 'Circuits' } }), 'submit an application');
+  assert.deepEqual(sent.next, [{ key: 'cs-form', title: 'CS form' }], 'electrical goes on to the CS form');
+  const sentMech = ok(await call('POST', '/recruit/site/application', { answers: { name: 'Mo', email: 'mo@cornell.edu', year: 'Junior', subteam: 'Mechanical', why: 'Gears' } }), 'submit another');
+  assert.deepEqual(sentMech.next, [{ key: 'mech-form', title: 'Mech form' }]);
 
   // Everything is audited.
   const audit = ok(await call('GET', `/recruit/cycles/${id}/audit`), 'audit').rows.map((a) => a.kind);

@@ -83,13 +83,29 @@ function recruitStageDraft(cycle, key) {
   st.stageDrafts ||= {};
   const id = `${cycle.id}:${key}`;
   const have = st.stageDrafts[id];
-  if (have && (recruitStageDirty(have) || have.saving)) return have;
+  if (have && (recruitStageDirty(have) || have.saving)) {
+    if (!have.saving) recruitRebaseNext(have, cycle, key);
+    return have;
+  }
   const sec = recruitSections(cycle)[key];
   const model = recruitStageModel(sec, key, cycle);
   const fresh = JSON.stringify(model);
   if (have && JSON.stringify(recruitStageComparable(JSON.parse(have.saved))) === JSON.stringify(recruitStageComparable(model))) return have;
   st.stageDrafts[id] = { id, key, cycleId: cycle.id, model, saved: fresh, saving: false, error: '', savedAt: have?.savedAt || 0, preview: have?.preview || false };
   return st.stageDrafts[id];
+}
+// Connections changed elsewhere (the chart, a split) land under the draft's
+// own ticks and unticks; the split's stages stay connected.
+function recruitRebaseNext(d, cycle, key) {
+  const saved = JSON.parse(d.saved);
+  const flow = recruitFlow(cycle);
+  const now = [...(flow.edges.get(key) || [])];
+  if (JSON.stringify(saved.next) === JSON.stringify(now)) return;
+  const routed = recruitSplitTargets(flow.splits.get(key) || null);
+  const added = d.model.next.filter((k) => !saved.next.includes(k) && flow.sections[k]);
+  const dropped = new Set(saved.next.filter((k) => !d.model.next.includes(k) && !routed.has(k)));
+  d.model.next = [...now.filter((k) => !dropped.has(k)), ...added.filter((k) => !now.includes(k))];
+  d.saved = JSON.stringify({ ...saved, next: now });
 }
 // Card identities differ between two drafts of the same stage; the rest is the stage.
 const recruitStageComparable = (m) => JSON.parse(JSON.stringify(m, (k, v) => (k === '_id' ? undefined : v)));
@@ -131,7 +147,7 @@ function recruitStageHeadHtml(cycle, key) {
     ...(s.form ? [[stats.responses, stats.responses === 1 ? 'response' : 'responses']] : []),
   ] : [];
   return `<div class="rs-head">
-    <div class="rs-head__title"><span class="rs-head__icon rs-head__icon--${MD.esc(s.kind)}">${recruitKindIcon(s.kind)}</span><div><span class="rs-head__kind">${MD.esc(recruitKindLabel(s.kind))}</span><h2>${MD.esc(s.title)}</h2></div></div>
+    <div class="rs-head__title"><h2>${MD.esc(s.title)}</h2>${recruitKindTagHtml(s.kind)}</div>
     ${numbers.length ? `<dl class="rs-head__numbers">${numbers.map(([n, label]) => `<div><dt>${MD.esc(label)}</dt><dd>${recruitNum(n)}</dd></div>`).join('')}</dl>` : ''}
     ${web}
   </div>`;
@@ -201,7 +217,7 @@ function recruitPaintStageTab(c, { list = null } = {}) {
 /* ------------------------------- people here ----------------------------- */
 
 const RECRUIT_STAGE_FILTERS = [
-  { id: 'reached', label: 'Everyone who reached it' }, { id: 'here', label: 'Here now' }, { id: 'done', label: 'Done' }, { id: 'notdone', label: 'Not done' },
+  { id: 'reached', label: 'Everyone who reached it' }, { id: 'here', label: 'Here now' }, { id: 'done', label: 'Done' }, { id: 'notdone', label: 'Not done' }, { id: 'next', label: 'Up next' },
 ];
 
 let recruitStageSearchTimer = null;
@@ -215,7 +231,7 @@ function recruitStagePeopleState(cycle, key) {
 
 function recruitStagePeopleParams(sp) {
   const p = new URLSearchParams();
-  if (sp.filter === 'here') { p.set('stage', sp.key); p.set('status', 'active'); }
+  if (sp.filter === 'here' || sp.filter === 'next') { p.set(sp.filter === 'here' ? 'stage' : 'next', sp.key); p.set('status', 'active'); }
   else p.set(sp.filter === 'done' ? 'done' : sp.filter === 'notdone' ? 'notdone' : 'reached', sp.key);
   if (sp.q.trim()) p.set('q', sp.q.trim());
   p.set('sort', 'name');
@@ -270,8 +286,10 @@ function recruitStagePeopleHtml(cycle, key) {
 function recruitStageChipsHtml(cycle, key, sp) {
   const s = recruitSections(cycle)[key];
   const stats = recruitFlowStats(key);
-  const counts = stats ? { reached: stats.reached, here: stats.here, done: stats.done, notdone: stats.notDone } : {};
-  const filters = RECRUIT_STAGE_FILTERS.filter((f) => (f.id !== 'done' && f.id !== 'notdone') || s.done || s.form);
+  const counts = stats ? { reached: stats.reached, here: stats.here, done: stats.done, notdone: stats.notDone, next: stats.upNext } : {};
+  // Up next: people whose path comes here once they finish where they are.
+  const into = (recruitFlow(cycle).into.get(key) || []).length > 0;
+  const filters = RECRUIT_STAGE_FILTERS.filter((f) => (f.id === 'next' ? into : (f.id !== 'done' && f.id !== 'notdone') || s.done || s.form));
   return filters.map((f) => `<button type="button" class="rc-chip" data-action="recruit-stage-filter" data-filter="${f.id}" aria-pressed="${sp.filter === f.id}">${MD.esc(f.label)}${counts[f.id] !== undefined ? `<span class="count">${recruitNum(counts[f.id])}</span>` : ''}</button>`).join('');
 }
 
@@ -294,7 +312,7 @@ function recruitStagePeopleRowsHtml(cycle, key, sp) {
   const span = 4 + s.fields.length + (s.form ? 1 : 0);
   if (!sp.loaded && (sp.loading || !sp.error)) return `<tr class="sheet__empty"><td colspan="${span}">Loading…</td></tr>`;
   if (sp.error && !sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">Could not load: ${MD.esc(sp.error)}. <button class="linklike" data-action="recruit-stage-people-retry">Retry</button></td></tr>`;
-  if (!sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${sp.q.trim() ? 'No one matches.' : sp.filter === 'here' ? 'No one is here now.' : sp.filter === 'done' ? 'No one yet.' : sp.filter === 'notdone' ? 'Everyone here is done.' : 'No one has reached this stage yet.'}</td></tr>`;
+  if (!sp.rows.length) return `<tr class="sheet__empty"><td colspan="${span}">${sp.q.trim() ? 'No one matches.' : sp.filter === 'here' ? 'No one is here now.' : sp.filter === 'next' ? 'No one is on their way here.' : sp.filter === 'done' ? 'No one yet.' : sp.filter === 'notdone' ? 'Everyone here is done.' : 'No one has reached this stage yet.'}</td></tr>`;
   return sp.rows.map((r) => recruitStagePersonRowHtml(cycle, key, r, sp)).join('');
 }
 
@@ -571,12 +589,18 @@ function recruitStageSettingsHtml(cycle, key) {
   const m = d.model;
   const flow = recruitFlow(cycle);
   const others = flow.keys.filter((k) => k !== key);
-  // A stage can lead anywhere that does not already lead back to it.
+  const split = flow.splits.get(key) || null;
+  const routed = recruitSplitTargets(split);
+  // A stage can lead anywhere that does not already lead back to it. Where
+  // the split sends people changes in the split.
   const leads = others.map((k) => {
-    const on = m.next.includes(k);
+    const when = routed.has(k) ? recruitSplitLabel(split, k) : '';
+    const on = m.next.includes(k) || Boolean(when);
     const loops = !on && recruitReaches({ ...flow, edges: new Map([...flow.edges, [key, m.next]]) }, key, k);
-    return `<li><label class="rc-check ${loops ? 'is-disabled' : ''}"><input type="checkbox" data-action="recruit-ss-next" data-to="${MD.esc(k)}" ${on ? 'checked' : ''} ${loops ? 'disabled' : ''}>${recruitKindIcon(flow.sections[k].kind)}<span>${MD.esc(flow.sections[k].title)}</span>${loops ? '<small>comes before this stage</small>' : ''}</label></li>`;
+    return `<li><label class="rc-check ${loops ? 'is-disabled' : when ? 'is-routed' : ''}"><input type="checkbox" data-action="recruit-ss-next" data-to="${MD.esc(k)}" ${on ? 'checked' : ''} ${loops || when ? 'disabled' : ''}>${recruitKindIcon(flow.sections[k].kind)}<span>${MD.esc(flow.sections[k].title)}</span>${loops ? '<small>comes before this stage</small>' : when ? `<small>${MD.esc(when)}</small>` : ''}</label></li>`;
   }).join('');
+  const asked = split ? recruitSplitQuestion(split, flow.sections) : null;
+  const splitRow = others.length ? `<div class="ss-split">${split ? `<span>Split by ${MD.esc(asked?.label || split.q)}${split.stage !== key ? ` on ${MD.esc(recruitSectionTitle(split.stage, cycle))}` : ''}</span>` : ''}<button type="button" class="btn btn--sm" data-action="recruit-flow-split" data-key="${MD.esc(key)}">${RC_ICONS.split}${split ? 'Edit split…' : 'Split by an answer…'}</button></div>` : '';
   const from = (flow.into.get(key) || []).map((k) => MD.esc(flow.sections[k].title));
   return `<div class="ss">
     <section class="ss__group"><h3 class="sf-panel__title">Name</h3>
@@ -585,6 +609,7 @@ function recruitStageSettingsHtml(cycle, key) {
       <div class="ss-kinds" role="radiogroup" aria-label="Kind">${RECRUIT_STAGE_KINDS.map((k) => `<button type="button" role="radio" class="ss-kind" data-action="recruit-ss-kind" data-kind="${k.value}" aria-checked="${m.kind === k.value}"><span class="ss-kind__icon">${recruitKindIcon(k.value)}</span><b>${k.label}</b><small>${MD.esc(k.note)}</small></button>`).join('')}</div></section>
     <section class="ss__group"><h3 class="sf-panel__title">Leads to</h3>
       ${others.length ? `<ul class="ss-next">${leads}</ul>` : '<p class="faint">Add another stage to connect this one.</p>'}
+      ${splitRow}
       <p class="rc-set__note">${from.length ? `Comes after ${from.join(' and ')}.` : 'Nothing leads here; people start at this stage.'} Where nothing is checked, this stage ends the flow.</p></section>
     <section class="ss__group ss__danger"><h3 class="sf-panel__title">Remove</h3>
       <div class="fe-options__remove"><span class="fe-switch__text">Remove ${MD.esc(recruitSectionTitle(key, cycle))}<small>A stage with form responses, people placed there or checklist entries stays until they move.</small></span><button type="button" class="btn btn--sm btn--danger" data-action="recruit-stage-remove">Remove stage…</button></div></section>
@@ -625,7 +650,8 @@ function recruitStagePayload(d) {
   if (!same(m.form, saved.form)) out.form = m.form ? { questions: recruitQuestionsPayload(m.form.questions) } : null;
   if (!same(m.fields, saved.fields)) out.fields = recruitFieldsPayload(m.fields);
   if (m.done !== saved.done || out.fields) out.done = out.fields && !out.fields.some((f) => f.key === m.done && f.type === 'check' && !f.each) ? null : m.done || null;
-  if (!same(m.next, saved.next)) out.next = [...m.next];
+  // The split's stages stay connected whatever the ticks say; the split changes them.
+  if (!same(m.next, saved.next)) out.next = [...new Set([...m.next, ...recruitSplitTargets(recruitFlow().splits.get(d.key) || null)])];
   return out;
 }
 
@@ -771,7 +797,7 @@ function recruitStageNewModalHtml(m) {
     <div class="modal__head"><h3>New stage</h3><button class="icon-btn" data-action="modal-close" aria-label="Close">${I.x}</button></div>
     <form class="modal__body rc-form" data-action="recruit-stage-create">
       ${recruitFormField('Name', `<input class="text-input" name="title" placeholder="e.g. Interview" maxlength="80" required autocomplete="off" spellcheck="false" value="${MD.esc(m.title || '')}">`)}
-      <div class="rc-field">Kind<div class="ss-kinds ss-kinds--compact" role="radiogroup" aria-label="Kind">${RECRUIT_STAGE_KINDS.map((k) => `<button type="button" role="radio" class="ss-kind" data-action="recruit-stage-new-kind" data-kind="${k.value}" aria-checked="${m.stageKind === k.value}"><span class="ss-kind__icon">${recruitKindIcon(k.value)}</span><b>${k.label}</b></button>`).join('')}</div></div>
+      <div class="rc-label">Kind<div class="ss-kinds ss-kinds--compact" role="radiogroup" aria-label="Kind">${RECRUIT_STAGE_KINDS.map((k) => `<button type="button" role="radio" class="ss-kind" data-action="recruit-stage-new-kind" data-kind="${k.value}" aria-checked="${m.stageKind === k.value}"><span class="ss-kind__icon">${recruitKindIcon(k.value)}</span><b>${k.label}</b></button>`).join('')}</div></div>
       ${recruitFormField('Comes after', recruitDd('recruit-stage-new-after', after, m.after || ''))}
       <label class="fe-switch fe-switch--row"><input type="checkbox" data-action="recruit-stage-new-form" ${m.form ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">A form on the website<small>Applicants fill it in themselves, like a coffee chat request.</small></span></label>
       <p class="field-error" role="alert" ${m.error ? '' : 'hidden'}>${MD.esc(m.error || '')}</p>
@@ -945,7 +971,6 @@ RECRUIT.register({
   panels: [{ id: 'stage', label: 'Stage', tab: false, order: 50, when: () => true }],
   view: (cycle) => recruitStageView(cycle),
   crumb: () => MD.esc(recruitSectionTitle(recruitStageKey()) || 'Stage'),
-  wide: () => true,
   dirty: () => Object.values(recruitState().stageDrafts || {}).some(recruitStageDirty),
   mount(cycle) {
     const st = recruitState();
