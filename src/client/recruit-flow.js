@@ -1,20 +1,32 @@
 /* ============================================================================
    Applications — flow module (client). The cycle's flow chart: every stage a
-   card, top to bottom in the order people meet them, the connections drawn
-   between them, and the people at each stage counted on its card. A split
-   sends people on by an answer they gave; its connections say which answer
-   goes where. Leads add stages, connect them (drag from a card's +, or its
-   menus), split, reorder and remove them; every change saves at once. A card
-   opens its stage's page.
+   card, left to right in the order people meet them (top to bottom on a
+   narrow screen), the connections drawn between them, and the people at
+   each stage counted on its card. A split sends people on by an answer they
+   gave: its branches leave the card together and say which answers take
+   them. Leads add stages (the + in the chart, or a card's own +), connect
+   them (drag from a card's +, or its menus), split, reorder and remove them;
+   every change saves at once. A card opens its stage in a panel over the
+   chart.
    ========================================================================== */
 
 'use strict';
 
 // recruit:flow:start
 
-// Card size and spacing, in CSS pixels. Fixed, so layout needs no measuring;
-// a card with a checklist's progress bar is taller, and so is its row.
-const FC = { W: 256, H: 122, H_METER: 134, GAP_X: 32, GAP_Y: 84, PAD: 28, OUT_H: 52, OUT_MIN: 480, DETOUR: 26 };
+// Sizes, in CSS pixels. Across a wide chart every card is as wide as the
+// chart allows between W_MIN and W_MAX (and as tall as its content needs); columns sit GAP apart (a gap
+// is as wide as the counts and answers on its connections need), and stages
+// that share a column stack STACK apart. A connection that passes a column
+// takes a LANE through it. Down a narrow chart, rows sit V_GAP apart.
+const FC = {
+  W_MIN: 184, W_MAX: 300, PAD: 24,
+  GAP: 56, GAP_MIN: 44, GAP_GROW: 40, GAP_LABEL: 200, ENTRY: 40, WHY: 112,
+  STACK: 28, LANE: 14, LANE_GAP: 14,
+  OUT_W: 112, OUT_H: 150,
+  FORK: 20, BEND: 10, SCALE_MIN: 0.8,
+  NARROW: 700, V_W: 272, V_GAP: 64, V_STACK: 20, V_OUT_H: 52, V_ENTRY: 44,
+};
 const FC_OUTCOME = '__outcome';
 
 // Everything the chart shows about a stage: kind, form, and its counts.
@@ -23,87 +35,277 @@ function recruitFlowStats(key) {
   return ins?.stages?.find((s) => s.key === key) || null;
 }
 
-// A point on a connection's curve, t from 0 (the card it leaves) to 1.
-const recruitBezier = (t, p0, p1, p2, p3) => (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3;
-
-// A connection leaves a card's bottom and enters the next card's top on a
-// smooth curve; one that passes stages in between runs down beside them.
-function recruitEdgePath(a, b, { x2 = null, side = null } = {}) {
-  if (!a || !b) return { d: '', mx: 0, my: 0 };
-  const x1 = a.x + a.w / 2, y1 = a.y + a.h, tx = x2 ?? b.x + b.w / 2, ty = b.y;
-  if (side !== null) {
-    const h = Math.min(30, (ty - y1) / 4);
-    return { d: `M${x1} ${y1} C${x1} ${y1 + h}, ${side} ${y1 + h}, ${side} ${y1 + 2 * h} L${side} ${ty - 2 * h} C${side} ${ty - h}, ${tx} ${ty - h}, ${tx} ${ty}`, mx: side, my: (y1 + ty) / 2 };
-  }
-  const dy = Math.max(24, (ty - y1) / 2);
-  // A split's answer sits nearer the card it leads to, clear of its siblings.
-  const t = 0.66;
-  return { d: `M${x1} ${y1} C${x1} ${y1 + dy}, ${tx} ${ty - dy}, ${tx} ${ty}`, mx: recruitBezier(t, x1, x1, tx, tx), my: recruitBezier(t, y1, y1 + dy, ty - dy, ty) };
+// The width the chart fills: its own zone once drawn; before that, the
+// window less the sidebar and the page's margins. The chart lays itself out
+// again once it knows (recruitFlowFit).
+function recruitFlowAvail() {
+  const zone = typeof document !== 'undefined' ? document.querySelector?.('[data-rc="flow"]') : null;
+  const w = Number(zone?.clientWidth) || 0;
+  if (w > 0) return w - 2;   // the zone's border
+  const vw = Number(typeof window !== 'undefined' && window.innerWidth) || 1280;
+  return Math.max(320, vw > 860 ? vw - 268 - 80 : vw - 36);
 }
 
-// Positions for every stage: a row per step along the flow, each row ordered
-// so connections cross as little as one pass over the rows manages, centred;
-// the outcomes span the bottom.
-function recruitFlowLayout(flow, { outcome = true } = {}) {
-  const rows = [];
-  for (const k of flow.keys) (rows[flow.ranks.get(k)] ||= []).push(k);
-  const list = rows.filter(Boolean);
-  const centre = new Map();
-  list.forEach((row, r) => {
-    if (r > 0) {
-      const bary = (k) => { const ins = flow.into.get(k).filter((p) => centre.has(p)); return ins.length ? ins.reduce((a, p) => a + centre.get(p), 0) / ins.length : Infinity; };
-      row.sort((a, b) => bary(a) - bary(b) || flow.order.indexOf(a) - flow.order.indexOf(b));
+// How wide a line of text is in the page's font (12px labels by default,
+// a card's 15px titles): measured where the page can, counted otherwise.
+let recruitMeasure = null;
+function recruitTextWidth(text, { px = 12, weight = 400 } = {}) {
+  const s = String(text || '');
+  try {
+    if (recruitMeasure === null) {
+      const ctx = document.createElement('canvas').getContext?.('2d') || false;
+      recruitMeasure = ctx ? { ctx, family: getComputedStyle(document.body).fontFamily || 'sans-serif' } : false;
     }
-    row.forEach((k, i) => centre.set(k, i - (row.length - 1) / 2));
-  });
-  const withOutcome = outcome && flow.keys.length > 0;
-  const widest = Math.max(1, ...list.map((row) => row.length));
-  const span = Math.max(widest * FC.W + (widest - 1) * FC.GAP_X, withOutcome ? FC.OUT_MIN : 0);
-  const nodes = new Map();
-  const meter = (k) => { const s = flow.sections[k]; return Boolean(s?.done && (s.fields || []).some((f) => f.key === s.done)); };
-  let y = FC.PAD;
-  list.forEach((row, r) => {
-    const width = row.length * FC.W + (row.length - 1) * FC.GAP_X;
-    const h = row.some(meter) ? FC.H_METER : FC.H;
-    row.forEach((k, i) => nodes.set(k, { key: k, row: r, x: FC.PAD + (span - width) / 2 + i * (FC.W + FC.GAP_X), y, w: FC.W, h }));
-    y += h + FC.GAP_Y;
-  });
-  let height = y - FC.GAP_Y;
-  if (withOutcome) {
-    nodes.set(FC_OUTCOME, { key: FC_OUTCOME, row: list.length, x: FC.PAD, y: height + FC.GAP_Y, w: span, h: FC.OUT_H });
-    height += FC.GAP_Y + FC.OUT_H;
+    if (recruitMeasure) { recruitMeasure.ctx.font = `${weight} ${px}px ${recruitMeasure.family}`; return Math.ceil(recruitMeasure.ctx.measureText(s).width); }
+  } catch { recruitMeasure = false; }
+  return Math.ceil(s.length * px * (weight >= 600 ? 0.6 : 0.56));
+}
+
+// How wide a label is once its words wrap at `max` (two lines at most; a
+// longer label is cut).
+function recruitWrapWidth(text, max) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  let widest = 0, line = '';
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (line && recruitTextWidth(next) > max) { widest = Math.max(widest, recruitTextWidth(line)); line = w; } else line = next;
   }
-  let right = FC.PAD + span;
-  const cards = [...nodes.values()].filter((n) => n.key !== FC_OUTCOME);
-  // A connection that would cross a card between its two rows goes around.
-  const sideFor = (a, b, x2) => {
-    const lo = Math.min(a.x + a.w / 2, x2) - 12, hi = Math.max(a.x + a.w / 2, x2) + 12;
-    const between = cards.filter((n) => n.row > a.row && n.row < b.row);
-    if (!between.some((n) => n.x < hi && n.x + n.w > lo)) return null;
-    const side = Math.max(a.x + a.w, ...between.map((n) => n.x + n.w)) + FC.DETOUR;
-    right = Math.max(right, side + FC.DETOUR);
-    return side;
-  };
+  return Math.min(max, Math.max(widest, recruitTextWidth(line)));
+}
+
+// Centres for one column's items, kept in order, as near the wanted centres
+// as the spacing between neighbours allows (least squares, by pooling
+// adjacent violators).
+function recruitSpread(want, gaps) {
+  const off = [0];
+  for (let i = 0; i < gaps.length; i += 1) off.push(off[i] + gaps[i]);
+  const blocks = [];
+  want.forEach((w, i) => {
+    let b = { sum: w - off[i], n: 1, start: i };
+    while (blocks.length && blocks.at(-1).sum / blocks.at(-1).n > b.sum / b.n) {
+      const top = blocks.pop();
+      b = { sum: top.sum + b.sum, n: top.n + b.n, start: top.start };
+    }
+    blocks.push(b);
+  });
+  const out = [];
+  for (const b of blocks) for (let k = 0; k < b.n; k += 1) out.push(b.sum / b.n + off[b.start + k]);
+  return out;
+}
+
+// Where everything goes. Stages sit in a column per step (a row, down a
+// narrow chart). Within a column they are ordered so connections cross as
+// little as a few sweeps manage, then placed as near the stages they
+// connect to as their spacing allows: a split fans out evenly around the
+// stage it leaves, and branches that meet again meet in the middle. A
+// connection that passes a column takes a lane through it, clear of the
+// cards there. Connections run straight, or bend once in a gap with rounded
+// corners: a stage's branches bend together just after it, connections into
+// one stage just before it. Every connection carries a count of the people
+// who passed along it, a split's also the answers that take it; each first
+// stage gets a short arrow in, counting who entered there. The outcomes
+// close the chart: a column across, a bar down. When the chart is still too
+// wide at its smallest cards, it is drawn a little smaller (never below
+// SCALE_MIN) before it scrolls.
+function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } = {}) {
+  const across = width >= FC.NARROW;
+  const ranks = [...new Set(flow.keys.map((k) => flow.ranks.get(k) ?? 0))].sort((a, b) => a - b);
+  const n = ranks.length;
+  const colOf = (k) => ranks.indexOf(flow.ranks.get(k) ?? 0);
+  const withOutcome = outcome && n > 0;
+
+  // Items: a card per stage, and a lane in each column a connection passes.
+  const items = new Map();
+  const add = (id, col, kind, key = null, from = null) => { const it = { id, col, kind, key, from, preds: [], succs: [] }; items.set(id, it); return it; };
+  for (const k of flow.keys) add(k, colOf(k), 'card', k);
   const edges = [];
-  for (const [from, to] of flow.edges) {
-    const split = flow.splits?.get(from);
-    const conditional = split ? recruitSplitTargets(split) : null;
-    for (const k of to) {
-      const a = nodes.get(from), b = nodes.get(k);
-      if (!a || !b) continue;
-      edges.push({ from, to: k, label: conditional?.has(k) ? recruitSplitLabel(split, k) : '', ...recruitEdgePath(a, b, { side: sideFor(a, b, b.x + b.w / 2) }) });
+  const connect = (from, to, extra) => {
+    const last = to === FC_OUTCOME ? n : colOf(to);
+    const chain = [from];
+    for (let c = colOf(from) + 1; c < last; c += 1) chain.push(add(`${from}>${to}@${c}`, c, 'lane', null, from).id);
+    if (to !== FC_OUTCOME) chain.push(to);
+    for (let i = 1; i < chain.length; i += 1) { items.get(chain[i - 1]).succs.push(chain[i]); items.get(chain[i]).preds.push(chain[i - 1]); }
+    edges.push({ from, to, chain, ...extra });
+  };
+  for (const [from, list] of flow.edges) {
+    const split = flow.splits?.get(from) || null;
+    const conditional = recruitSplitTargets(split);
+    for (const to of list) {
+      if (!items.has(to) || colOf(to) <= colOf(from)) continue;
+      connect(from, to, { outcome: false, split: conditional.has(to), label: conditional.has(to) ? recruitSplitLabel(split, to) : '' });
     }
   }
-  if (withOutcome) {
-    const out = nodes.get(FC_OUTCOME);
-    for (const k of flow.keys) {
-      if ((flow.edges.get(k) || []).length) continue;
-      const a = nodes.get(k);
-      const x2 = a.x + a.w / 2;
-      edges.push({ from: k, to: FC_OUTCOME, outcome: true, label: '', ...recruitEdgePath(a, out, { x2, side: sideFor(a, out, x2) }) });
+  if (withOutcome) for (const k of flow.keys) if (!(flow.edges.get(k) || []).length) connect(k, FC_OUTCOME, { outcome: true, split: false, label: '' });
+  const roots = flow.keys.filter((k) => !items.get(k).preds.length);
+
+  // Order within each column: stage order first, then sweeps that sort each
+  // column by where its neighbours sit (ties keep the order).
+  const cols = Array.from({ length: n }, () => []);
+  for (const it of items.values()) cols[it.col].push(it);
+  const seq = (it) => flow.order.indexOf(it.key ?? it.from) + (it.key ? 0 : 0.5);
+  for (const col of cols) col.sort((a, b) => seq(a) - seq(b));
+  const at = new Map();
+  const index = (col) => col.forEach((it, i) => at.set(it.id, i));
+  cols.forEach(index);
+  const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
+  const sortBy = (col, side) => {
+    const bary = new Map(col.map((it) => [it.id, mean(it[side].map((id) => at.get(id))) ?? at.get(it.id)]));
+    col.sort((a, b) => bary.get(a.id) - bary.get(b.id) || at.get(a.id) - at.get(b.id));
+    index(col);
+  };
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (let c = 1; c < n; c += 1) sortBy(cols[c], 'preds');
+    for (let c = n - 2; c >= 0; c -= 1) sortBy(cols[c], 'succs');
+  }
+
+  // Cards are one height: room for the longest title (two lines at most)
+  // and, where a checkbox marks a stage done, its bar.
+  const Wd = Math.min(FC.V_W, Math.max(208, width - 2 * FC.PAD));
+  const meters = flow.keys.some((k) => { const s = flow.sections[k]; return Boolean(s?.done && (s.fields || []).some((f) => f.key === s.done)); });
+  const cardH = (w) => {
+    const lines = flow.keys.some((k) => recruitTextWidth(flow.sections[k].title, { px: 15, weight: 600 }) > w - 32) ? 2 : 1;
+    return Math.ceil(2 + 28 + 20 + 10 + 19.5 * lines + 12 + 22 + (meters ? 36 : 0));
+  };
+  let H = cardH(across ? FC.W_MAX : Wd);
+
+  // Across the flow: centres, relaxed toward each item's neighbours.
+  const size = (it) => (it.kind === 'lane' ? FC.LANE : across ? H : Wd);
+  const apart = (a, b) => size(a) / 2 + (a.kind === 'lane' || b.kind === 'lane' ? FC.LANE_GAP : across ? FC.STACK : FC.V_STACK) + size(b) / 2;
+  const c = new Map();
+  const relax = () => {
+    for (const col of cols) {
+      let y = 0;
+      col.forEach((it, i) => { if (i) y += apart(col[i - 1], it); c.set(it.id, y); });
+      for (const it of col) c.set(it.id, c.get(it.id) - y / 2);
+    }
+    for (let round = 0; round < 24; round += 1) {
+      for (const col of round % 2 ? [...cols].reverse() : cols) {
+        const want = col.map((it) => mean([...it.preds, ...it.succs].map((id) => c.get(id))) ?? c.get(it.id));
+        recruitSpread(want, col.slice(1).map((it, i) => apart(col[i], it))).forEach((v, i) => c.set(col[i].id, v));
+      }
+    }
+  };
+  relax();
+
+  // How each connection enters its last gap, which decides where its count
+  // sits and how wide that gap must be.
+  const outs = new Map(), ins = new Map();
+  for (const e of edges) { outs.set(e.from, (outs.get(e.from) || 0) + 1); if (!e.outcome) ins.set(e.to, (ins.get(e.to) || 0) + 1); }
+  const pillW = (e) => (e.label ? recruitWrapWidth(e.label, FC.WHY) + 6 : 0) + recruitTextWidth('000') + 22;
+  const need = new Array(n + 1).fill(0);   // need[c]: the gap before column c
+  for (const e of edges) {
+    if (e.outcome) continue;
+    const bent = Math.abs(c.get(e.chain.at(-2)) - c.get(e.to)) >= 0.5;
+    e.turn = bent ? (e.chain.length === 2 && outs.get(e.from) > 1 ? 'fork' : ins.get(e.to) > 1 ? 'merge' : 'mid') : 'none';
+    const gap = colOf(e.to);
+    need[gap] = Math.max(need[gap], (e.turn === 'none' ? 0 : FC.FORK + FC.BEND) + pillW(e) + 16);
+  }
+
+  // Along the flow: card width and gaps from the width there is.
+  const gapCount = n - 1 + (withOutcome ? 1 : 0);
+  const entry = across ? FC.ENTRY : FC.V_ENTRY;
+  const gapsWith = (base) => Array.from({ length: gapCount }, (_, i) => Math.max(base, Math.min(FC.GAP_LABEL, need[i + 1])));
+  const fixed = (base) => 2 * FC.PAD + entry + (withOutcome ? FC.OUT_W : 0) + gapsWith(base).reduce((a, b) => a + b, 0);
+  let W = Wd, scale = 1, gaps;
+  if (across) {
+    const base = (width - fixed(FC.GAP)) / n >= FC.W_MIN ? FC.GAP : FC.GAP_MIN;
+    W = Math.floor((width - fixed(base)) / n);
+    if (W < FC.W_MIN) { W = FC.W_MIN; scale = Math.max(FC.SCALE_MIN, width / (fixed(base) + n * W)); }
+    W = Math.min(FC.W_MAX, W);
+    gaps = gapsWith(base);
+    // Width left once the cards are at their widest opens the gaps a little.
+    const extra = width - fixed(base) - n * W;
+    if (scale === 1 && extra > 0 && gapCount) gaps = gaps.map((g) => g + Math.min(FC.GAP_GROW, extra / gapCount));
+  } else gaps = Array.from({ length: gapCount }, (_, i) => Math.max(FC.V_GAP, Math.min(FC.GAP_LABEL, need[i + 1] ? 64 : 0)));
+  if (across && cardH(W) !== H) { H = cardH(W); relax(); }
+  const span = across ? W : H;   // a column's extent along the flow
+  const main = [FC.PAD + entry];
+  for (let i = 0; i < gapCount; i += 1) main.push(main[i] + span + gaps[i]);
+
+  // The outcomes: across, a card as tall as its rows, centred on the
+  // connections that end there (they merge into it); down, a bar the
+  // chart's width.
+  const ends = edges.filter((e) => e.outcome).map((e) => c.get(e.chain.at(-1)));
+  let outLow = 0, outHigh = 0;
+  if (withOutcome && ends.length) {
+    if (across) {
+      const m = (Math.min(...ends) + Math.max(...ends)) / 2;
+      outLow = m - FC.OUT_H / 2; outHigh = m + FC.OUT_H / 2;
+    } else {
+      outLow = Math.min(...[...items.values()].map((it) => c.get(it.id) - size(it) / 2));
+      outHigh = Math.max(...[...items.values()].map((it) => c.get(it.id) + size(it) / 2));
+      if (outHigh - outLow < 300) { const m = (outLow + outHigh) / 2; outLow = m - 150; outHigh = m + 150; }
     }
   }
-  return { nodes, edges, width: right + FC.PAD, height: height + FC.PAD };
+  let low = Infinity, high = -Infinity;
+  for (const it of items.values()) { low = Math.min(low, c.get(it.id) - size(it) / 2); high = Math.max(high, c.get(it.id) + size(it) / 2); }
+  if (withOutcome && ends.length) { low = Math.min(low, outLow); high = Math.max(high, outHigh); }
+  if (!Number.isFinite(low)) { low = 0; high = 0; }
+  const shift = FC.PAD - low;
+  const mid = (id) => c.get(id) + shift;
+
+  const nodes = new Map();
+  for (const it of items.values()) {
+    if (it.kind !== 'card') continue;
+    const m = main[it.col], x0 = mid(it.id);
+    nodes.set(it.key, across ? { key: it.key, col: it.col, x: m, y: x0 - H / 2, w: W, h: H } : { key: it.key, col: it.col, x: x0 - Wd / 2, y: m, w: Wd, h: H });
+  }
+  if (withOutcome && ends.length) {
+    nodes.set(FC_OUTCOME, across
+      ? { key: FC_OUTCOME, col: n, x: main[n], y: outLow + shift, w: FC.OUT_W, h: outHigh - outLow }
+      : { key: FC_OUTCOME, col: n, x: outLow + shift, y: main[n], w: outHigh - outLow, h: FC.V_OUT_H });
+  }
+
+  // Connections, in (along, across) coordinates turned into x and y.
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const P = (along, cross) => (across ? `${r1(along)} ${r1(cross)}` : `${r1(cross)} ${r1(along)}`);
+  const XY = (along, cross) => (across ? { lx: along, ly: cross } : { lx: cross, ly: along });
+  const hop = ([am, ac], [bm, bc], turn) => {
+    if (Math.abs(bc - ac) < 0.5) return `L${P(bm, bc)}`;
+    const s = bc > ac ? 1 : -1;
+    const r = Math.max(0, Math.min(FC.BEND, Math.abs(bc - ac) / 2, turn - am, bm - turn));
+    return `L${P(turn - r, ac)}Q${P(turn, ac)} ${P(turn, ac + s * r)}L${P(turn, bc - s * r)}Q${P(turn, bc)} ${P(turn + r, bc)}L${P(bm, bc)}`;
+  };
+  const drawn = edges.map((e) => {
+    const steps = e.chain.slice(1).map((id) => items.get(id));
+    const total = steps.length + (e.outcome ? 1 : 0);
+    let here = [main[items.get(e.from).col] + span, mid(e.from)];
+    let d = `M${P(...here)}`;
+    let place = null, gap = 0;
+    const cross = (next) => {
+      gap += 1;
+      const fork = gap === 1 && outs.get(e.from) > 1;
+      const merge = gap === total && (e.outcome ? ends.length > 1 : ins.get(e.to) > 1);
+      const turn = fork ? here[0] + FC.FORK : merge ? next[0] - FC.FORK : (here[0] + next[0]) / 2;
+      d += hop(here, next, turn);
+      if (gap === total) {
+        // The count sits on the last straight stretch before the card, or
+        // before the bend where connections merge into it.
+        const level = Math.abs(next[1] - here[1]) < 0.5;
+        const start = level ? (fork ? here[0] + FC.FORK : here[0]) : merge ? here[0] : turn + FC.BEND;
+        const stop = level || !merge ? next[0] : turn - FC.BEND;
+        place = { ...XY((start + stop) / 2, level || !merge ? next[1] : here[1]), lw: across ? stop - start - 10 : Wd - 16 };
+      }
+      here = next;
+    };
+    for (const it of steps) {
+      cross([main[it.col], mid(it.id)]);
+      if (it.kind === 'lane') { here = [main[it.col] + span, mid(it.id)]; d += `L${P(...here)}`; }
+    }
+    if (e.outcome) cross([main[n], across ? outLow + shift + FC.OUT_H / 2 : here[1]]);
+    return { from: e.from, to: e.to, outcome: e.outcome, split: e.split, label: e.label, d, ...(e.outcome ? {} : place) };
+  });
+  // Into each first stage: a short arrow from the chart's edge.
+  for (const k of roots) {
+    const cross = mid(k);
+    drawn.push({ from: null, to: k, entry: true, outcome: false, split: false, label: '', d: `M${P(FC.PAD, cross)}L${P(main[0], cross)}`, ...XY(FC.PAD + entry / 2, cross), lw: across ? entry - 6 : Wd - 16 });
+  }
+
+  const boxes = [...nodes.values()];
+  const far = (b) => (across ? b.x + b.w : b.y + b.h);
+  const extentAlong = Math.max(...boxes.map(far), FC.PAD) + FC.PAD;
+  const extentAcross = high - low + 2 * FC.PAD;
+  return { across, W: across ? W : Wd, H, scale, nodes, edges: drawn, width: across ? extentAlong : extentAcross, height: across ? extentAcross : extentAlong };
 }
 
 /* ------------------------------- drawing --------------------------------- */
@@ -111,111 +313,148 @@ function recruitFlowLayout(flow, { outcome = true } = {}) {
 // The kind of a stage as a quiet tag: its icon and its name.
 const recruitKindTagHtml = (kind) => `<span class="rc-kind-tag">${recruitKindIcon(kind)}${MD.esc(recruitKindLabel(kind))}</span>`;
 
+// The stage whose panel is open over the chart, if any.
+const recruitOpenStage = () => (UI.route?.params?.sub === 'stage' ? recruitStageKey() : null);
+
+// A card: the stage's kind, whether its form is on the website, its name,
+// who is here now and, where a checkbox marks it done, how far along they
+// are. How many came in is on the arrows.
 function recruitFlowNodeHtml(cycle, flow, n) {
   const key = n.key;
   const s = flow.sections[key];
   const stats = recruitFlowStats(key);
   const lead = recruitCanEdit(cycle);
   const loading = !recruitState().insights?.data;
-  const num = (v) => (loading ? '–' : recruitNum(v));
-  const landing = recruitLandingKey(cycle) === key;
-  const site = s.form ? `<span class="fc-web ${s.open ? 'is-open' : ''}" title="${s.open ? 'Open on the website' : 'Closed on the website'}">${s.open ? (landing ? 'Open · /apply' : 'Open') : 'Closed'}</span>` : '';
+  const num = (v) => (loading ? '–' : recruitNum(Number(v) || 0));
+  const site = s.form ? `<span class="fc-web ${s.open ? 'is-open' : ''}" title="${s.open ? 'Open on the website' : 'Closed on the website'}">${s.open ? 'Open' : 'Closed'}</span>` : '';
   const doneField = (s.fields || []).find((f) => f.key === s.done);
-  const reached = Number(stats?.reached || 0), done = Number(stats?.done || 0), upNext = Number(stats?.upNext || 0);
-  const pct = reached ? Math.round((done / reached) * 100) : 0;
-  const progress = doneField
-    ? `<span class="fc-node__done"><span class="fc-node__donetext"><b>${num(done)}</b>/${num(reached)} ${MD.esc(doneField.label.toLowerCase())}</span><span class="fc-meter" aria-hidden="true"><span style="width:${pct}%"></span></span></span>`
-    : s.form ? `<span class="fc-node__done"><span class="fc-node__donetext"><b>${num(stats?.responses)}</b> ${stats?.responses === 1 ? 'response' : 'responses'}</span></span>`
-    : `<span class="fc-node__done"><span class="fc-node__donetext"><b>${num(done)}</b> moved on</span></span>`;
-  const label = `${s.title}, ${recruitKindLabel(s.kind)}${loading ? '' : `: ${recruitPlural(stats?.here || 0, 'person', 'people')} here, ${recruitNum(reached)} reached${upNext ? `, ${recruitNum(upNext)} up next` : ''}${doneField ? `, ${recruitNum(done)} ${doneField.label.toLowerCase()}` : ''}`}`;
-  return `<div class="fc-node fc-node--${MD.esc(s.kind)}" data-key="${MD.esc(key)}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px">
-    <a class="fc-node__main" href="${recruitStageHref(key)}" data-key="${MD.esc(key)}" aria-label="${MD.esc(label)}">
+  const reached = Number(stats?.reached || 0), done = Number(stats?.done || 0), here = Number(stats?.here || 0);
+  const meter = doneField ? `<span class="fc-node__done"><span class="fc-node__line"><b>${num(done)}</b> of ${num(reached)} ${MD.esc(doneField.label.toLowerCase())}</span><span class="fc-meter" aria-hidden="true"><span style="width:${reached ? Math.round((done / reached) * 100) : 0}%"></span></span></span>` : '';
+  const label = `${s.title}, ${recruitKindLabel(s.kind)}${loading ? '' : `: ${recruitPlural(here, 'person', 'people')} here now${doneField ? `, ${recruitNum(done)} of ${recruitNum(reached)} ${doneField.label.toLowerCase()}` : ''}`}`;
+  const open = recruitOpenStage() === key;
+  return `<div class="fc-node ${open ? 'is-open' : ''}" data-key="${MD.esc(key)}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px">
+    <a class="fc-node__main" href="${recruitStageHref(key)}" data-key="${MD.esc(key)}" aria-label="${MD.esc(label)}" ${open ? 'aria-current="true"' : ''}>
       <span class="fc-node__top">${recruitKindTagHtml(s.kind)}${site}</span>
       <span class="fc-node__title">${MD.esc(s.title)}</span>
-      <span class="fc-node__stats"><span><b>${num(stats?.here)}</b> here</span><span><b>${num(reached)}</b> reached</span>${upNext ? `<span class="fc-node__next"><b>${recruitNum(upNext)}</b> up next</span>` : ''}</span>
-      ${progress}
+      <span class="fc-node__here ${here || loading ? '' : 'is-none'}"><b>${num(here)}</b><span>here now</span></span>
+      ${meter}
     </a>
     ${lead ? `<button type="button" class="icon-btn fc-node__more" data-action="recruit-flow-menu" data-key="${MD.esc(key)}" aria-label="Options for ${MD.esc(s.title)}" aria-haspopup="menu" title="Options">${I.dots}</button>
     <button type="button" class="fc-port" data-action="recruit-flow-port" data-key="${MD.esc(key)}" aria-label="Add after ${MD.esc(s.title)}, connect or split it" title="Add, connect or split; drag to a stage to connect" aria-haspopup="menu">${I.plus}</button>` : ''}
   </div>`;
 }
 
-// How it ended, along the bottom: each status and how many people have it.
+// How many people passed along a connection (reached both its stages),
+// entered at a first stage, or ended at a last one; null before the counts
+// arrive.
+function recruitFlowCount(e) {
+  const ins = recruitState().insights?.data;
+  if (!ins) return null;
+  if (e.entry) return ins.stages?.find((x) => x.key === e.to)?.reached ?? null;
+  if (e.outcome) return ins.stages?.find((x) => x.key === e.from)?.ended ?? null;
+  const hit = (ins.edges || []).find((x) => x && x.from === e.from && x.to === e.to);
+  return hit ? Number(hit.n) || 0 : null;
+}
+
+// A connection's count, and for a split the answers that take it; a lead
+// opens the split from its label.
+function recruitFlowLabelHtml(e, lead) {
+  if (e.lx === undefined) return '';
+  const n = recruitFlowCount(e);
+  const num = n === null ? '–' : recruitNum(n);
+  const who = n === 1 ? 'person' : 'people';
+  const title = e.entry ? `${num} ${who} entered at ${recruitSectionTitle(e.to)}`
+    : e.outcome ? `${num} ${who} ended at ${recruitSectionTitle(e.from)}`
+    : `${num} ${who} went from ${recruitSectionTitle(e.from)} to ${recruitSectionTitle(e.to)}${e.label ? ` (${e.label})` : ''}`;
+  const style = `left:${Math.round(e.lx)}px;top:${Math.round(e.ly)}px;max-width:${Math.max(40, Math.round(e.lw))}px`;
+  const cls = `fc-flow ${e.split ? 'fc-flow--split' : ''} ${e.outcome ? 'fc-flow--end' : ''} ${n === 0 ? 'is-zero' : ''}`;
+  const data = `data-from="${MD.esc(e.from || '')}" data-to="${MD.esc(e.to)}" style="${style}" title="${MD.esc(title)}"`;
+  const inner = `${e.label ? `<span class="fc-flow__why">${MD.esc(e.label)}</span>` : ''}<b>${num}</b>`;
+  return lead && e.split
+    ? `<button type="button" class="${cls}" data-action="recruit-flow-split" data-key="${MD.esc(e.from)}" ${data} aria-label="${MD.esc(title)}. Edit the split">${inner}</button>`
+    : `<span class="${cls}" ${data}>${inner}</span>`;
+}
+
+// How it ended: each status and how many people have it.
 function recruitFlowOutcomeHtml(n) {
   const ins = recruitState().insights?.data;
   const rows = [['accepted', 'Accepted'], ['waitlisted', 'Waitlisted'], ['declined', 'Declined'], ['withdrew', 'Withdrew']];
   return `<div class="fc-node fc-node--outcome" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px" role="group" aria-label="Outcomes">
-    <ul class="fc-outcome">${rows.map(([k, label]) => `<li><a href="${recruitPanelHref(recruitCycleRow().id, 'people', { status: k })}">${label}<b>${ins ? recruitNum(ins.statuses?.[k]) : '–'}</b></a></li>`).join('')}</ul>
+    <ul class="fc-outcome">${rows.map(([k, label]) => `<li><a href="${recruitPanelHref(recruitCycleRow().id, 'people', { status: k })}"><span>${label}</span><b>${ins ? recruitNum(ins.statuses?.[k]) : '–'}</b></a></li>`).join('')}</ul>
   </div>`;
 }
 
 function recruitFlowCanvasHtml(cycle) {
   const flow = recruitFlow(cycle);
-  if (!flow.keys.length) return `<div class="rc-empty-card"><b>No stages yet</b>${recruitCanEdit(cycle) ? '<p>Add the first stage: a form on the website, a meeting, a review, or any step the team tracks.</p><button class="btn btn--primary" data-action="recruit-stage-new">Add a stage</button>' : ''}</div>`;
-  const layout = recruitFlowLayout(flow);
   const lead = recruitCanEdit(cycle);
-  const edges = layout.edges.map((e) => `<path class="fc-edge ${e.outcome ? 'fc-edge--outcome' : ''} ${e.label ? 'fc-edge--split' : ''}" data-from="${MD.esc(e.from)}" data-to="${MD.esc(e.to)}" d="${e.d}" marker-end="url(#fc-arrow${e.outcome ? '-soft' : ''})"/>`).join('');
-  // A split's connections say which answers take people there.
-  const labels = layout.edges.filter((e) => e.label).map((e) => {
-    const style = `left:${Math.round(e.mx)}px;top:${Math.round(e.my)}px`;
-    const text = MD.esc(e.label);
-    return lead
-      ? `<button type="button" class="fc-when" data-action="recruit-flow-split" data-key="${MD.esc(e.from)}" data-from="${MD.esc(e.from)}" data-to="${MD.esc(e.to)}" style="${style}" title="${text}: edit the split">${text}</button>`
-      : `<span class="fc-when" data-from="${MD.esc(e.from)}" data-to="${MD.esc(e.to)}" style="${style}" title="${text}">${text}</span>`;
-  }).join('');
-  const nodes = [...layout.nodes.values()].map((n) => (n.key === FC_OUTCOME ? recruitFlowOutcomeHtml(n) : recruitFlowNodeHtml(cycle, flow, n))).join('');
-  return `<div class="fc-scroll" data-rc="flow-scroll"><div class="fc-canvas" data-rc="flow-canvas" style="width:${layout.width}px;height:${layout.height}px">
-    <svg class="fc-edges" width="${layout.width}" height="${layout.height}" aria-hidden="true">
-      <defs><marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker>
-      <marker id="fc-arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker></defs>
-      ${edges}<path class="fc-edge fc-edge--draft" data-rc="flow-draft" d=""/>
-    </svg>${nodes}${labels}
-  </div></div>`;
-}
-
-// The numbers above the chart: everyone, where they stand, how it ended.
-function recruitFlowSummaryHtml() {
+  const add = lead && flow.keys.length ? `<button type="button" class="fc-add" data-action="recruit-stage-new" aria-label="Add stage" title="Add stage">${I.plus}</button>` : '';
   const ins = recruitState().insights;
-  const d = ins?.data;
-  if (!d) return `<div class="fc-summary" data-rc="flow-summary"><span class="fc-summary__item">${ins?.error ? `Could not load counts: ${MD.esc(ins.error)} <button class="linklike" data-action="recruit-insights-retry">Retry</button>` : 'Loading counts…'}</span></div>`;
-  const item = (n, label, href) => `<a class="fc-summary__item" href="${href}"><b>${recruitNum(n)}</b>${label}</a>`;
-  const id = recruitCycleRow().id;
-  return `<div class="fc-summary" data-rc="flow-summary">
-    ${item(d.people, d.people === 1 ? 'person' : 'people', recruitPanelHref(id, 'people'))}
-    ${item(d.statuses.active, 'active', recruitPanelHref(id, 'people', { status: 'active' }))}
-    ${item(d.statuses.accepted, 'accepted', recruitPanelHref(id, 'people', { status: 'accepted' }))}
-    ${d.flagged ? item(d.flagged, 'flagged', recruitPanelHref(id, 'people', { review: 'flagged' })) : ''}
-  </div>`;
+  const note = ins?.error && !ins.data ? `<p class="fc-note" role="status">Counts did not load: ${MD.esc(ins.error)} <button class="linklike" data-action="recruit-insights-retry">Retry</button></p>` : '';
+  if (!flow.keys.length) return `<div class="fc-empty"><b>No stages yet</b>${lead ? '<p>Start with a form on the website, a meeting, a review, or any step the team tracks.</p><button class="btn btn--primary" data-action="recruit-stage-new">Add the first stage</button>' : '<p>A lead has not added any stages.</p>'}</div>`;
+  const width = recruitFlowAvail();
+  const layout = recruitFlowLayout(flow, { width });
+  const W = Math.ceil(layout.width), H = Math.ceil(layout.height), k = layout.scale;
+  const edges = layout.edges.map((e) => `<path class="fc-edge ${e.outcome ? 'fc-edge--outcome' : ''} ${e.entry ? 'fc-edge--entry' : ''} ${e.split ? 'fc-edge--split' : ''}" data-from="${MD.esc(e.from || '')}" data-to="${MD.esc(e.to)}" d="${e.d}" marker-end="url(#fc-arrow${e.outcome ? '-soft' : ''})"/>`).join('');
+  const labels = layout.edges.map((e) => recruitFlowLabelHtml(e, lead)).join('');
+  const nodes = [...layout.nodes.values()].map((n) => (n.key === FC_OUTCOME ? recruitFlowOutcomeHtml(n) : recruitFlowNodeHtml(cycle, flow, n))).join('');
+  const focus = recruitOpenStage() ? 'is-focus' : '';
+  return `${add}${note}<div class="fc-scroll" data-rc="flow-scroll"><div class="fc-sizer" data-rc="flow-sizer" style="width:${Math.ceil(W * k)}px;height:${Math.ceil(H * k)}px">
+    <div class="fc-canvas fc-canvas--${layout.across ? 'across' : 'down'} ${focus}" data-rc="flow-canvas" data-width="${Math.round(width)}" data-scale="${k}" style="width:${W}px;height:${H}px${k < 1 ? `;transform:scale(${Math.round(k * 1000) / 1000})` : ''}">
+      <svg class="fc-edges" width="${W}" height="${H}" aria-hidden="true">
+        <defs><marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker>
+        <marker id="fc-arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker></defs>
+        ${edges}<path class="fc-edge fc-edge--draft" data-rc="flow-draft" d=""/>
+      </svg>${nodes}${labels}
+    </div></div></div>`;
 }
 
 function recruitFlowView(cycle) {
   const st = recruitState();
-  const lead = recruitCanEdit(cycle);
   const held = st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() ? `<div data-rc="queue">${recruitPendingHtml()}</div>` : '';
-  return `<div class="fc-bar">${recruitFlowSummaryHtml()}${lead ? `<button class="btn btn--primary" data-action="recruit-stage-new">${I.plus} Add stage</button>` : ''}</div>
-    <div class="fc-wrap" data-rc="flow">${recruitFlowCanvasHtml(cycle)}</div>${held}`;
+  return `<div class="fc-wrap ${recruitCanEdit(cycle) ? 'has-add' : ''}" data-rc="flow">${recruitFlowCanvasHtml(cycle)}</div>${held}`;
 }
 
-// The chart and its numbers repaint in place (counts arrive, a save lands).
+// The chart repaints in place (counts arrive, a save lands, the width
+// changes), keeping where it was scrolled and the panel's focus.
 function recruitPaintFlow() {
   const host = $('[data-rc="flow"]');
   const cycle = recruitCycleRow();
   if (!host || !cycle) return false;
   recruitRepaint(host, recruitFlowCanvasHtml(cycle));
-  const next = $('[data-rc="flow-scroll"]', host);
-  if (next) { recruitFlowPlace(next); recruitFlowFades(next); }
-  const summary = $('[data-rc="flow-summary"]');
-  if (summary) summary.outerHTML = recruitFlowSummaryHtml();
+  recruitFlowSettle();
   return true;
 }
 
-// A chart wider than the page opens on its middle, where the flow starts,
-// and keeps its place when it is drawn again.
+// After the chart is drawn: its scroll place, its edge fades, and the pan
+// that keeps an open stage's card clear of the panel.
+function recruitFlowSettle({ animate = false } = {}) {
+  const scroll = $('[data-rc="flow-scroll"]');
+  if (!scroll) return;
+  recruitFlowPlace(scroll);
+  recruitFlowFades(scroll);
+  if (typeof recruitStageFocusChart === 'function') recruitStageFocusChart({ animate });
+}
+
+// The chart is laid out for the width it was drawn at; when its zone is
+// another width now (the first draw guessed, the window changed), it lays
+// itself out again.
+function recruitFlowFit() {
+  const zone = $('[data-rc="flow"]');
+  const canvas = zone ? $('[data-rc="flow-canvas"]', zone) : null;
+  const now = (Number(zone?.clientWidth) || 0) - 2;
+  if (canvas && now > 0 && Math.abs(now - Number(canvas.dataset.width || 0)) > 4) return recruitPaintFlow();
+  return false;
+}
+
+// A chart wider than its zone opens where the flow starts (the left across,
+// the middle down) and keeps its place when drawn again.
 function recruitFlowPlace(scroll) {
   if (!scroll?.dataset || scroll.dataset.placed) return;
   scroll.dataset.placed = '1';
   const more = (Number(scroll.scrollWidth) || 0) - (Number(scroll.clientWidth) || 0);
-  if (more > 0) scroll.scrollLeft = recruitState().mod.flowLeft ?? Math.round(more / 2);
+  if (more <= 0) return;
+  const down = Boolean(scroll.querySelector?.('.fc-canvas--down'));
+  scroll.scrollLeft = recruitState().mod.flowLeft ?? (down ? Math.round(more / 2) : 0);
 }
 
 // A chart wider than the page fades out at the edge that has more.
@@ -299,7 +538,9 @@ function recruitFlowUnlink(from, to) {
   }, `Removed the connection from ${recruitSectionTitle(from)} to ${recruitSectionTitle(to)}`);
 }
 
-// Left or right within its row; the order also sorts stages everywhere else.
+// Earlier or later within its column (up or down across, left or right on
+// a narrow chart); the order also sorts stages everywhere else.
+const recruitFlowAcross = () => recruitFlowAvail() >= FC.NARROW;
 function recruitFlowNudge(key, delta) {
   const flow = recruitFlow();
   const rank = flow.ranks.get(key);
@@ -309,7 +550,7 @@ function recruitFlowNudge(key, delta) {
   recruitFlowEdit((e) => {
     const a = e.order.indexOf(key), b = e.order.indexOf(row[j]);
     [e.order[a], e.order[b]] = [e.order[b], e.order[a]];
-  }, `Moved ${recruitSectionTitle(key)} ${delta < 0 ? 'left' : 'right'}`);
+  }, `Moved ${recruitSectionTitle(key)} ${recruitFlowAcross() ? (delta < 0 ? 'up' : 'down') : (delta < 0 ? 'left' : 'right')}`);
 }
 
 // Stages this one could lead to without a loop or a repeat.
@@ -324,7 +565,7 @@ function recruitFlowConnectMenu(anchor, from) {
   openMenu(targets.map((k) => ({ label: recruitSectionTitle(k), icon: recruitKindIcon(recruitSections()[k].kind), run: () => recruitFlowConnect(from, k) })), anchor);
 }
 
-// The + under a card: what comes after it.
+// The + on a card: what comes after it.
 function recruitFlowPortMenu(anchor, key) {
   const split = recruitFlow().splits.get(key);
   openMenu([
@@ -347,7 +588,7 @@ function recruitFlowNodeMenu(anchor, key) {
     { label: 'Connect to…', icon: RC_ICONS.flow, run: () => recruitFlowConnectMenu(anchor, key) },
     { label: flow.splits.has(key) ? 'Edit split…' : 'Split by an answer…', icon: RC_ICONS.split, run: () => recruitOpenSplit(key) },
     ...(next.length ? [{ label: 'Disconnect from…', icon: I.x, run: () => openMenu(next.map((k) => ({ label: recruitSectionTitle(k), run: () => recruitFlowUnlink(key, k) })), anchor) }] : []),
-    ...(row.length > 1 ? ['-', ...(at > 0 ? [{ label: 'Move left', run: () => recruitFlowNudge(key, -1) }] : []), ...(at < row.length - 1 ? [{ label: 'Move right', run: () => recruitFlowNudge(key, 1) }] : [])] : []),
+    ...(row.length > 1 ? ['-', ...(at > 0 ? [{ label: recruitFlowAcross() ? 'Move up' : 'Move left', run: () => recruitFlowNudge(key, -1) }] : []), ...(at < row.length - 1 ? [{ label: recruitFlowAcross() ? 'Move down' : 'Move right', run: () => recruitFlowNudge(key, 1) }] : [])] : []),
     '-',
     { label: 'Remove stage…', danger: true, run: () => recruitConfirmRemoveStage(key) },
   ];
@@ -545,7 +786,7 @@ function recruitFlowDragStart(ev, port) {
   const canvas = port.closest('[data-rc="flow-canvas"]');
   const from = port.dataset.key;
   const flow = recruitFlow();
-  const layout = recruitFlowLayout(flow);
+  const layout = recruitFlowLayout(flow, { width: Number(canvas?.dataset.width) || recruitFlowAvail() });
   const a = layout.nodes.get(from);
   const draft = $('[data-rc="flow-draft"]', canvas);
   if (!canvas || !a || !draft || typeof canvas.getBoundingClientRect !== 'function') return;
@@ -562,10 +803,15 @@ function recruitFlowDragStart(ev, port) {
     if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 4) return;
     moved = true;
     const box = canvas.getBoundingClientRect();
-    const x = e.clientX - box.left, y = e.clientY - box.top;
-    const x1 = a.x + a.w / 2, y1 = a.y + a.h;
-    const d = Math.max(24, (y - y1) / 2);
-    draft.setAttribute('d', `M${x1} ${y1} C${x1} ${y1 + d}, ${x} ${y - d}, ${x} ${y}`);
+    const k = Number(canvas.dataset.scale) || 1;
+    const x = (e.clientX - box.left) / k, y = (e.clientY - box.top) / k;
+    if (layout.across) {
+      const x1 = a.x + a.w, y1 = a.y + a.h / 2, d = Math.max(24, Math.abs(x - x1) / 2);
+      draft.setAttribute('d', `M${x1} ${y1} C${x1 + d} ${y1}, ${x - d} ${y}, ${x} ${y}`);
+    } else {
+      const x1 = a.x + a.w / 2, y1 = a.y + a.h, d = Math.max(24, Math.abs(y - y1) / 2);
+      draft.setAttribute('d', `M${x1} ${y1} C${x1} ${y1 + d}, ${x} ${y - d}, ${x} ${y}`);
+    }
     const hit = document.elementFromPoint?.(e.clientX, e.clientY)?.closest?.('.fc-node[data-key]');
     const key = hit?.dataset.key || null;
     if (key !== target) {
@@ -612,13 +858,25 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   let timer = null;
   window.addEventListener('resize', () => {
     clearTimeout(timer);
-    timer = setTimeout(() => { const scroll = document.querySelector?.('[data-rc="flow-scroll"]'); if (scroll) recruitFlowFades(scroll); }, 120);
+    timer = setTimeout(() => { if (!recruitFlowFit()) { const scroll = document.querySelector?.('[data-rc="flow-scroll"]'); if (scroll) recruitFlowFades(scroll); } }, 120);
   });
   document.addEventListener?.('scroll', (e) => {
     if (!e.target?.matches?.('[data-rc="flow-scroll"]')) return;
     recruitState().mod.flowLeft = e.target.scrollLeft;
     recruitFlowFades(e.target);
   }, true);
+}
+
+// What the chart needs once it is on the page, whichever view drew it.
+function recruitFlowMounted(cycle, { animate = false } = {}) {
+  const st = recruitState();
+  if (!st.insights || st.insights.key !== st.key + ':' + cycle.id) recruitLoadInsights();
+  if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
+  if (!recruitFlowFit()) recruitFlowSettle({ animate });
+  // A stage's panel just closed: its card takes the focus back.
+  const back = st.mod.returnFocus;
+  st.mod.returnFocus = null;
+  if (back && !recruitOpenStage()) $$('.fc-node__main').find((a) => a.dataset.key === back)?.focus?.({ preventScroll: true });
 }
 
 /* ------------------------------- register -------------------------------- */
@@ -629,13 +887,7 @@ RECRUIT.register({
   kernel: true,
   panels: [{ id: 'flow', label: 'Flow', icon: RC_ICONS.flow, order: 1, when: () => true }],
   view: (cycle) => recruitFlowView(cycle),
-  mount(cycle) {
-    const st = recruitState();
-    if (!st.insights || st.insights.key !== st.key + ':' + cycle.id) recruitLoadInsights();
-    if (st.cycles?.intakeCycleId === cycle.id && recruitIsAdmin() && st.queue === undefined) recruitLoadQueue();
-    const scroll = $('[data-rc="flow-scroll"]');
-    if (scroll) { recruitFlowPlace(scroll); recruitFlowFades(scroll); }
-  },
+  mount(cycle) { recruitFlowMounted(cycle); },
   refresh: { load: () => recruitLoadInsights({ quiet: true }), every: RECRUIT_SYNC_MS },
   actions: {
     'recruit-flow-menu': (el) => recruitFlowNodeMenu(el, el.dataset.key),

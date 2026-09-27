@@ -225,7 +225,7 @@ const insights = () => ({
       { key: 'score', label: 'Score', type: 'rating', each: true, max: 5, summary: { n: 2, people: 1, avg: 3.5, max: 5, dist: [0, 0, 1, 1, 0] } },
       { key: 'notes', label: 'Review notes', type: 'note', each: true, summary: { n: 0 } }] },
   ],
-  edges: [], daily: [{ day: '2026-09-01', counts: { interest: 2 } }, { day: '2026-09-03', counts: { interest: 1, coffee: 2, application: 1 } }],
+  edges: [{ from: 'interest', to: 'coffee', n: 2 }, { from: 'coffee', to: 'application', n: 1 }], daily: [{ day: '2026-09-01', counts: { interest: 2 } }, { day: '2026-09-03', counts: { interest: 1, coffee: 2, application: 1 } }],
   subteams: [{ name: 'Software', n: 2 }, { name: '<b>Bots</b>', n: 1 }], years: [{ name: 'Junior', n: 3 }],
 });
 // People as GET /recruit/cycles/:id/people lists them.
@@ -344,7 +344,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.ok(!r.app.querySelector('.rc-cycle-gear') && !r.app.querySelector('[data-action="recruit-stage-new"]'), 'reviewers see no gear and cannot add stages');
   r.ctx.UI.route.params = { id: 'cy-a', sub: 'stage', key: 'coffee', tab: 'settings' };
   r.mount();
-  same(r.app.querySelectorAll('.rs-tabs [role="tab"]').map((t) => t.textContent.replace(/\d+$/, '')), ['People', 'Form', 'Checklist'], 'a stage has no Settings tab for reviewers');
+  same(r.app.querySelectorAll('.sd-tabs [role="tab"]').map((t) => t.textContent.replace(/\d+$/, '')), ['People', 'Form', 'Checklist'], 'a stage has no Settings tab for reviewers');
   assert.equal(r.app.querySelector('[data-rc="stage-tab"]').dataset.tab, 'people', 'asking for settings shows People');
   console.log('PASS: the cycle shell draws Flow, People and Insights, marks the view a stage belongs to, reads old addresses, switches cycles in place and gates editing by role');
 }
@@ -465,29 +465,41 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   st.cycle.sections.interest.next = ['coffee', 'application'];
   st.cycle.sections.coffee.next = ['application'];
   const branched = f.run('recruitFlow()');
-  same([...branched.ranks], [['interest', 0], ['coffee', 1], ['application', 2]], 'a stage sits one row below the furthest stage leading into it');
+  same([...branched.ranks], [['interest', 0], ['coffee', 1], ['application', 2]], 'a stage sits one column past the furthest stage leading into it');
   assert.equal(f.run("recruitReaches(recruitFlow(), 'application', 'interest')"), true, 'application → interest would loop');
   assert.equal(f.run("recruitReaches(recruitFlow(), 'interest', 'application')"), false);
   same(f.run("recruitFlowTargets('coffee')"), [], 'coffee already leads everywhere it can without a loop');
   delete st.cycle.sections.interest.next; delete st.cycle.sections.coffee.next;
-  // Layout: a row per step from the top, then the outcomes across the bottom.
-  const layout = f.run('recruitFlowLayout(recruitFlow())');
+  // Layout: a column per step from the left, the outcomes last, fitted to the width.
+  const layout = f.run('recruitFlowLayout(recruitFlow(), { width: 1100 })');
   const at = (k) => layout.nodes.get(k);
-  assert.ok(at('interest').y < at('coffee').y && at('coffee').y < at('application').y && at('application').y < at('__outcome').y, 'rows run top to bottom');
-  assert.ok(at('interest').x === at('coffee').x && at('coffee').x === at('application').x, 'one stage a row stays in one column');
-  assert.ok(at('coffee').h > at('interest').h, 'a card with a progress bar gets a taller row');
-  assert.ok(at('__outcome').w >= at('interest').w, 'the outcomes span the chart');
+  assert.equal(layout.across, true, 'a wide chart runs across');
+  assert.ok(at('interest').x < at('coffee').x && at('coffee').x < at('application').x && at('application').x < at('__outcome').x, 'columns run left to right');
+  assert.ok(at('interest').y === at('coffee').y && at('coffee').y === at('application').y, 'a straight flow stays on one line');
+  assert.equal(new Set(['interest', 'coffee', 'application'].map((k) => at(k).h)).size, 1, 'cards are one height');
+  assert.ok(layout.width <= 1100 && layout.scale === 1, 'it fits the width it has');
   assert.equal(layout.edges.filter((e) => e.outcome).length, 1, 'the last stage leads to the outcomes');
-  // Two stages in a row sit side by side; a connection past a card goes around it.
+  assert.equal(layout.edges.filter((e) => e.entry).length, 1, 'the first stage has an arrow in');
+  const down = f.run('recruitFlowLayout(recruitFlow(), { width: 390 })');
+  assert.ok(!down.across && down.nodes.get('interest').y < down.nodes.get('coffee').y, 'a narrow chart runs down');
+  const tight = f.run('recruitFlowLayout(recruitFlow(), { width: 760 })');
+  assert.ok(tight.across && tight.scale < 1 && tight.scale >= 0.8, 'too wide for its smallest cards, it is drawn a little smaller');
+  // Two stages after the same one share a column, fanned out evenly around it.
   st.cycle.sections.interest.next = ['coffee', 'application'];
   st.cycle.sections.coffee.next = [];
-  const wide = f.run('recruitFlowLayout(recruitFlow())');
-  assert.equal(wide.nodes.get('coffee').y, wide.nodes.get('application').y, 'stages after the same one share a row');
-  assert.ok(wide.nodes.get('coffee').x + wide.nodes.get('coffee').w < wide.nodes.get('application').x, 'side by side');
+  const wide = f.run('recruitFlowLayout(recruitFlow(), { width: 1100 })');
+  const [i0, c0, a0] = ['interest', 'coffee', 'application'].map((k) => wide.nodes.get(k));
+  assert.equal(c0.x, a0.x, 'stages after the same one share a column');
+  assert.ok(c0.y + c0.h < a0.y, 'stacked, not overlapping');
+  assert.ok(Math.abs((c0.y + a0.y + a0.h) / 2 - (i0.y + i0.h / 2)) < 1, 'balanced around the stage they leave');
+  // A connection past a column takes a lane clear of the cards there.
   st.cycle.sections.interest.next = ['coffee', 'application'];
   st.cycle.sections.coffee.next = ['application'];
-  const around = f.run('recruitFlowLayout(recruitFlow())').edges.find((e) => e.from === 'interest' && e.to === 'application');
-  assert.match(around.d, / L/, 'interest → application runs down beside coffee');
+  const around = f.run('recruitFlowLayout(recruitFlow(), { width: 1100 })');
+  const pass = around.edges.find((e) => e.from === 'interest' && e.to === 'application');
+  const box = around.nodes.get('coffee');
+  const ys = [...pass.d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]).filter(([x]) => x >= box.x && x <= box.x + box.w).map(([, y]) => y);
+  assert.ok(ys.length && ys.every((y) => y < box.y || y > box.y + box.h), 'interest → application passes coffee in a lane');
   delete st.cycle.sections.interest.next; delete st.cycle.sections.coffee.next;
   // The chart: a card per stage with its counts, links and controls.
   f.mount();
@@ -495,13 +507,15 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   same(cards.map((c) => c.dataset.key), ['interest', 'coffee', 'application']);
   const coffee = f.app.querySelector('.fc-node[data-key="coffee"]');
   assert.equal(coffee.querySelector('.fc-node__main').getAttribute('href'), '#/applications/cy-a/stage?key=coffee', 'a card opens its stage');
-  assert.match(coffee.querySelector('.fc-node__stats').textContent, /1 here\s*2 reached/);
-  assert.match(coffee.querySelector('.fc-node__done').textContent, /1\/2 chat completed/, 'a stage with a done checkbox shows how many are done');
+  assert.match(coffee.querySelector('.fc-node__here').textContent, /1\s*here now/, 'a card says who is here now');
+  assert.match(coffee.querySelector('.fc-node__done').textContent, /1 of 2 chat completed/, 'a stage with a done checkbox shows how many are done');
   assert.equal(coffee.querySelector('.rc-kind-tag').textContent, 'Meeting', 'the kind is a quiet tag');
-  assert.match(f.app.querySelector('.fc-node[data-key="interest"] .fc-web').textContent, /Open · \/apply/, 'the form at /apply says so');
-  assert.equal(f.app.querySelectorAll('.fc-edge:not(.fc-edge--outcome)').length + f.app.querySelectorAll('.fc-edge--outcome').length, 4, 'two connections, one to the outcomes, and the draft line');
+  assert.equal(f.app.querySelector('.fc-node[data-key="interest"] .fc-web').textContent, 'Open', 'an open form says so');
+  assert.equal(f.app.querySelectorAll('.fc-edge').length, 5, 'two connections, one into the chart, one to the outcomes, and the draft line');
+  same(f.app.querySelectorAll('.fc-flow').map((el) => [el.dataset.from, el.dataset.to, el.textContent]), [['interest', 'coffee', '2'], ['coffee', 'application', '1'], ['', 'interest', '3']], 'each arrow carries how many passed along it; the first counts who entered');
   assert.match(f.app.querySelector('.fc-outcome').textContent, /Accepted\s*1/);
-  assert.match(f.app.querySelector('[data-rc="flow-summary"]').textContent, /3\s*people\s*2\s*active\s*1\s*accepted\s*1\s*flagged/);
+  assert.ok(!f.app.querySelector('[data-rc="flow-summary"], .fc-bar'), 'no bar above the chart');
+  assert.ok(f.app.querySelector('.fc-wrap .fc-add[data-action="recruit-stage-new"]'), 'a + inside the chart adds a stage');
   assert.ok(!f.app.querySelector('.fc-cut, .rc-status-dot, .rc-cycle-state__dot'), 'no hover X on connections and no dots');
   assert.equal(f.app.querySelectorAll('.fc-port').length, 3, 'every card has a port to connect from');
   f.run("recruitFlowPortMenu")(f.app.querySelector('.fc-port[data-key="coffee"]'), 'coffee');
@@ -516,7 +530,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   put.resolve({ cycle: cycleRow({ version: 4 }), sections: saved }); await connecting;
   assert.equal(f.toasts.at(-1), 'Interest form now leads to Application form');
   assert.equal(f.run('recruitCycleRow().version'), 4, 'the next save uses the new version');
-  assert.equal(f.app.querySelectorAll('.fc-edge[data-to]:not(.fc-edge--outcome)').length, 3, 'the chart repainted in place');
+  assert.equal(f.app.querySelectorAll('.fc-edge[data-to]:not(.fc-edge--outcome):not(.fc-edge--entry)').length, 3, 'the chart repainted in place');
   assert.equal(f.renders.length, 0, 'editing the flow never re-renders the route');
   f.run("recruitFlowConnect('application', 'interest')");
   assert.match(f.toasts.at(-1), /comes before Application form; that connection would loop back/, 'a loop is refused before any request');
@@ -556,8 +570,8 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const r = fixture({ admin: false });
   loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
   r.mount();
-  assert.ok(r.app.querySelector('.fc-node') && !r.app.querySelector('.fc-port, .fc-node__more'), 'reviewers read the chart');
-  console.log('PASS: the flow chart lays out rows from the top, counts each stage, saves connections, removals and new stages as one versioned PUT, refuses loops, and puts itself back when a save fails');
+  assert.ok(r.app.querySelector('.fc-node') && !r.app.querySelector('.fc-port, .fc-node__more, .fc-add'), 'reviewers read the chart');
+  console.log('PASS: the flow chart runs left to right fitted to its width, balances splits, counts people on the arrows, saves connections, removals and new stages as one versioned PUT, refuses loops, and puts itself back when a save fails');
 }
 
 /* ------------------------------- splits ---------------------------------- */
@@ -630,9 +644,9 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   // The chart: each way out of the split says which answers take it.
   f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'flow' } };
   f.mount();
-  same(f.app.querySelectorAll('.fc-when').map((b) => [b.dataset.to, b.textContent]), [['elec', 'Electrical'], ['software-form', 'Software']]);
+  same(f.app.querySelectorAll('.fc-flow--split').map((b) => [b.dataset.to, b.querySelector('.fc-flow__why').textContent]), [['elec', 'Electrical'], ['software-form', 'Software']], 'each way says which answers take it');
   same(f.app.querySelectorAll('.fc-edge--split').map((e) => e.dataset.to), ['elec', 'software-form'], 'only the split\'s ways are dashed');
-  assert.equal(f.app.querySelector('.fc-when').dataset.action, 'recruit-flow-split', 'a lead opens the split from a label');
+  assert.equal(f.app.querySelector('.fc-flow--split').dataset.action, 'recruit-flow-split', 'a lead opens the split from a label');
   // Cutting a way drops its answers; removing the split keeps the connections.
   const unlinking = f.run("recruitFlowUnlink('application', 'elec')");
   const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
@@ -686,10 +700,12 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   f.mount();
   const page = () => f.app.querySelector('[data-rc="stage"]');
   assert.equal(page().dataset.stage, 'coffee');
-  same(f.app.querySelectorAll('.rs-strip__stage').map((a) => a.textContent), ['Interest form', 'Coffee chats', 'Application form'], 'the strip lists every stage');
-  const numbers = f.app.querySelectorAll('.rs-head__numbers div').map((d) => [d.querySelector('dt').textContent, d.querySelector('dd').textContent]);
-  same(numbers, [['here now', '1'], ['reached', '2'], ['chat completed', '1'], ['responses', '2']]);
-  same(f.app.querySelectorAll('.rs-tabs [role="tab"]').map((t) => t.textContent), ['People', 'Form2', 'Checklist3', 'Settings']);
+  // It opens as a panel over the flow chart, its card lit behind it.
+  assert.ok(page().classList.contains('sd') && f.app.querySelector('.sd-veil'), 'a stage is a panel with a veil to close it by');
+  assert.ok(f.app.querySelector('.fc-canvas.is-focus .fc-node.is-open[data-key="coffee"]'), 'the chart stays behind it with the stage lit');
+  same(f.app.querySelectorAll('.sd-nums span').map((el) => el.textContent), ['1 here now', '2 reached', '1 chat completed'], 'the head says who is here, who reached it and who is done');
+  same(f.app.querySelectorAll('.sd-head__tools a').map((a) => a.getAttribute('aria-label')), ['Previous stage: Interest form', 'Next stage: Application form'], 'the stages before and after are a click away');
+  same(f.app.querySelectorAll('.sd-tabs [role="tab"]').map((t) => t.textContent), ['People', 'Form2', 'Checklist3', 'Settings']);
   assert.ok(f.app.querySelector('[data-rc="stage-save"]').hidden, 'nothing to save yet');
   // The checklist: add a checkbox that marks the stage done.
   const add = f.app.querySelector('[data-action="recruit-ck-add"]');
@@ -701,7 +717,6 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   f.type(f.app.querySelector('[data-m="recruit-ck-label"][data-i="3"]'), 'Showed up');
   assert.ok(!f.app.querySelector('[data-rc="stage-save"]').hidden, 'typing shows the save bar');
   assert.match(f.app.querySelector('[data-rc="stage-save"]').textContent, /Unsaved changes/);
-  assert.match(f.app.querySelector('[data-rc="checklist-preview"]').textContent, /Showed up/, 'the preview follows the label');
   const done = f.app.querySelector('[data-action="recruit-ck-done"][data-i="3"]');
   done.checked = true; await f.click(done);
   assert.equal(f.app.querySelector('[data-action="recruit-ck-done"][data-i="3"]').checked, true, 'the new field shows that it marks the stage done');
@@ -757,8 +772,10 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   await f.click(f.app.querySelector('[data-action="recruit-sf-option-add"][data-i="2"]'));
   f.type(f.app.querySelector('[data-m="recruit-sf-option"][data-i="2"][data-j="1"]'), 'Friday');
   const req = f.app.querySelector('[data-action="recruit-sf-required"][data-i="2"]'); req.checked = true; await f.click(req);
-  // What happens on the website rides with the save.
-  const open = f.app.querySelector('[data-action="recruit-sf-open"]'); open.checked = true; await f.click(open);
+  // What happens on the website is in Settings, in the same draft, and rides with the save.
+  f.ctx.UI.route.params.tab = 'settings';
+  f.mount();
+  assert.equal(f.app.querySelector('.ss-link a').textContent, '/apply/coffee', 'the form\'s own address, to copy');
   f.type(f.app.querySelector('[data-m="recruit-sf-capacity"]'), '40');
   await f.click(f.app.querySelector('[data-action="recruit-sf-recipient-add"]'));
   f.type(f.app.querySelector('[data-m="recruit-sf-recipient"][data-j="0"]'), 'nope');
@@ -772,11 +789,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
   assert.equal(put2.body.version, 4, 'the version the last save brought back');
   const b2 = put2.body.settings.sections.coffee;
-  assert.equal(b2.open, true); assert.equal(b2.capacity, 40); same(b2.notifyTo, ['lead@cornell.edu'], 'recipients are trimmed and lowercased');
+  assert.equal(b2.open, undefined, 'opening the form is the header\'s own save'); assert.equal(b2.capacity, 40); same(b2.notifyTo, ['lead@cornell.edu'], 'recipients are trimmed and lowercased');
   same(b2.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
-  const s2 = { ...savedSections, coffee: { ...savedSections.coffee, open: true, capacity: 40, notifyTo: ['lead@cornell.edu'], form: { questions: b2.form.questions } } };
+  const s2 = { ...savedSections, coffee: { ...savedSections.coffee, capacity: 40, notifyTo: ['lead@cornell.edu'], form: { questions: b2.form.questions } } };
   put2.resolve({ cycle: cycleRow({ version: 5 }), sections: s2 }); await saving2;
-  assert.equal(f.toasts.at(-1), 'Coffee chats saved · live on the website');
+  assert.equal(f.toasts.at(-1), 'Coffee chats saved');
   // Settings: a name, a kind, and where it leads; no loops on offer.
   f.ctx.UI.route.params.tab = 'settings';
   f.mount();
@@ -797,24 +814,34 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.ok(!f.run('RECRUIT.dirty()')); assert.equal(f.toasts.at(-1), 'Changes discarded');
   // Opening the form from the header is one save.
   const toggle = f.app.querySelector('[data-action="recruit-stage-open"]');
-  toggle.checked = false;
+  assert.equal(toggle.checked, false);
+  toggle.checked = true;
   const toggling = f.click(toggle);
   const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
-  same(put4.body.settings, { sections: { coffee: { open: false } } });
-  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...s2, coffee: { ...s2.coffee, open: false } } }); await toggling;
-  assert.equal(f.toasts.at(-1), 'Coffee chats is closed on the website');
+  same(put4.body.settings, { sections: { coffee: { open: true } } });
+  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...s2, coffee: { ...s2.coffee, open: true } } }); await toggling;
+  assert.equal(f.toasts.at(-1), 'Coffee chats is open on the website');
   assert.ok(!f.run('RECRUIT.dirty()'), 'the draft learns the saved state without turning dirty');
   assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
+  // Escape leaves a text box first, then closes the panel back to the chart.
+  const keydown = f.run('RECRUIT.keydown.bind(RECRUIT)');
+  f.ctx.UI.menu = null;   // the last menu this test opened has closed
+  const name = f.app.querySelector('[data-m="recruit-ss-title"]');
+  let blurred = false; name.blur = () => { blurred = true; };
+  assert.equal(keydown({ key: 'Escape', target: name, preventDefault() {} }), true); assert.ok(blurred, 'the first Escape leaves the box');
+  assert.equal(keydown({ key: 'Escape', target: f.document.body, preventDefault() {} }), true);
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  assert.equal(f.navs.at(-1), '#/applications/cy-a/flow', 'the second closes the panel');
   // A stage without a form says so; reviewers read the checklist.
   st.cycle.sections.coffee.form = null;
   f.ctx.UI.route.params.tab = 'form';
   f.mount();
-  assert.match(f.app.innerHTML, /No form on the website/); assert.ok(f.app.querySelector('[data-action="recruit-sf-add-form"]'), 'a lead can add one');
+  assert.match(f.app.querySelector('.sd-empty').textContent, /No form/); assert.ok(f.app.querySelector('[data-action="recruit-sf-add-form"]'), 'a lead can add one');
   const r = fixture({ admin: false });
   loadCycle(r, { role: 'reviewer', roles: ['reviewer'], sub: 'stage', params: { key: 'coffee', tab: 'checklist' } });
   r.mount();
   assert.ok(r.app.querySelector('.ck--read') && !r.app.querySelector('[data-action="recruit-ck-add"]'), 'reviewers read the checklist');
-  console.log('PASS: a stage\'s page edits one draft across Form, Checklist and Settings, validates before sending, saves only what changed with derived keys, and keeps the draft when a save fails');
+  console.log('PASS: a stage opens in a panel over the chart, edits one draft across Form, Checklist and Settings, validates before sending, saves only what changed with derived keys, and keeps the draft when a save fails');
 }
 
 /* ------------------------------- a stage's people ------------------------ */
@@ -826,11 +853,13 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'stage', key: 'coffee' } })");
   const list = await f.pending(/\/people\?/);
   assert.match(list.url, /reached=coffee/); assert.match(list.url, /sort=name/);
-  same(f.app.querySelectorAll('[data-rc="stage-chips"] .rc-chip').map((c) => c.textContent), ['Everyone who reached it2', 'Here now1', 'Done1', 'Not done1', 'Up next1'], 'the chips count each list');
+  const show = () => f.app.querySelector('[data-m="recruit-stage-filter"]');
+  same(JSON.parse(show().dataset.opts).map((o) => o.label), ['Everyone who reached it · 2', 'Here now · 1', 'Done · 1', 'Not done · 1', 'Up next · 1'], 'one menu picks the list, with how many each holds');
   list.resolve({ rows: people().slice(0, 1), total: 1 }); await f.settle();
   const row = f.app.querySelector('[data-rc="stage-people-rows"] tr[data-email="ada@cornell.edu"]');
   assert.ok(row, 'one row per person');
-  same(f.app.querySelectorAll('[data-rc="stage-people-head"] th').map((th) => th.dataset.col), ['check', 'person', 'status', 'sent', 'f-completed', 'f-met_with', 'f-notes', 'review'], 'the checklist joins the list as columns');
+  same(f.app.querySelectorAll('[data-rc="stage-people-head"] th').map((th) => th.dataset.col), ['check', 'person', 'f-completed', 'f-met_with', 'f-notes'], 'the checklist joins the list as columns');
+  assert.match(row.querySelector('.sd-meta').textContent, /2/, 'a flag and comments show beside the person, only when there are some');
   assert.equal(row.querySelector('td[data-col="f-met_with"]').dataset.label, 'Met with', 'each field cell carries its label for the stacked phone layout');
   assert.equal(row.querySelector('[data-action="recruit-field-check"]').checked, false);
   // Ticking the box shows at once, saves, and every list follows.
@@ -849,15 +878,18 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   patch2.reject(Object.assign(new Error('No'), { status: 403 })); await f.settle();
   assert.equal(st.stagePeople.rows[0].fields.coffee.met_with, 'Rae', 'the value comes back when the save fails');
   assert.match(f.toasts.at(-1), /Could not save Met with: No/);
-  // Filters load their own list.
-  await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="notdone"]'));
+  // Each list loads on its own.
+  f.pick(show(), 'Not done · 1');
   assert.match((await f.pending(/\/people\?/)).url, /notdone=coffee/);
-  await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="here"]'));
+  f.pick(show(), 'Here now · 1');
   const here = (await f.pending(/\/people\?/)).url;
   assert.match(here, /stage=coffee/); assert.match(here, /status=active/);
-  await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="next"]'));
+  f.pick(show(), 'Up next · 1');
   const next = (await f.pending(/\/people\?/)).url;
   assert.match(next, /next=coffee/); assert.match(next, /status=active/);
+  // Selecting people swaps the bar for what to do with them.
+  const pickRow = f.app.querySelector('[data-action="recruit-stage-select"]');
+  if (pickRow) { pickRow.checked = true; await f.click(pickRow); assert.ok(f.app.querySelector('[data-rc="stage-bar"] [data-action="recruit-bulk-move"]'), 'move, set status or copy the selection'); }
   console.log('PASS: a stage\'s people load by filter, show its checklist as columns, save a tick at once and put a failed value back');
 }
 
