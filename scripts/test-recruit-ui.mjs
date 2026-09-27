@@ -1,28 +1,33 @@
-// The recruit client (registry, shell, cycle index, Applications panel,
-// sections) run whole inside vm against a small tree-based DOM fixture. No
-// network, browser, production data or credentials are used.
+// The recruit client (registry, cycle shell, cycle index, flow chart, a
+// stage's page, People, a person's page, Insights) run whole inside vm
+// against a small tree-based DOM fixture. No network, browser, production
+// data or credentials are used.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
-const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', forms: 'recruit-forms.js', people: 'recruit-people.js', applications: 'recruit-applications.js' };
+const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', flow: 'recruit-flow.js', stage: 'recruit-stage.js', people: 'recruit-people.js', person: 'recruit-person.js', insights: 'recruit-insights.js' };
 const src = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([k, f]) => [k, await read(`../src/client/${f}`)])));
 const ui2 = await read('../src/client/ui2.js');
 const main = await read('../src/client/main.js');
+const assemble = await read('./assemble.mjs');
 const ddSource = ui2.slice(ui2.indexOf('function dd('), ui2.indexOf('const ddSections'));
 const focusSource = main.slice(main.indexOf('function focusReference('), main.indexOf('function modalFocusables('));
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const same = (a, b, msg) => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 const unesc = (s) => String(s).replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&amp;', '&');
 
-// Marker comments slice each module; every module registers exactly once.
+// Marker comments slice each module; every module registers exactly once,
+// the build concatenates them in this order, and no template holds a native
+// select or datalist.
 for (const [name, text] of Object.entries(src)) {
   assert.ok(text.includes(`// recruit:${name}:start`) && text.includes(`// recruit:${name}:end`), `${name} carries slice markers`);
   assert.equal((text.match(/RECRUIT\.register\(/g) || []).length, name === 'core' ? 0 : 1, `${name} registers once`);
   assert.doesNotMatch(text, /<select|<datalist/i, `${name} has no native select`);
 }
+assert.match(assemble.replace(/\s+/g, ' '), new RegExp(Object.values(files).map((f) => `read\\('${f.replace('.', '\\.')}'\\)`).join(', ')), 'the build concatenates the modules after the core, in order');
 
 /* ------------------------------- fake DOM -------------------------------- */
 
@@ -40,8 +45,8 @@ class El {
     this.classList = {
       list: () => (self.attrs.class || '').split(/\s+/).filter(Boolean),
       contains: (c) => self.classList.list().includes(c),
-      add: (c) => { if (!self.classList.contains(c)) self.attrs.class = [...self.classList.list(), c].join(' '); },
-      remove: (c) => { self.attrs.class = self.classList.list().filter((x) => x !== c).join(' '); },
+      add: (...cs) => { for (const c of cs) if (!self.classList.contains(c)) self.attrs.class = [...self.classList.list(), c].join(' '); },
+      remove: (...cs) => { self.attrs.class = self.classList.list().filter((x) => !cs.includes(x)).join(' '); },
       toggle: (c, force) => { (force ?? !self.classList.contains(c)) ? self.classList.add(c) : self.classList.remove(c); },
     };
   }
@@ -49,27 +54,40 @@ class El {
   setAttribute(k, v) { this.attrs[k] = String(v); if (k.startsWith('data-')) this.dataset[camel(k.slice(5))] = String(v); }
   getAttribute(k) { return this.attrs[k] ?? null; }
   hasAttribute(k) { return k in this.attrs; }
+  removeAttribute(k) { delete this.attrs[k]; }
   get id() { return this.attrs.id || ''; }
   get className() { return this.attrs.class || ''; } set className(v) { this.attrs.class = v; }
   get hidden() { return this._hidden ?? ('hidden' in this.attrs); } set hidden(v) { this._hidden = Boolean(v); }
   get disabled() { return this._disabled ?? ('disabled' in this.attrs); } set disabled(v) { this._disabled = Boolean(v); }
   get readOnly() { return this._readOnly ?? ('readonly' in this.attrs); } set readOnly(v) { this._readOnly = Boolean(v); }
   get checked() { return this._checked ?? ('checked' in this.attrs); } set checked(v) { this._checked = Boolean(v); }
+  get open() { return this._open ?? ('open' in this.attrs); } set open(v) { this._open = Boolean(v); }
   get value() { return this._value ?? (this.tagName === 'TEXTAREA' ? this.textContent : (this.attrs.value || '')); } set value(v) { this._value = String(v); }
   get name() { return this.attrs.name || ''; }
   get tabIndex() { return Number(this.attrs.tabindex ?? 0); }
   get offsetParent() { return this.parentElement; }
+  get firstElementChild() { return this.children.find((c) => c.nodeType === 1) || null; }
   get textContent() { return this.children.map((c) => c.textContent).join(''); }
   set textContent(v) { for (const c of this.children) c.parentElement = null; this.children = v === '' ? [] : [Object.assign(new Text(String(v)), { parentElement: this })]; }
   get innerHTML() { return this.children.map((c) => (c.nodeType === 3 ? esc(c.text) : c.outerHTML)).join(''); }
   set innerHTML(h) { if (this.contains(this.doc.activeElement)) this.doc.activeElement = this.doc.body; for (const c of this.children) c.parentElement = null; this.children = []; for (const c of parseHtml(h, this.doc)) this.appendChild(c); }
   get outerHTML() { const a = Object.entries(this.attrs).map(([k, v]) => ` ${k}="${esc(v)}"`).join(''); const t = this.tagName.toLowerCase(); return VOID.has(t) ? `<${t}${a}>` : `<${t}${a}>${this.innerHTML}</${t}>`; }
+  set outerHTML(h) {
+    const p = this.parentElement;
+    if (!p) return;
+    if (this.contains(this.doc.activeElement)) this.doc.activeElement = this.doc.body;
+    const kids = parseHtml(h, this.doc);
+    kids.forEach((k) => { k.parentElement = p; });
+    p.children.splice(p.children.indexOf(this), 1, ...kids);
+    this.parentElement = null;
+  }
   appendChild(c) { c.parentElement = this; this.children.push(c); return c; }
   insertAdjacentHTML(pos, h) { const kids = parseHtml(h, this.doc); if (pos === 'afterbegin') { kids.forEach((k) => { k.parentElement = this; }); this.children.unshift(...kids); } else kids.forEach((k) => this.appendChild(k)); }
   remove() { if (this.contains(this.doc.activeElement)) this.doc.activeElement = this.doc.body; const p = this.parentElement; if (p) p.children = p.children.filter((c) => c !== this); this.parentElement = null; }
   contains(t) { let n = t; while (n) { if (n === this) return true; n = n.parentElement; } return false; }
   focus() { if (this.isConnected) this.doc.activeElement = this; }
-  select() {} setSelectionRange() {} addEventListener() {} scrollIntoView() {}
+  blur() { if (this.doc.activeElement === this) this.doc.activeElement = this.doc.body; }
+  select() {} setSelectionRange() {} addEventListener() {} removeEventListener() {} scrollIntoView() {}
   getBoundingClientRect() { return { top: 0, bottom: 1, left: 0, right: 0, width: 0, height: 0 }; }
   matches(sel) { return String(sel).split(',').some((s) => matchSelector(this, s.trim())); }
   closest(sel) { let n = this; while (n && n.nodeType === 1) { if (n.matches(sel)) return n; n = n.parentElement; } return null; }
@@ -93,6 +111,7 @@ function matchCompound(n, c) {
       const want = a[3] ?? a[4] ?? a[5];
       if (want !== undefined) { if (a[2] === '^') { if (!v.startsWith(want)) return false; } else if (v !== want) return false; }
     } else if (part.startsWith(':not(')) { if (matchSelector(n, part.slice(5, -1))) return false; }
+    else if (part === ':focus') { if (n.doc.activeElement !== n) return false; }
   }
   return true;
 }
@@ -131,23 +150,26 @@ function makeDocument() {
   doc.activeElement = doc.body;
   doc.querySelector = (s) => doc.body.querySelector(s);
   doc.querySelectorAll = (s) => doc.body.querySelectorAll(s);
+  doc.getElementById = (id) => doc.body.querySelector('#' + id);
   return doc;
 }
 
 /* ------------------------------- fixture --------------------------------- */
 
-function fixture({ remote = true, admin = true } = {}) {
+function fixture({ remote = true, admin = true, me = 'lead@cornell.edu', width = 1440 } = {}) {
   const document = makeDocument();
   const app = document.body.appendChild(new El(document, 'div'));
   app.setAttribute('id', 'app');
   const requests = [], renders = [], backgrounds = [], toasts = [], menus = [], navs = [], closes = [];
   const base = {
     UI: { route: { name: 'recruit', params: {} }, modal: null, menu: null, editor: null, palette: null, toasts: [] },
-    Store: { me: () => ({ email: 'lead@cornell.edu', name: 'Lead' }), isAdmin: () => admin, userName: (e) => e, relTime: () => 'just now' },
+    Store: { me: () => ({ email: me, name: 'Lead' }), isAdmin: () => admin, userName: (e) => e, relTime: () => 'just now' },
     MD: { esc }, I: new Proxy({}, { get: () => '<svg></svg>' }),
     document, $: (sel, root) => (root || document.body).querySelector(sel), $$: (sel, root) => (root || document.body).querySelectorAll(sel),
     crypto: { randomUUID }, AbortSignal, URLSearchParams, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); return t; }, clearTimeout, setImmediate, console,
-    location: { hash: '' }, window: { open() {}, addEventListener() {} }, localStorage: (() => { const data = new Map(); return { getItem: (k) => data.get(k) || null, setItem: (k,v) => data.set(k,v), removeItem: (k) => data.delete(k) }; })(), navigator: { clipboard: { writeText: async () => {} } },
+    location: { hash: '' }, window: { open() {}, addEventListener() {}, innerWidth: width },
+    localStorage: (() => { const data = new Map(); return { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: (k) => data.delete(k) }; })(),
+    navigator: { clipboard: { writeText: async () => {} } },
     topbar: (crumbs, right) => `<header class="topbar"><nav class="crumbs">${crumbs}</nav>${right || ''}</header>`,
     api(url, options = {}) { return new Promise((resolve, reject) => requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null, signal: options.signal, resolve, reject })); },
     render() { renders.push(base.UI.modal); },
@@ -158,7 +180,6 @@ function fixture({ remote = true, admin = true } = {}) {
     openMenu(items, anchor) { menus.push({ items, anchor }); base.UI.menu = { items }; },
     runAdminForm: async (form, submit) => submit(),
     adminFormMessage() {},
-    // The shell's dialog helpers: a veil appended to the body, no route render.
     viewModal() { return `<div class="modal-veil" data-action="modal-veil">${run('RECRUIT.modal(UI.modal)')}</div>`; },
     captureModalFocus() {},
     mountModalFocus() { document.body.querySelector('.modal [data-action="modal-close"]')?.focus(); },
@@ -166,86 +187,161 @@ function fixture({ remote = true, admin = true } = {}) {
   if (remote) base.REMOTE = { pending: 0 };
   const ctx = vm.createContext(base);
   const run = (code) => vm.runInContext(code, ctx);
-  vm.runInContext(ddSource + '\n' + focusSource + '\n' + src.core + '\n' + src.cycles + '\n' + src.forms + '\n' + src.people + '\n' + src.applications, ctx, { filename: 'recruit-client.js' });
-  const settle = () => new Promise((resolve) => setImmediate(resolve));
-  return { ctx, document, app, requests, renders, backgrounds, toasts, menus, navs, closes, run, settle,
+  vm.runInContext(ddSource + '\n' + focusSource + '\n' + Object.values(src).join('\n'), ctx, { filename: 'recruit-client.js' });
+  const settle = async (n = 3) => { for (let i = 0; i < n; i++) await new Promise((resolve) => setImmediate(resolve)); };
+  const call = (name) => run(name);
+  const click = async (el, ev = {}) => {
+    assert.ok(el, 'the control exists');
+    return run('RECRUIT.click.bind(RECRUIT)')(el.dataset.action, el, { preventDefault() {}, stopPropagation() {}, ...ev }, () => {});
+  };
+  const type = (el, value) => { assert.ok(el, 'the field exists'); el.value = value; return run('RECRUIT.input.bind(RECRUIT)')(el, { type: 'input' }); };
+  const change = (el, value) => { assert.ok(el, 'the field exists'); el.value = value; return run('RECRUIT.change.bind(RECRUIT)')(el, { type: 'change' }); };
+  const pick = (host, label) => { run('RECRUIT.dd.bind(RECRUIT)')(host); const item = menus.at(-1).items.find((i) => i !== '-' && i.label === label); assert.ok(item, `the menu offers ${label}`); item.run(); };
+  const pending = async (match, method = 'GET') => { await settle(); const r = requests.find((x) => !x.done && x.method === method && (typeof match === 'string' ? x.url === match : match.test(x.url))); assert.ok(r, `a ${method} request for ${match}`); r.done = true; return r; };
+  return { ctx, document, app, requests, renders, backgrounds, toasts, menus, navs, closes, run, call, settle, click, type, change, pick, pending,
     mount() { app.innerHTML = run('viewRecruit()'); return app; },
     mountModal() { document.body.querySelector('.modal-veil')?.remove(); const veil = document.body.appendChild(new El(document, 'div')); veil.setAttribute('class', 'modal-veil'); veil.innerHTML = run('RECRUIT.modal(UI.modal)'); return veil; } };
 }
 
-const cycleRow = (over = {}) => ({ id: 'cy-a', version: 3, status: 'open', name: 'Fall 2026', term: 'Fall 2026', updated: 1, doc: { subteams: [{ key: 'electrical', name: 'Electrical' }, { key: 'software', name: 'Software' }], modules: {}, pipeline: { views: [{ key: 'v1', name: 'Unscored electrical', query: { subteam: 'Electrical' } }] } }, ...over });
-const rows = () => [
-  { id: 'in-1', name: '<img src=x onerror=alert(1)>', email: '"x"@cornell.edu', ts: 1700000000000, year: 'Junior', subteam: 'Electrical', stage: 'applied', tags: ['<b>'], flagged: false, comments: 1, files: [], editVersion: 2, reviewVersion: 1, source: 'form' },
-  { id: 'in-2', name: 'Two', email: 'two@cornell.edu', ts: 1700000100000, year: '', subteam: '', stage: 'screening', tags: [], flagged: true, comments: 0, files: [], editVersion: 0, reviewVersion: 0, source: 'admin' },
-];
-// The forms the server merges for a fresh cycle: the interest form keeps its
-// six fixed questions, the other two ask only for a name and an email.
+const cycleRow = (over = {}) => ({ id: 'cy-a', version: 3, status: 'open', name: 'Fall 2026', term: 'Fall 2026', updated: 1, closesAt: null, doc: { subteams: [{ key: 'electrical', name: 'Electrical' }, { key: 'software', name: 'Software' }], modules: {}, site: { landing: 'interest' } }, ...over });
 const q = (key, type, label, extra = {}) => ({ key, type, label, required: false, ...extra });
-const defaultSections = () => ({
-  interest: { title: 'Interest form', description: '', open: true, required: ['name', 'email', 'subteam', 'year', 'project', 'file'], form: { questions: [q('name', 'short', 'Name', { required: true }), q('email', 'email', 'Email', { required: true }), q('subteam', 'single', 'Subteam', { options: ['Electrical', 'Software'] }), q('year', 'single', 'Year', { options: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'] }), q('project', 'long', 'Coolest project'), q('file', 'file', 'Photo or PDF')] } },
-  coffee: { title: 'Coffee chats', description: '', open: false, required: ['name', 'email'], form: { questions: [q('name', 'short', 'Name', { required: true }), q('email', 'email', 'Email', { required: true })] } },
-  application: { title: 'Application form', description: '', open: false, required: ['name', 'email'], form: { questions: [q('name', 'short', 'Name', { required: true }), q('email', 'email', 'Email', { required: true })] } },
+const basics = () => [q('name', 'short', 'Name', { required: true, max: 100 }), q('email', 'email', 'Email', { required: true, max: 200 })];
+// The stages as GET /recruit/cycles/:id merges them for a cycle saved before
+// the flow chart: three forms in order, the coffee chats with their checklist.
+const sections = () => ({
+  interest: { title: 'Interest form', description: '', open: true, kind: 'form', fields: [], done: null, required: ['name', 'email', 'subteam', 'year', 'project', 'file'], form: { questions: [...basics(), q('subteam', 'single', 'Subteam', { options: ['Electrical', 'Software'] }), q('year', 'single', 'Year', { options: ['Junior', 'Senior'] }), q('project', 'long', 'Coolest project', { max: 1000 }), q('file', 'file', 'Photo or PDF', { accept: ['application/pdf'], maxBytes: 100 })] } },
+  coffee: { title: 'Coffee chats', description: 'Grab a coffee.', open: false, kind: 'meeting', done: 'completed', fields: [{ key: 'completed', type: 'check', label: 'Chat completed' }, { key: 'met_with', type: 'text', label: 'Met with' }, { key: 'notes', type: 'note', label: 'Notes' }], required: ['name', 'email'], form: { questions: basics() } },
+  application: { title: 'Application form', description: '', open: false, kind: 'form', done: null, fields: [{ key: 'score', type: 'rating', label: 'Score', max: 5, each: true }, { key: 'notes', type: 'note', label: 'Review notes', each: true }], required: ['name', 'email'], form: { questions: basics() } },
 });
-function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, bySection: { interest: 2 } } } = {}) {
+const insights = () => ({
+  people: 3, statuses: { active: 2, accepted: 1, waitlisted: 0, declined: 0, withdrew: 0 }, flagged: 1, commented: 1, medianDays: 4, firstAt: 1700000000000,
+  stages: [
+    { key: 'interest', title: 'Interest form', kind: 'form', rank: 0, form: true, open: true, doneField: null, here: 1, reached: 3, done: 3, notDone: 0, responses: 3, declined: 0, fields: [] },
+    { key: 'coffee', title: 'Coffee chats', kind: 'meeting', rank: 1, form: true, open: false, doneField: 'Chat completed', here: 1, reached: 2, done: 1, notDone: 1, responses: 2, declined: 0, fields: [
+      { key: 'completed', label: 'Chat completed', type: 'check', each: false, summary: { yes: 1, of: 2 } },
+      { key: 'met_with', label: 'Met with', type: 'text', each: false, summary: { n: 1, top: [{ value: '<Rae>', n: 1 }] } },
+      { key: 'notes', label: 'Notes', type: 'note', each: false, summary: { n: 1 } }] },
+    { key: 'application', title: 'Application form', kind: 'form', rank: 2, form: true, open: false, doneField: null, here: 0, reached: 1, done: 1, notDone: 0, responses: 1, declined: 0, fields: [
+      { key: 'score', label: 'Score', type: 'rating', each: true, max: 5, summary: { n: 2, people: 1, avg: 3.5, max: 5, dist: [0, 0, 1, 1, 0] } },
+      { key: 'notes', label: 'Review notes', type: 'note', each: true, summary: { n: 0 } }] },
+  ],
+  edges: [], daily: [{ day: '2026-09-01', counts: { interest: 2 } }, { day: '2026-09-03', counts: { interest: 1, coffee: 2, application: 1 } }],
+  subteams: [{ name: 'Software', n: 2 }, { name: '<b>Bots</b>', n: 1 }], years: [{ name: 'Junior', n: 3 }],
+});
+// People as GET /recruit/cycles/:id/people lists them.
+const people = () => [
+  { email: 'ada@cornell.edu', name: 'Ada', cornell: true, subteam: 'Software', year: 'Junior', first: 1, last: 3, latest: 'p-a2', flagged: true, comments: 2, reviewVersion: 3, trackVersion: 2,
+    stage: 'coffee', status: 'active', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: false }, fields: { coffee: { completed: false, met_with: 'Rae' } },
+    sections: { interest: { id: 'p-a1', section: 'interest', ts: 1 }, coffee: { id: 'p-a2', section: 'coffee', ts: 3 } } },
+  { email: 'bo@cornell.edu', name: '<b>Bo</b>', cornell: true, subteam: '', year: null, first: 2, last: 2, latest: 'p-b1', flagged: false, comments: 0, reviewVersion: 0, trackVersion: 0,
+    stage: 'application', status: 'accepted', states: { interest: 'skipped', coffee: 'skipped', application: 'current' }, done: { application: true }, fields: { application: { score: { n: 2, avg: 3.5, mine: 4 } } },
+    sections: { application: { id: 'p-b1', section: 'application', ts: 2 } } },
+];
+function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params = {}, cycle = {}, withInsights = true } = {}) {
   const st = f.run('recruitState()');
   st.me = { admin: roles.includes('admin'), cycles: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', roles }] };
   f.ctx.UI.recruitMe = st.me;
-  st.cycles = { list: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', counts, updated: 1, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true, orphans: 0 } };
+  st.cycles = { list: [{ id: 'cy-a', name: 'Fall 2026', term: 'Fall 2026', status: 'open', counts: { total: 3, bySection: { interest: 3, coffee: 2, application: 1 } }, updated: 1, version: 3 }, { id: 'cy-b', name: 'Spring 2027', term: 'Spring 2027', status: 'draft', counts: { total: 0 }, updated: 1, version: 1 }], intakeCycleId: 'cy-a', migration: { done: true, orphans: 0 } };
   st.cycleId = 'cy-a';
-  st.cycle = { data: cycleRow(), role, roles, counts, sections: defaultSections(), grants: [] };
-  st.apps = { key: st.key + ':cy-a:interest', rows: rows(), byId: Object.fromEntries(rows().map((r) => [r.id, r])), next: 'cursor-1', total: 200, counts, loading: false, error: null };
-  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'interest' } };
+  st.cycle = { data: cycleRow(cycle), role, roles, counts: { total: 3, bySection: { interest: 3, coffee: 2, application: 1 } }, sections: sections(), grants: [], team: [{ email: 'lead@cornell.edu', name: 'Lead' }, { email: 'rae@cornell.edu', name: 'Rae' }], email: 'lead@cornell.edu' };
+  if (withInsights) st.insights = { key: st.key + ':cy-a', data: insights(), loading: false, error: null, promise: null };
+  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub, ...params } };
   return st;
 }
 
 /* ------------------------------- registry -------------------------------- */
 {
   const f = fixture();
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'people', 'applications', 'forms'], 'kernel modules register in order');
-  f.ctx.zetaCalls = [];
-  f.run(`RECRUIT.register({ name: 'zeta', order: 5, panel: { id: 'zeta', label: 'Zeta', when: (cycle, role) => role === 'admin' || role === 'lead' }, view: () => '<p>zeta</p>',
-    actions: { 'recruit-zeta': (el, ev, stop) => zetaCalls.push(el.dataset.id) }, modals: { 'recruit-zeta': (m) => '<div class="modal" data-zeta></div>' },
-    columns: [{ id: 'score', label: 'Score', sortKey: 'score', cell: (r) => '<b>' + (r.extras?.score?.mean ?? '—') + '</b>' }],
-    filters: [{ group: 'review', value: 'unscored', label: 'Unscored', query: { unscored: 1 } }],
-    detailSections: (app) => ({ id: 'zeta', title: 'Zeta', html: '<p data-zeta-section>' + app.id + '</p>' }) })`);
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'zeta', 'people', 'applications', 'forms'], 'registry sorts by order');
-  assert.throws(() => f.run("RECRUIT.register({ name: 'zeta', order: 9 })"), /already registered/);
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'flow', 'stage', 'people', 'person', 'insights'], 'modules register in order');
+  assert.throws(() => f.run("RECRUIT.register({ name: 'flow', order: 9 })"), /already registered/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, actions: { 'nope': () => {} } })"), /must start with recruit-/);
+  assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, changes: { 'nope': () => {} } })"), /must start with recruit-/, 'change handlers are checked like the rest');
   assert.throws(() => f.run("RECRUIT.register({ name: 'noorder' })"), /needs an order/);
-  const cycle = cycleRow();
-  f.ctx.cycle = cycle;
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['people', 'zeta', 'interest', 'coffee', 'application'], 'People leads, the three section tabs follow module tabs by panel order; settings is a dialog, not a tab');
-  same(f.run("RECRUIT.panels(cycle, 'reviewer').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application'], 'tabs are gated by role');
+  f.ctx.cycle = cycleRow();
+  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => [p.id, p.tab])"), [['flow', true], ['people', true], ['insights', true], ['stage', false], ['person', false]], 'three tabs; a stage and a person are pages of their own');
+  f.ctx.zetaCalls = [];
+  f.run(`RECRUIT.register({ name: 'zeta', order: 9, panel: { id: 'zeta', label: 'Zeta', order: 4, when: (cycle, role) => role === 'admin' }, view: () => '<p data-zeta>zeta</p>',
+    actions: { 'recruit-zeta': (el) => zetaCalls.push(el.dataset.id) }, inputs: { 'recruit-zeta-in': (el) => zetaCalls.push('input:' + el.value) }, changes: { 'recruit-zeta-ch': (el) => zetaCalls.push('change:' + el.value) },
+    modals: { 'recruit-zeta': () => '<div class="modal" data-zeta></div>' } })`);
+  same(f.run("RECRUIT.panels(cycle, 'admin').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'people', 'insights', 'zeta'], 'a module adds a tab');
+  same(f.run("RECRUIT.panels(cycle, 'reviewer').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'people', 'insights'], 'tabs are gated by role');
   f.ctx.cycle = cycleRow({ doc: { modules: { zeta: false } } });
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application'], 'a module switched off for the cycle loses its tab');
+  same(f.run("RECRUIT.panels(cycle, 'admin').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'people', 'insights'], 'a module switched off for the cycle loses its tab');
   assert.match(f.run("RECRUIT.modal({ kind: 'recruit-zeta' })"), /data-zeta/, 'modal kinds resolve through the registry');
   assert.equal(f.run("RECRUIT.modal({ kind: 'recruit-nope' })"), '', 'unknown kinds draw nothing');
   const el = f.run("document.createElement('button')"); el.setAttribute('data-action', 'recruit-zeta'); el.setAttribute('data-id', 'x');
-  let stopped = 0;
+  let stopped = 0, propagation = 0;
   assert.equal(await f.run('RECRUIT.click.bind(RECRUIT)')('recruit-zeta', el, { preventDefault() {}, stopPropagation() {} }, () => { stopped++; }), true);
   same(f.ctx.zetaCalls, ['x']); assert.equal(stopped, 1, 'the dispatcher stops the event for buttons');
+  const box = f.run("document.createElement('input')"); box.setAttribute('type', 'checkbox'); box.setAttribute('data-id', 'y');
+  await f.run('RECRUIT.click.bind(RECRUIT)')('recruit-zeta', box, { stopPropagation() { propagation++; } }, () => { stopped++; });
+  assert.equal(stopped, 1); assert.equal(propagation, 1, 'a checkbox keeps its default: only propagation stops');
   const form = f.run("document.createElement('form')"); form.setAttribute('data-action', 'recruit-zeta');
   assert.equal(await f.run('RECRUIT.click.bind(RECRUIT)')('recruit-zeta', form, {}, () => {}), false, 'a click that lands on a form is not an action');
   assert.equal(await f.run('RECRUIT.click.bind(RECRUIT)')('recruit-unknown', el, {}, () => {}), false);
-  f.ctx.evt = { key: 'ArrowRight', target: null, prevented: 0, preventDefault() { this.prevented++; } };
-  loadCycle(f);
+  const field = f.run("document.createElement('input')");
+  field.setAttribute('data-m', 'recruit-zeta-ch'); field.value = 'a';
+  assert.equal(f.run('RECRUIT.change.bind(RECRUIT)')(field, {}), true);
+  field.setAttribute('data-m', 'recruit-zeta-in'); field.value = 'b';
+  assert.equal(f.run('RECRUIT.change.bind(RECRUIT)')(field, {}), true, 'a change without its own handler falls back to the input handler');
+  same(f.ctx.zetaCalls, ['x', 'y', 'change:a', 'input:b']);
+  console.log('PASS: registry sorts by order, validates every handler group, gates tabs by role and module switch, and dispatches clicks, inputs and changes');
+}
+
+/* ------------------------------- the cycle shell ------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { cycle: { closesAt: Date.UTC(2026, 9, 6, 16) } });
   f.mount();
   const tabs = f.app.querySelectorAll('.rc-tabs [role="tab"]');
-  same(tabs.map((t) => t.textContent), ['People', 'Zeta', 'Interest form', 'Coffee chats', 'Application form']);
-  assert.ok(f.app.querySelector('.rc-tabs .rc-tabs__add[data-action="recruit-form-new"]'), 'a + after the tabs adds a form');
-  assert.equal(tabs[2].getAttribute('aria-current'), 'page');
-  tabs[2].focus(); f.ctx.evt.target = tabs[2];
-  assert.equal(f.run('RECRUIT.keydown(evt)'), true); assert.ok(f.document.activeElement === tabs[3], 'arrow keys rove the tablist');
-  f.ctx.evt.key = 'a'; assert.equal(f.run('RECRUIT.keydown(evt)'), false);
-  const sheet = f.app.querySelector('.sheet--recruit');
-  assert.ok(sheet.querySelector('th[data-col="score"]'), 'module columns join the sheet');
-  assert.match(sheet.querySelector('tbody td[data-col="score"]').innerHTML, /—/);
-  f.ctx.st = f.run('recruitState()'); f.ctx.st.selected = new Set(['in-1', 'in-2']);
-  f.run('recruitPaintSelection()');
-  assert.match(f.app.querySelector('[data-recruit-selection]').innerHTML, /2 selected/, 'the selection toolbar counts');
-  f.run("UI.modal = { kind: 'recruit-person', email: 'one@cornell.edu' }"); f.ctx.st.persons = { 'one@cornell.edu': { person: { email: 'one@cornell.edu', name: 'One', flagged: false, review: { comments: [] }, reviewVersion: 0, latest: 'in-1' }, submissions: [{ application: { id: 'in-1', name: 'One', email: 'one@cornell.edu', section: 'interest', answers: {}, files: [], tags: [] }, form: { questions: [] } }], history: [] } };
-  assert.match(f.run('RECRUIT.modal(UI.modal)'), /data-zeta-section/, 'module detail sections join the dialog');
-  console.log('PASS: registry dispatches by view key, sorts by order, gates tabs by role and module switch, and merges columns, filters and detail sections');
+  same(tabs.map((t) => t.textContent), ['Flow', 'People', 'Insights']);
+  assert.equal(tabs[0].getAttribute('aria-current'), 'page');
+  assert.match(f.app.innerHTML, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026</);
+  assert.match(f.app.innerHTML, /class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch"/, 'the title is the cycle switch');
+  assert.ok(f.app.querySelector('.rc-cycle-gear[data-action="recruit-settings-open"]'), 'the gear sits beside the name');
+  const meta = f.app.querySelector('.rc-cycle-meta').textContent;
+  assert.match(meta, /Open/); assert.match(meta, /Receives the website's forms/); assert.match(meta, /Deadline Oct 6/);
+  tabs[0].focus();
+  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowRight', target: tabs[0], preventDefault() {} }), true);
+  assert.ok(f.document.activeElement === tabs[1], 'arrow keys rove the tablist');
+  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'a', target: tabs[1], preventDefault() {} }), false);
+  // A stage's page names itself in the crumbs; the Flow tab stays marked.
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'stage', key: 'coffee' };
+  f.mount();
+  assert.match(f.app.innerHTML, /<a href="#\/applications\/cy-a">Fall 2026<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Coffee chats<\/span>/);
+  const onStage = f.app.querySelectorAll('.rc-tabs [role="tab"]');
+  assert.equal(onStage[0].getAttribute('aria-selected'), 'true'); assert.equal(onStage[0].getAttribute('aria-current'), null, 'the tab is marked but is not the page');
+  assert.ok(f.app.querySelector('.rc-wrap--full'), 'a stage uses the whole width');
+  // Addresses from before the flow chart open that stage's page.
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'coffee' };
+  assert.equal(f.run('recruitActivePanel().id'), 'stage'); assert.equal(f.run('recruitStageKey()'), 'coffee');
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'form:people' };
+  assert.equal(f.run('recruitActivePanel().id'), 'flow', 'form:people opens a stage only where one is called people');
+  st.cycle.sections.people = { ...sections().coffee, title: 'People intake' };
+  assert.equal(f.run('recruitActivePanel().id'), 'stage'); assert.equal(f.run('recruitStageKey()'), 'people');
+  delete st.cycle.sections.people;
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'nonsense' };
+  assert.equal(f.run('recruitActivePanel().id'), 'flow', 'an unknown view falls back to the first tab');
+  // Switching cycles keeps the view where it exists in the other cycle.
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'people' };
+  f.mount();
+  const sw = f.app.querySelector('[data-m="recruit-cycle-switch"]');
+  f.run('RECRUIT.dd.bind(RECRUIT)')(sw, 'cy-b');
+  assert.equal(f.navs.at(-1), '#/applications/cy-b/people');
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'stage', key: 'coffee' };
+  f.run('RECRUIT.dd.bind(RECRUIT)')(sw, 'cy-b');
+  assert.equal(f.navs.at(-1), '#/applications/cy-b', 'a stage of one cycle is not a stage of the other');
+  assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
+  // Reviewers read: no gear, no Add stage, no stage settings.
+  const r = fixture({ admin: false });
+  loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
+  r.mount();
+  assert.ok(!r.app.querySelector('.rc-cycle-gear') && !r.app.querySelector('[data-action="recruit-stage-new"]'), 'reviewers see no gear and cannot add stages');
+  r.ctx.UI.route.params = { id: 'cy-a', sub: 'stage', key: 'coffee', tab: 'settings' };
+  r.mount();
+  same(r.app.querySelectorAll('.rs-tabs [role="tab"]').map((t) => t.textContent.replace(/\d+$/, '')), ['People', 'Form', 'Checklist'], 'a stage has no Settings tab for reviewers');
+  assert.equal(r.app.querySelector('[data-rc="stage-tab"]').dataset.tab, 'people', 'asking for settings shows People');
+  console.log('PASS: the cycle shell draws Flow, People and Insights, marks the view a stage belongs to, reads old addresses, switches cycles in place and gates editing by role');
 }
 
 /* ------------------------------- cycle index ----------------------------- */
@@ -265,456 +361,604 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   st.me = { admin: true, cycles: [] }; f.ctx.UI.recruitMe = st.me;
   st.cycles = { loading: true }; assert.match(f.run('viewRecruit()'), /Loading…/);
   st.cycles = { error: 'boom' }; assert.match(f.run('viewRecruit()'), /Could not load: boom/);
+  st.cycles = { list: [], intakeCycleId: null, migration: { done: true, orphans: 0 } };
+  assert.match(f.run('viewRecruit()'), /No cycle yet/);
   st.cycles = { list: [
     { id: 'cy-a', name: '<b>Fall</b> 2026', term: 'Fall 2026', status: 'open', counts: { total: 12, bySection: { interest: 10, coffee: 2 } }, updated: 1 },
     { id: 'cy-old', name: 'Spring 2025', term: 'Spring 2025', status: 'archived', counts: { total: 3 }, updated: 1 },
   ], intakeCycleId: 'cy-a', migration: { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 } };
-  const html = f.run('viewRecruit()');
+  f.mount();
+  const html = f.app.innerHTML;
   assert.match(html, /&lt;b&gt;Fall&lt;\/b&gt; 2026/, 'cycle names are escaped'); assert.doesNotMatch(html, /<b>Fall<\/b>/);
-  assert.match(html, /Open · receives the website's forms · Interest form 10 · Coffee chats 2 · Application form 0/);
+  const card = f.app.querySelector('.rc-cycle-card[data-id="cy-a"]');
+  same(card.querySelectorAll('.rc-cycle-card__stage').map((s) => [s.querySelector('.rc-cycle-card__label').textContent, s.querySelector('.rc-cycle-card__n').textContent]), [['Interest form', '10'], ['Coffee chats', '2'], ['Application form', '0']], 'each card counts its stages');
+  assert.ok(card.querySelector('.rc-cycle-card__live'), 'the cycle taking the website\'s forms says so');
   assert.match(html, /Archived<\/h2>/, 'archived cycles sit under a second heading');
   assert.match(html, /Import the current list and archives/); assert.match(html, /40 submissions and 1 archive/);
   assert.match(html, /data-action="recruit-cycle-new"/);
   st.cycles.migration = { done: true, orphans: 5 };
-  assert.match(f.run('viewRecruit()'), /5 submissions arrived while no cycle was receiving the form/);
-  assert.doesNotMatch(f.run('viewRecruit()'), /<select/);
-  // The migration loop follows the server's next step and repaints from state.
   f.mount();
+  assert.match(f.app.innerHTML, /5 submissions arrived while no cycle was receiving the form/);
+  st.cycles.migration = { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 };
+  f.mount();
+  // The import follows the server's next step and repaints from state.
   const migrating = f.run('recruitRunMigration()');
   assert.equal(f.requests[0].url, '/recruit/migrate'); same(f.requests[0].body.step, 'live'); assert.match(f.requests[0].body.requestId, /^rq-/);
+  assert.equal(f.app.querySelector('[data-rc="migrate"]').textContent, 'Importing…');
   f.requests[0].resolve({ done: false, next: { step: 'archive', archiveId: 'ar-1' } }); await f.settle();
   assert.equal(f.requests[1].body.archiveId, 'ar-1');
   f.requests[1].resolve({ done: true }); await migrating;
   assert.equal(st.cycles, undefined, 'the index refetches after the import'); same(f.backgrounds, ['recruit']); assert.equal(f.renders.length, 0);
   assert.equal(f.toasts.at(-1), 'Imported the current list and archives');
-  console.log('PASS: the cycle index renders every UI.recruit sentinel, escapes names, lists archived cycles apart, and runs the resumable import without render()');
+  // A new cycle starts from the default flow or copies another cycle's.
+  st.cycles = { list: [{ id: 'cy-a', name: 'Fall 2026', status: 'open', counts: {} }], intakeCycleId: null, migration: { done: true } };
+  f.ctx.UI.modal = { kind: 'recruit-cycle' };
+  const veil = f.mountModal();
+  const from = veil.querySelector('[data-m="recruit-cycle-copy"]');
+  same(JSON.parse(from.dataset.opts).map((o) => o.label), ['The default flow', "Fall 2026's flow"]);
+  const creating = f.run('recruitCreateCycle()');
+  assert.equal(veil.querySelector('.field-error').textContent, 'A cycle needs a name.');
+  await creating;
+  veil.querySelector('[data-m="recruit-cycle-name"]').value = 'Spring 2027';
+  f.pick(from, "Fall 2026's flow");
+  const creating2 = f.run('recruitCreateCycle()');
+  const post = await f.pending('/recruit/cycles', 'POST');
+  assert.equal(post.body.name, 'Spring 2027'); assert.equal(post.body.copyFrom, 'cy-a'); assert.match(post.body.requestId, /^rq-/);
+  post.resolve({ cycle: { id: 'cy-new' } }); await creating2;
+  assert.equal(f.navs.at(-1), '#/applications/cy-new/flow', 'a new cycle opens on its flow');
+  assert.equal(f.toasts.at(-1), 'Created Spring 2027');
+  console.log('PASS: the cycle index renders every sentinel, escapes names, counts each stage, runs the resumable import without render(), and creates a cycle from a flow');
 }
 
-/* ------------------------------- sheet ----------------------------------- */
+/* ------------------------------- settings -------------------------------- */
 {
   const f = fixture();
-  loadCycle(f);
-  const html = f.run('viewRecruit()');
-  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/, 'names are escaped in rows'); assert.doesNotMatch(html, /<img src=x/);
-  assert.match(html, /&quot;x&quot;@cornell\.edu/, 'emails are escaped in rows and labels');
-  assert.match(html, /data-m="recruit-filter"/); assert.match(html, /data-m="recruit-cycle-switch"/);
-  assert.doesNotMatch(html, /<select|<datalist/);
-  assert.match(html, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026/); assert.doesNotMatch(html, /receives the website form · 2 interest/, 'the cycle page has no counts subtitle'); assert.match(html, /class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch"/, 'the title is the cycle switch'); assert.match(html, /data-rc-count="interest">2</, 'the tab bar counts responses');
-  assert.match(html, /2 of 200 shown · <\/span><button class="linklike" data-action="recruit-load-more">Load more/);
-  assert.match(html, /applications\.csv\?section=interest/, 'the export link names the section');
+  const st = loadCycle(f);
   f.mount();
-  assert.match(f.app.innerHTML, /data-action="recruit-person-flag"/, 'a response row uses the shared person flag');
-  assert.match(f.app.innerHTML, /interest-comments/, 'a response row shows the shared comment count');
-  const person = f.app.querySelector('[data-action="recruit-person-open"][data-email="two@cornell.edu"]');
-  assert.equal(person.dataset.form, 'interest', 'a row opens its person at this form');
-  person.focus();
-  f.run("recruitState().apps.rows[1].name = 'Two Renamed'"); f.run("recruitState().apps.byId['in-2'].name = 'Two Renamed'");
-  assert.equal(f.run('recruitPaintRows()'), true);
-  const again = f.app.querySelector('[data-action="recruit-person-open"][data-email="two@cornell.edu"]');
-  assert.ok(again !== person); assert.ok(f.document.activeElement === again, 'focus is restored after the tbody repaint');
-  assert.match(f.app.querySelector('tbody').innerHTML, /Two Renamed/);
-  // Filters: the combined menu, its label, and the server query.
-  const host = f.app.querySelector('[data-m="recruit-filter"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host);
-  const labels = f.menus[0].items.filter((i) => i !== '-').map((i) => i.label);
-  for (const want of ['All subteams', 'Electrical', 'Undecided', 'All years', 'Junior']) assert.ok(labels.includes(want), `filter menu offers ${want}`);
-  assert.ok(labels.includes('Flagged') && labels.includes('Has comments'), 'shared review filters work in every form');
-  f.menus[0].items.find((i) => i.label === 'Electrical').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'Electrical');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[1].items.find((i) => i.label === 'Junior').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'Electrical · Junior', 'filter labels compose');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[2].items.find((i) => i.label === 'Undecided').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'Undecided · Junior');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[3].items.find((i) => i.label === 'All subteams').run();
-  f.run('RECRUIT.dd.bind(RECRUIT)')(host); f.menus[4].items.find((i) => i.label === 'All years').run();
-  assert.equal(host.querySelector('.dd__label').textContent, 'All people');
-  const listCalls = f.requests.filter((r) => r.url.includes('/applications?'));
-  assert.match(listCalls[1].url, /subteam=Electrical/, 'server filters ride the query');
-  assert.ok(listCalls.every((r) => r.signal instanceof AbortSignal), 'every list fetch is bounded');
-  // Settings is a dialog from the gear beside the name: about, status, subteams, who can review.
-  assert.ok(f.app.querySelector('.rc-cycle-gear[data-action="recruit-settings-open"]'), 'the gear sits beside the cycle name');
   f.run('recruitOpenSettings()');
   assert.equal(f.ctx.UI.modal.kind, 'recruit-settings');
   const settings = f.mountModal();
   assert.equal(settings.querySelector('[data-action="recruit-settings-about"] [name="name"]').value, 'Fall 2026', 'About holds the name');
-  assert.ok(!settings.querySelector('[data-m="recruit-term"]') && !settings.querySelector('[name="opensAt"]') && !settings.querySelector('[name="capacity"]') && !settings.querySelector('[name="perIpHour"]'), 'term, opens, capacity and rate limits are gone from the dialog');
   const seg = settings.querySelectorAll('.rc-seg--status [data-action="recruit-status-set"]');
-  same([...seg].map((b) => [b.dataset.status, b.getAttribute('aria-current') === 'page', b.disabled]), [['draft', false, true], ['open', true, false], ['closed', false, false]], 'status is a segmented control: the current one pressed, only real moves enabled');
+  same(seg.map((b) => [b.dataset.status, b.getAttribute('aria-current') === 'page', b.disabled]), [['draft', false, true], ['open', true, false], ['closed', false, false]], 'status is a segmented control: the current one pressed, only real moves enabled');
   assert.equal(settings.querySelector('[data-action="recruit-website-toggle"]').checked, true, 'the receiving checkbox reflects the index');
-  assert.equal(settings.querySelectorAll('[data-rc="subteam-rows"] .rc-row').length, 2); assert.ok(!settings.querySelector('[name="capacity"]'), 'subteam rows are names only');
-  assert.match(settings.querySelector('#rc-set-review').innerHTML, /Admins only so far/); assert.ok(settings.querySelector('[data-action="recruit-roles-open"]'));
+  assert.equal(settings.querySelectorAll('[data-rc="subteam-rows"] .rc-row').length, 2);
+  assert.match(settings.querySelector('#rc-set-review').innerHTML, /Admins only so far/);
   assert.ok(!settings.querySelector('[data-action="recruit-cycle-delete"]'), 'an open cycle cannot be deleted; nothing offers it');
-  assert.doesNotMatch(f.app.innerHTML + settings.innerHTML, /<select/);
-  // A dd without a handler gets the default menu from data-opts and marks its form dirty.
-  const st0 = f.run('recruitState()');
-  st0.mod.roles = { key: st0.key + ':cy-a', loading: false, error: null, roles: [], members: [{ email: 'r@cornell.edu', name: 'Rae' }] };
+  // Who can review: roster members get a role through the app's own dropdowns.
+  st.mod.roles = { key: st.key + ':cy-a', loading: false, error: null, roles: [{ member: 'old@cornell.edu', name: 'Old', roles: ['reviewer'] }], members: [{ email: 'rae@cornell.edu', name: 'Rae' }, { email: 'boss@cornell.edu', name: 'Boss', admin: true }, { email: 'old@cornell.edu', name: 'Old' }] };
+  st.cycle.team = [{ email: 'boss@cornell.edu', name: 'Boss' }, { email: 'old@cornell.edu', name: 'Old' }];
   f.ctx.UI.modal = { kind: 'recruit-roles' };
-  const rolesVeil = f.mountModal();
-  const roleDd = rolesVeil.querySelector('[data-m="recruit-role-role"]');
-  assert.ok(roleDd, 'Who can review offers a role dropdown');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(roleDd);
-  const pick = f.menus.at(-1).items.find((i) => i.label === 'Lead'); pick.run();
+  const roles = f.mountModal();
+  const roleDd = roles.querySelector('[data-m="recruit-role-role"]');
+  f.pick(roleDd, 'Lead');
   assert.equal(roleDd.dataset.value, 'lead'); assert.equal(roleDd.closest('form').dataset.adminDirty, 'true');
-  const adding = f.run('recruitAddRole')(rolesVeil.querySelector('[data-action="recruit-role-form"]'));
-  const putRole = f.requests.find((r) => r.method === 'PUT' && r.url === '/recruit/cycles/cy-a/roles/r%40cornell.edu');
-  assert.ok(putRole, 'adding sends one PUT for the member'); same(putRole.body.roles, ['lead']); assert.match(putRole.body.requestId, /^rq-/);
-  putRole.resolve({ role: { member: 'r@cornell.edu', roles: ['lead'], subteams: [], ts: 1 } }); await adding;
+  const adding = f.run('recruitAddRole')(roles.querySelector('[data-action="recruit-role-form"]'));
+  const put = await f.pending('/recruit/cycles/cy-a/roles/boss%40cornell.edu', 'PUT');
+  same(put.body.roles, ['lead']); assert.match(put.body.requestId, /^rq-/);
+  put.resolve({ role: { member: 'boss@cornell.edu', roles: ['lead'], subteams: [], ts: 1 } }); await adding;
   assert.equal(f.toasts.at(-1), 'Lead added');
-  assert.match(rolesVeil.querySelector('[data-rc="roles-body"]').innerHTML, /Rae/, 'the list repaints in place');
-  assert.equal(st0.cycle.grants.length, 1, 'the cycle knows its new grant');
-  f.ctx.UI.modal = null; f.ctx.UI.route.params.sub = 'coffee';
-  const sw = f.app.querySelector('[data-m="recruit-cycle-switch"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(sw, 'cy-b'); assert.equal(f.navs.at(-1), '#/applications/cy-b/coffee', 'switching cycles keeps the panel');
-  console.log('PASS: sheet rows escape user data, focus survives repaints, dd() drives every choice with composed labels, and no template contains a native select');
+  assert.equal(st.cycle.grants.length, 2, 'the cycle knows its new grant');
+  const removing = f.run('recruitRemoveRole')('old@cornell.edu');
+  (await f.pending('/recruit/cycles/cy-a/roles/old%40cornell.edu', 'DELETE')).resolve({ ok: true }); await removing;
+  same(st.cycle.team.map((m) => m.email), ['boss@cornell.edu'], 'a member whose grant goes leaves the team');
+  const removing2 = f.run('recruitRemoveRole')('boss@cornell.edu');
+  (await f.pending('/recruit/cycles/cy-a/roles/boss%40cornell.edu', 'DELETE')).resolve({ ok: true }); await removing2;
+  same(st.cycle.team.map((m) => m.email), ['boss@cornell.edu'], 'an admin stays on the team without a grant');
+  assert.doesNotMatch(settings.innerHTML + roles.innerHTML, /<select|<datalist/);
+  console.log('PASS: settings hold about, status, subteams and reviewers; roles save through the app\'s dropdowns and keep the team in step');
 }
 
-/* ------------------------------- form editor ----------------------------- */
+/* ------------------------------- the flow chart -------------------------- */
 {
   const f = fixture();
   const st = loadCycle(f);
-  const sections = () => ({
-    interest: { title: 'Interest form', description: 'Say hi', open: true, form: { questions: [
-      { key: 'name', type: 'short', label: 'Name', required: true, max: 100 }, { key: 'email', type: 'email', label: 'Email', required: true, max: 200 },
-      { key: 'subteam', type: 'single', label: 'Subteam', options: ['Electrical', 'Software'] }, { key: 'year', type: 'single', label: 'Year', options: ['Freshman'] },
-      { key: 'project', type: 'long', label: 'Project', help: 'Tell us', max: 1000 }, { key: 'file', type: 'file', label: 'File', accept: ['application/pdf'], maxBytes: 100 },
-    ] } },
-    coffee: { title: 'Coffee chats', description: '', open: false, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } },
-    application: { title: 'Application', description: '', open: false, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } },
-  });
-  st.cycle.sections = sections();
-  f.ctx.UI.route.params.sub = 'coffee';
+  // The model: implicit edges follow the order; saved connections win.
+  const flow = f.run('recruitFlow()');
+  same([...flow.edges].map(([k, v]) => [k, v]), [['interest', ['coffee']], ['coffee', ['application']], ['application', []]]);
+  same(flow.keys, ['interest', 'coffee', 'application']);
+  st.cycle.sections.interest.next = ['coffee', 'application'];
+  st.cycle.sections.coffee.next = ['application'];
+  const branched = f.run('recruitFlow()');
+  same([...branched.ranks], [['interest', 0], ['coffee', 1], ['application', 2]], 'a stage sits one column past the furthest stage leading into it');
+  assert.equal(f.run("recruitReaches(recruitFlow(), 'application', 'interest')"), true, 'application → interest would loop');
+  assert.equal(f.run("recruitReaches(recruitFlow(), 'interest', 'application')"), false);
+  same(f.run("recruitFlowTargets('coffee')"), [], 'coffee already leads everywhere it can without a loop');
+  delete st.cycle.sections.interest.next; delete st.cycle.sections.coffee.next;
+  // Layout: columns left to right, then the outcomes; rows down a phone.
+  const layout = f.run('recruitFlowLayout(recruitFlow())');
+  const xs = ['interest', 'coffee', 'application', '__outcome'].map((k) => layout.nodes.get(k).x);
+  assert.ok(xs[0] < xs[1] && xs[1] < xs[2] && xs[2] < xs[3], 'columns run left to right');
+  assert.equal(layout.edges.filter((e) => e.outcome).length, 1, 'the last stage leads to the outcomes');
+  const down = f.run('recruitFlowLayout(recruitFlow(), { vertical: true })');
+  assert.ok(down.nodes.get('interest').y < down.nodes.get('coffee').y && down.nodes.get('interest').x === down.nodes.get('coffee').x, 'down a phone the stages stack');
+  // The chart: a card per stage with its counts, links and controls.
   f.mount();
-  assert.match(f.app.innerHTML, /class="rc-seg rc-seg--mode"/, 'a lead sees Responses | Edit form on the tab');
-  assert.match(f.app.innerHTML, /rc-seg__thumb/, 'with a thumb that slides');
-  assert.match(f.app.innerHTML, />Edit form</);
-  const barSwitch = f.app.querySelector('[data-action="recruit-mode-open"][data-form="coffee"]');
-  assert.ok(barSwitch && !barSwitch.checked, 'the tab bar carries a switch for the form, off while it is closed');
-  // Flipping it saves at once; the editor's own switch follows without turning dirty.
-  barSwitch.checked = true;
-  const flipping = f.run('RECRUIT.click.bind(RECRUIT)')('recruit-mode-open', barSwitch, { stopPropagation() {} }, () => {});
+  const cards = f.app.querySelectorAll('.fc-node[data-key]');
+  same(cards.map((c) => c.dataset.key), ['interest', 'coffee', 'application']);
+  const coffee = f.app.querySelector('.fc-node[data-key="coffee"]');
+  assert.equal(coffee.querySelector('.fc-node__main').getAttribute('href'), '#/applications/cy-a/stage?key=coffee', 'a card opens its stage');
+  assert.match(coffee.querySelector('.fc-node__stats').textContent, /1 here\s*2 reached/);
+  assert.match(coffee.querySelector('.fc-node__done').textContent, /1\/2 chat completed/, 'a stage with a done checkbox shows how many are done');
+  assert.match(f.app.querySelector('.fc-node[data-key="interest"] .fc-web').textContent, /Open · \/apply/, 'the form at /apply says so');
+  assert.equal(f.app.querySelectorAll('.fc-edge:not(.fc-edge--outcome)').length + f.app.querySelectorAll('.fc-edge--outcome').length, 4, 'two connections, one to the outcomes, and the draft line');
+  assert.match(f.app.querySelector('.fc-outcome').textContent, /Accepted\s*1/);
+  assert.match(f.app.querySelector('[data-rc="flow-summary"]').textContent, /3\s*people\s*2\s*active\s*1\s*accepted\s*1\s*flagged/);
+  assert.equal(f.app.querySelectorAll('.fc-cut').length, 2, 'every connection can be cut by a lead');
+  assert.equal(f.app.querySelectorAll('.fc-port').length, 3, 'every card has a port to connect from');
+  // Connecting saves every connection explicitly, with the order.
+  const connecting = f.run("recruitFlowConnect('interest', 'application')");
+  const put = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  assert.equal(put.body.version, 3);
+  same(put.body.settings, { sections: { interest: { next: ['coffee', 'application'] }, coffee: { next: ['application'] }, application: { next: [] } }, order: ['interest', 'coffee', 'application'] });
+  assert.equal(f.run("recruitFlow().edges.get('interest').length"), 2, 'the chart shows the connection before the save lands');
+  const saved = sections(); saved.interest.next = ['coffee', 'application']; saved.coffee.next = ['application']; saved.application.next = [];
+  put.resolve({ cycle: cycleRow({ version: 4 }), sections: saved }); await connecting;
+  assert.equal(f.toasts.at(-1), 'Interest form now leads to Application form');
+  assert.equal(f.run('recruitCycleRow().version'), 4, 'the next save uses the new version');
+  assert.equal(f.app.querySelectorAll('.fc-cut').length, 3, 'the chart repainted in place');
+  assert.equal(f.renders.length, 0, 'editing the flow never re-renders the route');
+  f.run("recruitFlowConnect('application', 'interest')");
+  assert.match(f.toasts.at(-1), /comes before Application form; that connection would loop back/, 'a loop is refused before any request');
+  // A failed save puts the chart back.
+  const unlinking = f.run("recruitFlowUnlink('interest', 'application')");
+  const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put2.body.settings.sections.interest, { next: ['coffee'] });
+  assert.equal(f.run("recruitFlow().edges.get('interest').length"), 1);
+  put2.reject(Object.assign(new Error('The cycle changed since you opened it'), { status: 409 })); await unlinking;
+  assert.equal(f.run("recruitFlow().edges.get('interest').length"), 2, 'the connection comes back when the save fails');
+  // Removing a stage joins what led into it to what it led to.
+  f.run("recruitConfirmRemoveStage('coffee')");
+  assert.equal(f.ctx.UI.modal.kind, 'confirm'); assert.match(f.ctx.UI.modal.text, /Interest form will lead to Application form/);
+  const removing = f.ctx.UI.modal.onGo();
+  const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put3.body.settings.remove, ['coffee']); same(put3.body.settings.order, ['interest', 'application']);
+  same(put3.body.settings.sections.interest, { next: ['application'] }, 'the bridge dedupes');
+  put3.resolve({ cycle: cycleRow({ version: 5 }), sections: { interest: { ...saved.interest, next: ['application'] }, application: saved.application } }); await removing;
+  assert.equal(f.toasts.at(-1), 'Coffee chats removed');
+  // A new stage goes between the stage it follows and what that led to.
+  f.run("recruitOpenStageNew('interest')");
+  assert.equal(f.ctx.UI.modal.kind, 'recruit-stage-new');
+  const dialog = f.mountModal();
+  dialog.querySelector('[name="title"]').value = 'Interview';
+  const creating = f.run('recruitCreateStage()');
+  const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  const made = put4.body.settings.sections.interview;
+  same([made.title, made.kind, made.form, made.done, made.next], ['Interview', 'meeting', null, 'completed', ['application']], 'a meeting starts with its checklist and no form');
+  same(made.fields.map((x) => [x.key, x.type]), [['completed', 'check'], ['with', 'member'], ['notes', 'note']]);
+  same(put4.body.settings.sections.interest.next, ['interview']);
+  same(put4.body.settings.order, ['interest', 'interview', 'application']);
+  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { interest: { ...saved.interest, next: ['interview'] }, interview: { ...made, open: false, required: [] }, application: saved.application } }); await creating;
+  assert.equal(f.navs.at(-1), '#/applications/cy-a/stage?key=interview&tab=checklist', 'it opens on its checklist');
+  st.cycle.sections.flow = undefined;
+  assert.equal(f.run("recruitStageKeyFor('Flow')"), 'flow');
+  // Reviewers see the chart without its controls.
+  const r = fixture({ admin: false });
+  loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
+  r.mount();
+  assert.ok(r.app.querySelector('.fc-node') && !r.app.querySelector('.fc-port, .fc-cut, .fc-node__more'), 'reviewers read the chart');
+  console.log('PASS: the flow chart lays out columns, counts each stage, saves connections, removals and new stages as one versioned PUT, refuses loops, and puts itself back when a save fails');
+}
+
+/* ------------------------------- a stage's page -------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'stage', params: { key: 'coffee', tab: 'checklist' } });
+  f.mount();
+  const page = () => f.app.querySelector('[data-rc="stage"]');
+  assert.equal(page().dataset.stage, 'coffee');
+  same(f.app.querySelectorAll('.rs-strip__stage').map((a) => a.textContent), ['Interest form', 'Coffee chats', 'Application form'], 'the strip lists every stage');
+  const numbers = f.app.querySelectorAll('.rs-head__numbers div').map((d) => [d.querySelector('dt').textContent, d.querySelector('dd').textContent]);
+  same(numbers, [['here now', '1'], ['reached', '2'], ['chat completed', '1'], ['responses', '2']]);
+  same(f.app.querySelectorAll('.rs-tabs [role="tab"]').map((t) => t.textContent), ['People', 'Form2', 'Checklist3', 'Settings']);
+  assert.ok(f.app.querySelector('[data-rc="stage-save"]').hidden, 'nothing to save yet');
+  // The checklist: add a checkbox that marks the stage done.
+  const add = f.app.querySelector('[data-action="recruit-ck-add"]');
+  await f.click(add);
+  same(f.menus.at(-1).items.map((i) => i.label), ['Checkbox', 'Rating', 'Choice', 'Short text', 'Note', 'Number', 'Date', 'Team member']);
+  f.menus.at(-1).items.find((i) => i.label === 'Checkbox').run();
+  assert.equal(f.app.querySelectorAll('.ck-f').length, 4, 'the new field is a card');
+  assert.ok(f.document.activeElement === f.app.querySelector('[data-m="recruit-ck-label"][data-i="3"]'), 'its label takes focus');
+  f.type(f.app.querySelector('[data-m="recruit-ck-label"][data-i="3"]'), 'Showed up');
+  assert.ok(!f.app.querySelector('[data-rc="stage-save"]').hidden, 'typing shows the save bar');
+  assert.match(f.app.querySelector('[data-rc="stage-save"]').textContent, /Unsaved changes/);
+  assert.match(f.app.querySelector('[data-rc="checklist-preview"]').textContent, /Showed up/, 'the preview follows the label');
+  const done = f.app.querySelector('[data-action="recruit-ck-done"][data-i="3"]');
+  done.checked = true; await f.click(done);
+  assert.equal(f.app.querySelector('[data-action="recruit-ck-done"][data-i="3"]').checked, true, 'the new field shows that it marks the stage done');
+  assert.equal(f.app.querySelector('[data-action="recruit-ck-done"][data-i="0"]').checked, false, 'only one checkbox marks it done');
+  // A rating kept per reviewer, with its scale from the app's dropdown.
+  await f.click(add); f.menus.at(-1).items.find((i) => i.label === 'Rating').run();
+  f.type(f.app.querySelector('[data-m="recruit-ck-label"][data-i="4"]'), 'Energy');
+  f.pick(f.app.querySelector('[data-m="recruit-ck-max"][data-i="4"]'), '10');
+  assert.ok(f.app.querySelector('[data-action="recruit-ck-each"][data-i="4"]').checked, 'a rating starts per reviewer');
+  // An empty label stops the save before any request.
+  await f.click(add); f.menus.at(-1).items.find((i) => i.label === 'Note').run();
+  const before = f.requests.length;
+  await f.click(f.app.querySelector('[data-action="recruit-stage-save"]'));
+  assert.equal(f.requests.length, before, 'an unlabelled field never reaches the server');
+  assert.match(f.app.querySelector('[data-rc="stage-save"]').textContent, /Field 6 needs a label/);
+  await f.click(f.app.querySelector('[data-action="recruit-ck-remove"][data-i="5"]'));
+  // Arrow keys on a grip move a card.
+  const grip = f.app.querySelector('[data-sortable="fields"] [data-i="4"] .rc-grip');
+  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowUp', target: grip, preventDefault() {} }), true);
+  assert.equal(f.app.querySelector('[data-m="recruit-ck-label"][data-i="3"]').value, 'Energy', 'ArrowUp moves the card up');
+  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowDown', target: f.app.querySelector('[data-sortable="fields"] [data-i="3"] .rc-grip'), preventDefault() {} }), true);
+  // Save sends only what changed, with keys for the new fields.
+  const saving = f.click(f.app.querySelector('[data-action="recruit-stage-save"]'));
   await f.settle();
-  const flip = f.requests.filter((r) => r.method === 'PUT').at(-1);
-  assert.equal(flip.url, '/recruit/cycles/cy-a/settings/site'); same(flip.body.settings, { sections: { coffee: { open: true } } });
-  flip.resolve({ cycle: { ...cycleRow(), version: 4 } }); await flipping; await f.settle();
-  assert.equal(f.toasts.at(-1), 'Coffee chats is open on the website');
-  assert.ok(f.app.querySelector('[data-action="recruit-mode-open"][data-form="coffee"]').checked, 'the bar repaints with the saved state');
-  assert.equal(f.run("recruitSections(recruitCycleRow()).coffee.open"), true);
-  f.ctx.st = st;
-  f.run("recruitSections(recruitCycleRow()).coffee.open = false; recruitState().cycle.sections.coffee.open = false");
-  assert.match(f.app.innerHTML, /href="#\/applications\/cy-a\/coffee\?edit=1"/, 'the Form view is a link');
-  assert.match(f.app.innerHTML, /href="https:\/\/cornellphysicalintelligence\.com\/apply\/coffee\/"[^>]*>\/apply\/coffee</, 'the address of the form is shown even while closed');
-  assert.match(f.app.innerHTML, /data-action="recruit-copy-link" data-link="https:\/\/cornellphysicalintelligence\.com\/apply\/coffee\/"/, 'and can be copied');
-  assert.doesNotMatch(f.app.innerHTML, /and at/, 'a closed form is not the /apply form');
+  const put = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  const body = put.body.settings.sections.coffee;
+  same(Object.keys(body).sort(), ['done', 'fields'], 'only the checklist changed');
+  same(body.fields, [
+    { key: 'completed', type: 'check', label: 'Chat completed' }, { key: 'met_with', type: 'text', label: 'Met with' }, { key: 'notes', type: 'note', label: 'Notes' },
+    { key: 'showed_up', type: 'check', label: 'Showed up' }, { key: 'energy', type: 'rating', label: 'Energy', max: 10, each: true },
+  ], 'new fields get keys from their labels');
+  assert.equal(body.done, 'showed_up', 'the new checkbox marks the stage done');
+  const savedSections = sections();
+  savedSections.coffee.fields = body.fields; savedSections.coffee.done = 'showed_up';
+  put.resolve({ cycle: cycleRow({ version: 4 }), sections: savedSections }); await saving;
+  assert.equal(f.toasts.at(-1), 'Coffee chats saved');
+  assert.ok(f.app.querySelector('[data-rc="stage-save"]').hidden, 'the bar goes once saved');
+  assert.match(f.app.querySelector('.fe-q__type--fixed').textContent, /Checkbox/, 'a saved field keeps its type');
+  assert.equal(f.renders.length, 0, 'the stage never re-renders the route');
+  // The form: a question, its type from the app's dropdown, its options.
+  f.ctx.UI.route.params.tab = 'form';
   f.mount();
-  assert.ok(f.app.querySelector('.sheet--recruit'), 'Responses is the sheet');
-  f.ctx.UI.route.params.edit = '1';
-  f.mount();
-  const editor = f.app.querySelector('[data-rc="form-editor"]');
-  assert.ok(editor && !f.app.querySelector('.sheet--recruit'), 'Form draws the editor in the tab instead of the sheet');
+  const edit = f.app.querySelector('[data-rc="stage-tab"]');
+  assert.equal(edit.dataset.tab, 'form');
   assert.equal(f.app.querySelectorAll('.fe-q').length, 2);
   assert.equal(f.app.querySelectorAll('.fe-q__type--fixed').length, 2, 'name and email keep their type');
-  assert.equal(f.app.querySelectorAll('[data-action="recruit-fe-remove"]').length, 0, 'fixed questions cannot be removed');
-  assert.doesNotMatch(editor.innerHTML, /<select/);
-  assert.ok(f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'nothing to save yet');
-  const click = async (action, i, j) => {
-    const el = f.app.querySelector(`[data-action="${action}"]${i === undefined ? '' : `[data-i="${i}"]`}${j === undefined ? '' : `[data-j="${j}"]`}`);
-    assert.ok(el, `${action} ${i ?? ''} ${j ?? ''} exists`);
-    assert.equal(await f.run('RECRUIT.click.bind(RECRUIT)')(action, el, { stopPropagation() {} }, () => {}), true);
-    return el;
-  };
-  const type = (m, value, i, j) => {
-    const el = f.app.querySelector(`[data-m="${m}"]${i === undefined ? '' : `[data-i="${i}"]`}${j === undefined ? '' : `[data-j="${j}"]`}`);
-    assert.ok(el, `${m} exists`);
-    el.value = value;
-    assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(el, { type: 'input' }), true);
-  };
-  await click('recruit-fe-add');
-  assert.equal(f.app.querySelectorAll('.fe-q').length, 3, 'Add question appends a card');
-  assert.ok(f.document.activeElement === f.app.querySelector('[data-m="recruit-fe-label"][data-i="2"]'), 'the new label takes focus');
-  type('recruit-fe-label', 'Which day works for you?', 2);
-  assert.ok(!f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'typing enables Save');
-  assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Unsaved changes/);
-  // The type menu is the app's own dd; picking "Choose one" seeds an option row.
-  const typeHost = f.app.querySelector('[data-m="recruit-fe-type"][data-i="2"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(typeHost);
-  f.menus.at(-1).items.find((it) => it.label === 'Choose one').run();
-  assert.equal(f.app.querySelectorAll('[data-m="recruit-fe-option"][data-i="2"]').length, 1, 'a choice question starts with one option row');
-  type('recruit-fe-option', 'Monday', 2, 0);
-  await click('recruit-fe-option-add', 2);
-  type('recruit-fe-option', 'Friday', 2, 1);
-  await click('recruit-fe-option-add', 2);
-  await click('recruit-fe-option-remove', 2, 2);
-  assert.equal(f.app.querySelectorAll('[data-m="recruit-fe-option"][data-i="2"]').length, 2, 'options add and remove in place');
-  f.app.querySelector('[data-action="recruit-fe-required"][data-i="2"]').checked = true;
-  await click('recruit-fe-required', 2);
-  assert.equal(f.app.querySelectorAll('[data-action="recruit-fe-up"], [data-action="recruit-fe-down"]').length, 0, 'no arrow buttons; the grip moves a card');
-  const grip = f.app.querySelector('.fe-q[data-i="2"] .fe-q__grip');
-  assert.ok(grip, 'every card has a grip');
-  const keyed = { key: 'ArrowUp', target: grip, preventDefault() {} };
-  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')(keyed), true);
-  assert.equal(f.app.querySelector('.fe-q[data-i="1"] [data-m="recruit-fe-label"]').value, 'Which day works for you?', 'ArrowUp on the grip moves the card up');
-  assert.ok(f.document.activeElement === f.app.querySelector('.fe-q[data-i="1"] .fe-q__grip'), 'the grip keeps focus on its card');
-  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowDown', target: f.app.querySelector('.fe-q[data-i="1"] .fe-q__grip'), preventDefault() {} }), true);
-  assert.equal(f.app.querySelector('.fe-q[data-i="2"] [data-m="recruit-fe-label"]').value, 'Which day works for you?', 'ArrowDown moves it back');
-  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'a', target: grip, preventDefault() {} }), false);
-  const open = f.app.querySelector('[data-action="recruit-fe-open"]'); open.checked = true; await click('recruit-fe-open');
-  const landing = f.app.querySelector('[data-action="recruit-fe-landing"]'); landing.checked = true; await click('recruit-fe-landing');
-  assert.ok(f.app.querySelector('[data-rc="fe-options"] [data-action="recruit-fe-notify"]').checked, 'emailing the team is on by default');
-  assert.equal(f.app.querySelector('[data-action="recruit-fe-replace"]'), null, 'unverified replacement is not offered');
-  const note = f.app.querySelector('[data-rc="fe-notify-default"]');
-  assert.ok(!note.hidden && /Nobody is emailed until an address is added/.test(note.textContent), 'with no addresses the row says nobody is emailed');
-  await click('recruit-fe-recipient-add');
-  const recipient = f.app.querySelector('[data-m="recruit-fe-recipient"][data-j="0"]');
-  assert.ok(recipient, 'the email row grows a recipient input');
-  type('recruit-fe-recipient', 'nope', undefined, 0);
-  assert.ok(f.app.querySelector('[data-rc="fe-notify-default"]').hidden, 'once an address is written the line goes');
-  const requestsBefore = f.requests.length;
-  await click('recruit-fe-save'); await f.settle();
-  assert.match(f.app.querySelector('[data-rc="fe-foot"]').textContent, /"nope" is not an email address/, 'a bad address stops the save');
-  assert.equal(f.requests.length, requestsBefore, 'nothing was sent');
-  type('recruit-fe-recipient', ' Lead@Cornell.edu ', undefined, 0);
-  type('recruit-fe-capacity', '40');
-  type('recruit-fe-desc', 'Grab a coffee.');
-  type('recruit-fe-thanks', ' A member will write to you. ');
-  const saving = click('recruit-fe-save');
+  assert.equal(f.app.querySelectorAll('[data-action="recruit-sf-remove"]').length, 0, 'and cannot be removed');
+  await f.click(f.app.querySelector('[data-action="recruit-sf-add"]'));
+  f.type(f.app.querySelector('[data-m="recruit-sf-label"][data-i="2"]'), 'Which day works for you?');
+  f.pick(f.app.querySelector('[data-m="recruit-sf-type"][data-i="2"]'), 'Choose one');
+  assert.equal(f.app.querySelectorAll('[data-m="recruit-sf-option"][data-i="2"]').length, 1, 'a choice starts with one option');
+  f.type(f.app.querySelector('[data-m="recruit-sf-option"][data-i="2"][data-j="0"]'), 'Monday');
+  await f.click(f.app.querySelector('[data-action="recruit-sf-option-add"][data-i="2"]'));
+  f.type(f.app.querySelector('[data-m="recruit-sf-option"][data-i="2"][data-j="1"]'), 'Friday');
+  const req = f.app.querySelector('[data-action="recruit-sf-required"][data-i="2"]'); req.checked = true; await f.click(req);
+  // What happens on the website rides with the save.
+  const open = f.app.querySelector('[data-action="recruit-sf-open"]'); open.checked = true; await f.click(open);
+  f.type(f.app.querySelector('[data-m="recruit-sf-capacity"]'), '40');
+  await f.click(f.app.querySelector('[data-action="recruit-sf-recipient-add"]'));
+  f.type(f.app.querySelector('[data-m="recruit-sf-recipient"][data-j="0"]'), 'nope');
+  const count = f.requests.length;
+  await f.click(f.app.querySelector('[data-action="recruit-stage-save"]'));
+  assert.equal(f.requests.length, count, 'a bad address stops the save');
+  assert.match(f.app.querySelector('[data-rc="stage-save"]').textContent, /"nope" is not an email address/);
+  f.type(f.app.querySelector('[data-m="recruit-sf-recipient"][data-j="0"]'), ' Lead@Cornell.edu ');
+  const saving2 = f.click(f.app.querySelector('[data-action="recruit-stage-save"]'));
   await f.settle();
-  const put = f.requests.at(-1);
-  assert.equal(put.url, '/recruit/cycles/cy-a/settings/site'); assert.equal(put.method, 'PUT'); assert.equal(put.body.version, 4, 'the version the bar switch brought back');
-  const saved = put.body.settings.sections.coffee;
-  assert.equal(put.body.settings.landing, 'coffee', 'the /apply choice rides with the save');
-  assert.equal(saved.open, true); assert.equal(saved.description, 'Grab a coffee.'); assert.equal(saved.thanks, 'A member will write to you.', 'what applicants read after sending rides along, trimmed');
-  assert.deepEqual([saved.notify, saved.replace, saved.capacity], [true, true, 40], 'the form\'s own email, replace and cap settings ride with the save');
-  assert.deepEqual(saved.notifyTo, ['lead@cornell.edu'], 'its recipients ride along, trimmed and lowercased');
-  same(saved.form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a new question gets a key from its label');
-  same(saved.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
-  assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Saving…/);
-  put.resolve({ cycle: { ...cycleRow(), version: 4, doc: { ...cycleRow().doc, site: { landing: 'coffee' } } } }); await saving; await f.settle();
-  assert.ok(f.app.querySelector('[data-action="recruit-fe-save"]').disabled, 'Save settles');
+  const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  assert.equal(put2.body.version, 4, 'the version the last save brought back');
+  const b2 = put2.body.settings.sections.coffee;
+  assert.equal(b2.open, true); assert.equal(b2.capacity, 40); same(b2.notifyTo, ['lead@cornell.edu'], 'recipients are trimmed and lowercased');
+  same(b2.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
+  const s2 = { ...savedSections, coffee: { ...savedSections.coffee, open: true, capacity: 40, notifyTo: ['lead@cornell.edu'], form: { questions: b2.form.questions } } };
+  put2.resolve({ cycle: cycleRow({ version: 5 }), sections: s2 }); await saving2;
   assert.equal(f.toasts.at(-1), 'Coffee chats saved · live on the website');
-  assert.ok(f.app.querySelector('[data-action="recruit-mode-open"][data-form="coffee"]').checked, 'the tab bar shows the saved state');
-  assert.match(f.app.innerHTML, /and at <a class="rc-mode__link" href="https:\/\/cornellphysicalintelligence\.com\/apply\/"/, 'the tab bar says this form is the one at /apply');
-  await click('recruit-copy-link');
-  assert.equal(f.toasts.at(-1), 'Link copied');
-  assert.equal(f.run('recruitSections(recruitCycleRow()).coffee.form.questions.length'), 3, 'the saved section is what the cycle now reports');
-  assert.equal(f.run('recruitCycleRow().version'), 4, 'the next save uses the new version');
-  assert.equal(f.renders.length, 0, 'the editor never re-renders the route');
-  // Validation happens before any request.
-  await click('recruit-fe-add'); type('recruit-fe-label', '', 3);
-  const before = f.requests.length;
-  await click('recruit-fe-save');
-  assert.equal(f.requests.length, before, 'an unlabelled question never reaches the server');
-  assert.match(f.app.querySelector('[data-rc="fe-foot"]').innerHTML, /Question 4 needs a label/);
-  await click('recruit-fe-remove', 3);
-  await click('recruit-fe-discard');
-  assert.equal(f.app.querySelectorAll('.fe-q').length, 3);
-  // The + opens a small dialog; creating a form is one PUT, then the cycle reloads on that form's editor.
-  await click('recruit-form-new');
-  assert.equal(f.ctx.UI.modal.kind, 'recruit-form-new');
-  const newForm = f.mountModal();
-  newForm.querySelector('[name="title"]').value = 'Coffee chats, round 2';
-  const fromDd = newForm.querySelector('[data-m="recruit-form-from"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(fromDd); f.menus.at(-1).items.find((i) => i.label === 'A copy of Coffee chats').run();
-  const creating = f.run('recruitCreateForm()');
-  await f.settle();
-  const create = f.requests.filter((r) => r.method === 'PUT').at(-1);
-  assert.equal(create.url, '/recruit/cycles/cy-a/settings/site');
-  const newKey = Object.keys(create.body.settings.sections)[0];
-  assert.equal(newKey, 'coffee-chats-round-2', 'the key comes from the title');
-  assert.equal(create.body.settings.sections[newKey].title, 'Coffee chats, round 2');
-  assert.equal(create.body.settings.sections[newKey].open, false, 'a new form starts closed');
-  assert.deepEqual(create.body.settings.sections[newKey].form.questions.map((q) => q.key), ['name', 'email', 'which_day_works_for_you'], 'a copy takes the source form\'s questions');
-  create.resolve({ cycle: { ...cycleRow(), version: 5 } }); await creating; await f.settle();
-  assert.equal(f.toasts.at(-1), 'Coffee chats, round 2 added');
-  assert.equal(f.navs.at(-1), `#/applications/cy-a/${newKey}?edit=1`, 'it opens on the new form\'s editor');
-  // A cycle with its own forms shows them as tabs and People filters.
-  const g = fixture();
-  const gst = loadCycle(g);
-  gst.cycle.sections = { ...sections(), 'coffee-2': { title: 'Round 2', description: '', open: true, form: { questions: [{ key: 'name', type: 'short', label: 'Name', required: true }, { key: 'email', type: 'email', label: 'Email', required: true }] } } };
-  same(g.run("RECRUIT.panels(recruitCycleRow(), 'admin').map((p) => p.id)"), ['people', 'interest', 'coffee', 'application', 'coffee-2'], 'the tabs are the cycle\'s forms');
-  g.ctx.UI.route.params.sub = 'coffee-2'; g.mount();
-  assert.match(g.app.innerHTML, /aria-current="page"[^>]*>Round 2</, 'a form of the cycle\'s own is a tab by its title');
-  g.ctx.UI.route.params.sub = 'people'; g.mount();
-  gst.people ||= { rows: [], q: '', filter: '' };
-  assert.ok(g.run('recruitPeopleFilterMenu')(g.app.querySelector('[data-m="recruit-people-filter"]')).some((i) => i.label === 'Round 2'), 'People filters include custom forms');
-  g.ctx.UI.route.params.sub = 'coffee-2'; g.ctx.UI.route.params.edit = '1'; g.mount();
-  assert.match(g.app.querySelector('[data-rc="fe-options"]').innerHTML, /Remove this form/, 'a form of the cycle\'s own can be removed from its editor');
-  g.ctx.UI.route.params.sub = 'interest'; g.mount();
-  assert.match(g.app.querySelector('[data-rc="fe-options"]').innerHTML, /Remove this form/, 'so can the interest form');
-  assert.ok(g.app.querySelector('[data-action="recruit-form-remove"][data-form="interest"]').disabled, 'but not while it has responses');
-  gst.cycle.sections.people = { title: 'People intake', open: true, form: { questions: gst.cycle.sections['coffee-2'].form.questions } };
-  g.ctx.UI.route.params.sub = 'form:people'; g.mount();
-  assert.ok(g.app.querySelector('[data-rc="form-editor"][data-section="people"]'), 'an existing form named people has its own editor route');
-  assert.match(g.app.innerHTML, /cy-a\/form:people\?edit=1/);
-  assert.ok(g.app.querySelector('[data-m="recruit-panel-switch"]'), 'many forms use a custom dropdown');
-  const draftPreview = g.run("recruitFormPreviewHtml(recruitFormEditor(recruitCycleRow(), 'people'))");
-  assert.match(draftPreview, /Preview · current draft/);
-  assert.doesNotMatch(draftPreview, /data-m="recruit-fe-label"|<select|<datalist/);
-  // Reviewers get the responses only.
-  const r = fixture({ admin: false });
-  const rst = loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
-  rst.cycle.sections = sections();
-  r.ctx.UI.route.params.edit = '1';
-  r.mount();
-  assert.ok(!r.app.querySelector('[data-rc="form-editor"]') && r.app.querySelector('.sheet--recruit'), 'reviewers cannot open the editor');
-  assert.doesNotMatch(r.app.innerHTML, /class="rc-seg"/);
-  console.log('PASS: the form editor lives in the section tab, edits a model in place, saves one PUT with derived keys, validates first, and is leads-only');
-}
-
-/* ------------------------------- stepping -------------------------------- */
-{
-  const f = fixture();
-  const st = loadCycle(f);
+  // Settings: a name, a kind, and where it leads; no loops on offer.
+  f.ctx.UI.route.params.tab = 'settings';
   f.mount();
-  f.ctx.st = st;
-  f.run("recruitOpenPerson('two@cornell.edu', { form: 'interest' })");
-  assert.equal(f.renders.length, 0, 'opening appends the dialog in place; the page behind it is not rebuilt');
-  assert.ok(f.ctx.UI.modal.inPlace, 'the dialog is marked for an in-place close');
-  const dialog = f.document.querySelector('.rc-person');
-  assert.ok(dialog, 'the veil is in the document');
-  assert.equal(dialog.dataset.person, 'two@cornell.edu');
-  assert.match(dialog.querySelector('[data-rc="person-identity"]').innerHTML, /Two<\/h3>/, 'the sheet row names the person before their detail arrives');
-  assert.match(dialog.querySelector('[data-rc="person-nav"]').innerHTML, /2 of 2/, 'Previous and Next walk the sheet, one entry per person');
-  const detailReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-a/people/two%40cornell.edu');
-  assert.ok(detailReq, 'the person loads by email');
-  assert.ok(f.requests.some((r) => r.url === '/recruit/cycles/cy-a/people/%22x%22%40cornell.edu'), 'the neighbour loads ahead of time');
-  const prev = dialog.querySelector('[data-action="recruit-person-prev"]');
-  prev.focus();
-  f.run('recruitStepPerson(-1)');
-  assert.equal(f.renders.length, 0, 'stepping never re-renders: the window stays');
-  assert.equal(f.ctx.UI.modal.email, '"x"@cornell.edu');
-  assert.equal(dialog.dataset.person, '"x"@cornell.edu');
-  assert.match(dialog.querySelector('[data-rc="person-nav"]').innerHTML, /1 of 2/);
-  assert.ok(dialog.querySelector('[data-action="recruit-person-prev"]').disabled, 'Previous stays drawn, disabled at the start');
-  assert.ok(dialog.contains(f.document.activeElement), 'focus stays in the dialog');
-  f.run('recruitStepPerson(-1)');
-  assert.equal(f.ctx.UI.modal.email, '"x"@cornell.edu', 'a spare click at the start is harmless');
-  f.run('recruitStepPerson(1)');
-  assert.equal(f.ctx.UI.modal.email, 'two@cornell.edu'); assert.equal(f.renders.length, 0);
-  console.log('PASS: Previous and Next swap the person inside the open dialog without a render, prefetch neighbours, and keep focus');
+  const leads = f.app.querySelectorAll('[data-action="recruit-ss-next"]');
+  same(leads.map((b) => [b.dataset.to, b.checked, b.disabled]), [['interest', false, true], ['application', true, false]], 'what comes before this stage cannot follow it');
+  f.type(f.app.querySelector('[data-m="recruit-ss-title"]'), 'Coffee chat');
+  const kind = f.app.querySelector('[data-action="recruit-ss-kind"][data-kind="step"]');
+  await f.click(kind);
+  assert.equal(kind.getAttribute('aria-checked'), 'true');
+  const saving3 = f.click(f.app.querySelector('[data-action="recruit-stage-save"]'));
+  await f.settle();
+  const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put3.body.settings.sections.coffee, { title: 'Coffee chat', kind: 'step' });
+  put3.reject(Object.assign(new Error('Something broke'), { status: 500 })); await saving3;
+  assert.match(f.app.querySelector('[data-rc="stage-save"]').textContent, /Something broke/, 'a failed save keeps the draft and says why');
+  assert.ok(f.run('RECRUIT.dirty()'), 'unsaved work is reported, so the sync loop leaves the cycle alone');
+  await f.click(f.app.querySelector('[data-action="recruit-stage-discard"]'));
+  assert.ok(!f.run('RECRUIT.dirty()')); assert.equal(f.toasts.at(-1), 'Changes discarded');
+  // Opening the form from the header is one save.
+  const toggle = f.app.querySelector('[data-action="recruit-stage-open"]');
+  toggle.checked = false;
+  const toggling = f.click(toggle);
+  const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put4.body.settings, { sections: { coffee: { open: false } } });
+  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...s2, coffee: { ...s2.coffee, open: false } } }); await toggling;
+  assert.equal(f.toasts.at(-1), 'Coffee chats is closed on the website');
+  assert.ok(!f.run('RECRUIT.dirty()'), 'the draft learns the saved state without turning dirty');
+  assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
+  // A stage without a form says so; reviewers read the checklist.
+  st.cycle.sections.coffee.form = null;
+  f.ctx.UI.route.params.tab = 'form';
+  f.mount();
+  assert.match(f.app.innerHTML, /No form on the website/); assert.ok(f.app.querySelector('[data-action="recruit-sf-add-form"]'), 'a lead can add one');
+  const r = fixture({ admin: false });
+  loadCycle(r, { role: 'reviewer', roles: ['reviewer'], sub: 'stage', params: { key: 'coffee', tab: 'checklist' } });
+  r.mount();
+  assert.ok(r.app.querySelector('.ck--read') && !r.app.querySelector('[data-action="recruit-ck-add"]'), 'reviewers read the checklist');
+  console.log('PASS: a stage\'s page edits one draft across Form, Checklist and Settings, validates before sending, saves only what changed with derived keys, and keeps the draft when a save fails');
 }
 
-/* ------------------------------- people ---------------------------------- */
+/* ------------------------------- a stage's people ------------------------ */
 {
   const f = fixture();
-  const st = loadCycle(f);
-  f.ctx.UI.route.params.sub = 'people';
+  const st = loadCycle(f, { sub: 'stage', params: { key: 'coffee' } });
+  f.mount();
+  assert.match(f.app.querySelector('[data-rc="stage-people-rows"]').textContent, /Loading…/, 'the list says Loading until it loads');
+  f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'stage', key: 'coffee' } })");
+  const list = await f.pending(/\/people\?/);
+  assert.match(list.url, /reached=coffee/); assert.match(list.url, /sort=name/);
+  same(f.app.querySelectorAll('[data-rc="stage-chips"] .rc-chip').map((c) => c.textContent), ['Everyone who reached it2', 'Here now1', 'Done1', 'Not done1'], 'the chips count each list');
+  list.resolve({ rows: people().slice(0, 1), total: 1 }); await f.settle();
+  const row = f.app.querySelector('[data-rc="stage-people-rows"] tr[data-email="ada@cornell.edu"]');
+  assert.ok(row, 'one row per person');
+  same(f.app.querySelectorAll('[data-rc="stage-people-head"] th').map((th) => th.dataset.col), ['check', 'person', 'status', 'sent', 'f-completed', 'f-met_with', 'f-notes', 'review'], 'the checklist joins the list as columns');
+  assert.equal(row.querySelector('td[data-col="f-met_with"]').dataset.label, 'Met with', 'each field cell carries its label for the stacked phone layout');
+  assert.equal(row.querySelector('[data-action="recruit-field-check"]').checked, false);
+  // Ticking the box shows at once, saves, and every list follows.
+  const tick = row.querySelector('[data-action="recruit-field-check"]');
+  tick.checked = true;
+  const setting = f.click(tick);
+  const patch = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/fields', 'PATCH');
+  same(patch.body, { stage: 'coffee', field: 'completed', value: true });
+  assert.equal(st.stagePeople.rows[0].fields.coffee.completed, true, 'the list shows the change before the save lands');
+  patch.resolve({ person: { email: 'ada@cornell.edu', stage: 'coffee', status: 'active', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: true }, fields: { coffee: { completed: true, met_with: 'Rae' } }, trackVersion: 3 } }); await setting;
+  assert.equal(st.stagePeople.rows[0].done.coffee, true, 'the server\'s answer is kept');
+  // A failed save puts the value back.
+  f.change(f.app.querySelector('[data-m="recruit-field-text"][data-field="met_with"]'), 'Lee');
+  const patch2 = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/fields', 'PATCH');
+  same(patch2.body, { stage: 'coffee', field: 'met_with', value: 'Lee' });
+  patch2.reject(Object.assign(new Error('No'), { status: 403 })); await f.settle();
+  assert.equal(st.stagePeople.rows[0].fields.coffee.met_with, 'Rae', 'the value comes back when the save fails');
+  assert.match(f.toasts.at(-1), /Could not save Met with: No/);
+  // Filters load their own list.
+  await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="notdone"]'));
+  assert.match((await f.pending(/\/people\?/)).url, /notdone=coffee/);
+  await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="here"]'));
+  const here = (await f.pending(/\/people\?/)).url;
+  assert.match(here, /stage=coffee/); assert.match(here, /status=active/);
+  console.log('PASS: a stage\'s people load by filter, show its checklist as columns, save a tick at once and put a failed value back');
+}
+
+/* ------------------------------- People ---------------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'people' });
   f.mount();
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'people' } })");
-  const req = f.requests.find((r) => r.url.startsWith('/recruit/cycles/cy-a/people?'));
-  assert.ok(req, 'the People tab loads everyone once');
+  const req = await f.pending(/\/people\?/);
+  assert.match(req.url, /sort=last/); assert.match(req.url, /limit=100/);
   assert.match(f.app.innerHTML, /Loading…/);
-  assert.match(f.app.innerHTML, /data-m="recruit-people-filter"/, 'People filters by flag and comments');
-  assert.match(f.app.innerHTML, /people\.csv/, 'a lead can export the people');
-  req.resolve({ rows: [
-    { email: 'a@cornell.edu', name: 'Ada', cornell: true, subteam: 'Software', year: 'Junior', first: 1, last: 3, latest: 'p-a2', flagged: true, comments: 2, reviewVersion: 3, sections: {
-      interest: { id: 'p-a1', section: 'interest', name: 'Ada', email: 'a@cornell.edu', ts: 1 },
-      coffee: { id: 'p-a2', section: 'coffee', name: 'Ada', email: 'a@cornell.edu', ts: 3 } } },
-    { email: 'b@cornell.edu', name: '<b>Bo</b>', cornell: true, subteam: '', year: null, first: 2, last: 2, latest: 'p-b1', flagged: false, comments: 0, reviewVersion: 0, sections: {
-      application: { id: 'p-b1', section: 'application', name: '<b>Bo</b>', email: 'b@cornell.edu', ts: 2 } } },
-  ], total: 2, counts: { people: 2, flagged: 1, bySection: { interest: 1, coffee: 1, application: 1 } } });
-  await f.settle();
+  req.resolve({ rows: people(), total: 2, counts: { people: 2, flagged: 1, byStatus: { active: 1, accepted: 1 } } }); await f.settle();
   assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'people paint in place');
   const body = f.app.querySelector('[data-rc="people-rows"]');
   assert.equal(body.querySelectorAll('tr').length, 2, 'one row per person');
   assert.match(body.innerHTML, /&lt;b&gt;Bo&lt;\/b&gt;/); assert.doesNotMatch(body.innerHTML, /<b>Bo/);
-  assert.equal(body.querySelectorAll('[data-action="recruit-person-open"][data-email="a@cornell.edu"]').length, 2, 'identity and comments open the person');
-  assert.doesNotMatch(f.app.innerHTML, /data-col="forms"|recruit-person-forms/, 'submissions are reached through the person, without a redundant Forms sent column');
-  const ada = body.querySelector('tr[data-email="a@cornell.edu"]');
-  const adaFlag = ada.querySelector('[data-action="recruit-person-flag"][data-email="a@cornell.edu"]');
-  assert.ok(adaFlag && adaFlag.classList.contains('is-flagged') && adaFlag.getAttribute('aria-pressed') === 'true', 'the row flags the person with the list\'s own control');
-  const adaComments = ada.querySelector('.interest-comments');
-  assert.ok(adaComments.classList.contains('has-comments') && adaComments.innerHTML.includes('<span>2</span>') && adaComments.dataset.comments === 'true' && adaComments.dataset.email === 'a@cornell.edu', 'the row shows the thread size and opens the person at the thread');
-  const bo = body.querySelector('tr[data-email="b@cornell.edu"]');
-  assert.ok(!bo.querySelector('.interest-flag.is-flagged') && !bo.querySelector('.interest-comments.has-comments'), 'an unflagged person without comments shows quiet controls');
-  assert.match(f.app.querySelector('.sheet--people thead').innerHTML, /data-col="review"/, 'People has the review column');
-  assert.equal(f.app.querySelector('[data-rc="people-counts"]').textContent, '2 people · 1 flagged · Interest form 1 · Coffee chats 1 · Application form 1');
-  const q = f.app.querySelector('[data-m="recruit-people-q"]');
-  q.value = 'bo'; assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' }), true);
-  const allRows = f.run('recruitState().people.rows');
-  f.run('recruitLoadPeople()');
-  const searched = f.requests.at(-1);
-  assert.match(searched.url, /q=bo/, 'search runs on the server across all pages');
-  searched.resolve({rows: [allRows[1]], total: 1}); await f.settle();
-  assert.equal(body.querySelectorAll('tr').length, 1);
-  q.value = ''; f.run('recruitState().people.q = ""');
+  const ada = body.querySelector('tr[data-email="ada@cornell.edu"]');
+  assert.match(ada.querySelector('[data-col="stage"]').textContent, /Coffee chats/);
+  assert.match(ada.querySelector('[data-col="status"]').textContent, /Active/);
+  same(ada.querySelectorAll('.rc-track__dot').map((d) => d.className.replace('rc-track__dot ', '')), ['rc-track__dot--done', 'rc-track__dot--current', 'rc-track__dot--ahead'], 'progress shows each stage');
+  assert.ok(ada.querySelector('.interest-flag.is-flagged'), 'the flag is the person\'s');
+  assert.match(ada.querySelector('.interest-comments').innerHTML, /<span>2<\/span>/);
+  // Filters: a menu of groups, each opening its own choices.
   const filter = f.app.querySelector('[data-m="recruit-people-filter"]');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(filter); f.menus.at(-1).items.find((i) => i.label === 'Flagged').run();
-  assert.match(f.requests.at(-1).url, /flagged=1/);
-  f.requests.at(-1).resolve({rows:[allRows[0]],total:1}); await f.settle();
+  f.run('RECRUIT.dd.bind(RECRUIT)')(filter);
+  same(f.menus.at(-1).items.map((i) => i.label), ['Stage', 'Status', 'Review', 'Sent a form', 'Subteam', 'Year']);
+  f.menus.at(-1).items.find((i) => i.label === 'Stage').run();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  f.menus.at(-1).items.find((i) => i.label === 'Coffee chats').run();
+  const filtered = await f.pending(/\/people\?/);
+  assert.match(filtered.url, /stage=coffee/);
+  assert.match(f.app.querySelector('[data-rc="people-filters"]').textContent, /StageCoffee chats/, 'the filter shows as a chip');
+  assert.match(f.app.querySelector('[data-rc="people-export"]').getAttribute('href'), /people\.csv\?stage=coffee&sort=last&columns=full/, 'export follows the filters and carries every column');
+  filtered.resolve({ rows: people().slice(0, 1), total: 1 }); await f.settle();
   assert.equal(body.querySelectorAll('tr').length, 1);
-  f.run('RECRUIT.dd.bind(RECRUIT)')(filter); f.menus.at(-1).items.find((i) => i.label === 'Coffee chats').run();
-  assert.match(f.requests.at(-1).url, /section=coffee/);
-  assert.match(f.requests.at(-1).url, /flagged=1/, 'form participation combines with review status');
-  f.requests.at(-1).resolve({rows:[allRows[0]],total:1}); await f.settle();
-  assert.equal(filter.querySelector('.dd__label').textContent, 'Coffee chats · Flagged');
-  assert.match(f.app.querySelector('[data-rc="people-export"]').getAttribute('href'), /section=coffee/);
-  assert.match(f.app.querySelector('[data-rc="people-export"]').getAttribute('href'), /flagged=1/, 'export follows the active filters');
-  f.run('RECRUIT.dd.bind(RECRUIT)')(filter); f.menus.at(-1).items.find((i) => i.label === 'All people').run();
-  assert.doesNotMatch(f.requests.at(-1).url, /section=|flagged=/, 'All people clears both filter groups');
-  f.requests.at(-1).resolve({rows:allRows,total:2}); await f.settle();
-  assert.equal(body.querySelectorAll('tr').length, 2);
-  st.people.section = 'coffee';
-  f.run("recruitOpenPerson('a@cornell.edu')");
-  assert.equal(f.ctx.UI.modal.form, 'coffee', 'opening a person respects the form used to filter People');
-  assert.equal(f.run('recruitPersonSteps()[0].form'), 'coffee', 'Previous and Next preserve the form being reviewed');
-  st.people.section = '';
-  f.run("recruitOpenPerson('a@cornell.edu', { form: 'interest' })");
-  assert.equal(f.ctx.UI.modal.email, 'a@cornell.edu');
-  assert.ok(f.document.querySelector('.rc-person'), 'a person opens from the People tab without the section sheet');
-  assert.match(f.document.querySelector('.rc-person [data-rc="person-nav"]').innerHTML, /1 of 2/, 'Previous and Next count people');
-  assert.match(f.document.querySelector('.rc-person [data-rc="person-flag"]').innerHTML, /aria-pressed="true"/, 'the flag shows before the detail arrives');
-  f.run('recruitStepPerson(1)');
-  assert.equal(f.ctx.UI.modal.email, 'b@cornell.edu', 'Next moves to the next person');
-  f.run("recruitAcceptPersonReview('a@cornell.edu', { person: { email: 'a@cornell.edu', name: 'Ada', flagged: false, review: { comments: [] }, reviewVersion: 4 } })");
-  assert.ok(!f.app.querySelector('tr[data-email="a@cornell.edu"] .interest-flag.is-flagged') && !f.app.querySelector('tr[data-email="a@cornell.edu"] .interest-comments.has-comments'), 'review changes repaint the person\'s row');
-  console.log('PASS: People lists everyone across the three forms with their flag and thread, escapes, searches and filters in place, opens any person at any form, and steps by person');
+  await f.click(f.app.querySelector('[data-action="recruit-people-unfilter"][data-group="stage"]'));
+  (await f.pending(/\/people\?/)).resolve({ rows: people(), total: 2 }); await f.settle();
+  // Links from the chart arrive with a filter.
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'people', status: 'accepted' };
+  f.mount();
+  f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'people', status: 'accepted' } })");
+  assert.match((await f.pending(/\/people\?/)).url, /status=accepted/, 'the address filters the list');
+  // Moving a selection is one request.
+  f.run("recruitState().people.rows = " + JSON.stringify(people()));
+  f.run("recruitState().people.loaded = true");
+  f.run('recruitPaintPeople()');
+  for (const e of ['ada@cornell.edu', 'bo@cornell.edu']) { const box = f.app.querySelector(`[data-action="recruit-people-select"][data-email="${e}"]`); box.checked = true; await f.click(box); }
+  assert.ok(!f.app.querySelector('[data-rc="people-bulk"]').hidden); assert.match(f.app.querySelector('[data-rc="people-bulk"]').textContent, /2 selected/);
+  await f.click(f.app.querySelector('[data-action="recruit-bulk-move"]'));
+  f.menus.at(-1).items.find((i) => i.label === 'Application form').run();
+  const moves = await f.pending('/recruit/cycles/cy-a/moves', 'POST');
+  same(moves.body.emails, ['ada@cornell.edu', 'bo@cornell.edu']); assert.equal(moves.body.stage, 'application'); assert.match(moves.body.requestId, /^rq-/);
+  moves.resolve({ moved: 2, emails: moves.body.emails, missing: [] }); await f.settle();
+  assert.equal(f.toasts.at(-1), '2 people moved to Application form');
+  assert.equal(f.run('recruitState().people.selected.size'), 0, 'the selection clears after a move');
+  // The board: a column per stage, active people by default.
+  f.ctx.UI.route.params = { id: 'cy-a', sub: 'people' };
+  await f.click(f.app.querySelector('[data-action="recruit-people-unfilter-all"]'));
+  same(f.run('recruitState().people.filters'), {}, 'Clear drops every filter');
+  await f.click(f.app.querySelector('[data-action="recruit-people-view"][data-view="board"]'));
+  assert.equal(f.ctx.localStorage.getItem('cupi-recruit-people-view'), 'board', 'the view is remembered');
+  f.mount();
+  f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'people' } })");
+  const boardReq = await f.pending(/\/people\?.*status=active/);
+  assert.match(boardReq.url, /sort=name/);
+  boardReq.resolve({ rows: [people()[0]], total: 1 }); await f.settle();
+  same(f.app.querySelectorAll('.pb-col').map((c) => [c.dataset.stage, c.querySelector('.count').textContent]), [['interest', '0'], ['coffee', '1'], ['application', '0']]);
+  assert.ok(f.app.querySelector('.pb-card[data-email="ada@cornell.edu"] .pb-card__flag'), 'a card shows the flag');
+  assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
+  console.log('PASS: People lists everyone with their stage, status and progress, filters by group and address, exports what it shows, moves a selection in one request, and draws a board');
+}
+
+/* ------------------------------- a person's page ------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'person', params: { email: 'ada@cornell.edu' } });
+  const rows = people();
+  st.people = { id: `${st.key}:cy-a`, rows, byEmail: Object.fromEntries(rows.map((r) => [r.email, r])), next: null, total: 2, counts: null, loading: false, loaded: true, error: null, q: '', filters: {}, sort: 'last', view: 'table', selected: new Set(), appliedParams: '' };
+  st.personNav = { emails: ['ada@cornell.edu', 'bo@cornell.edu'], label: 'People', href: '#/applications/cy-a/people', cycleId: 'cy-a' };
+  f.mount();
+  assert.match(f.app.querySelector('.pn-head h2').textContent, /Ada/, 'the list row names the person before their detail arrives');
+  assert.match(f.app.querySelector('.pn-step').textContent, /1 of 2/, 'Previous and Next walk the list it was opened from');
+  f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'person', email: 'ada@cornell.edu' } })");
+  const detail = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu');
+  assert.ok(detail.signal instanceof AbortSignal);
+  assert.ok(f.requests.some((r) => r.url === '/recruit/cycles/cy-a/people/bo%40cornell.edu'), 'the next person loads ahead of time');
+  const first = { id: 'ic-first', text: 'Existing <comment>', name: 'Rae', by: 'rae@cornell.edu', ts: 1, stage: 'coffee' };
+  detail.resolve({
+    person: { ...people()[0], review: { flagged: true, comments: [first] }, reviewVersion: 3, trackVersion: 2,
+      track: { stage: null, fields: { coffee: { completed: { v: false, by: 'rae@cornell.edu', name: 'Rae', at: 5 }, met_with: { v: 'Rae', by: 'rae@cornell.edu', name: 'Rae', at: 6 } } }, moves: [] } },
+    submissions: [
+      { application: { id: 'p-a1', section: 'interest', name: 'Ada', email: 'ada@cornell.edu', ts: 1, answers: { project: 'A <robot>' }, files: [{ id: 'f-1', question: 'file', name: 'cv.pdf', size: 2048 }] }, form: { questions: sections().interest.form.questions } },
+      { application: { id: 'p-a2', section: 'coffee', name: 'Ada', email: 'ada@cornell.edu', ts: 3, answers: { topics: 'Time' }, files: [] }, form: { questions: basics() } },
+    ],
+    history: [{ cycleId: 'cy-old', cycleName: 'Spring 2025', section: 'interest', sectionTitle: 'Interest form' }],
+  });
+  await f.settle();
+  const html = f.app.innerHTML;
+  assert.match(html, /A &lt;robot&gt;/); assert.match(html, /Existing &lt;comment&gt;/); assert.doesNotMatch(html, /<robot>|<comment>/);
+  assert.match(html, /href="\/api\/recruit\/files\/f-1" download="cv\.pdf"/, 'files link only the authenticated route');
+  same(f.app.querySelectorAll('.pn-journey__step').map((s) => s.querySelector('.pn-journey__state').textContent), ['Done', 'Here now', 'Not yet']);
+  same(f.app.querySelectorAll('.pn-stage').map((s) => s.dataset.stage), ['interest', 'coffee', 'application'], 'a card per stage');
+  const coffee = f.app.querySelector('.pn-stage[data-stage="coffee"]');
+  assert.match(coffee.querySelector('.pn-field--check').textContent, /Rae · /, 'who set a value and when');
+  assert.match(coffee.querySelector('.pn-stage__comments').textContent, /1/, 'a stage counts the comments about it');
+  assert.match(html, /Also in Spring 2025 · Interest form/);
+  assert.match(f.app.querySelector('[data-rc="pn-activity"]').textContent, /Sent the Coffee chats form/);
+  assert.match(f.app.querySelector('[data-rc="pn-activity"]').textContent, /Sent the Interest form/, 'a title that already says form is not doubled');
+  // A checklist value from the page.
+  const tick = coffee.querySelector('[data-action="recruit-field-check"]');
+  tick.checked = true;
+  const setting = f.click(tick);
+  const patch = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/fields', 'PATCH');
+  same(patch.body, { stage: 'coffee', field: 'completed', value: true });
+  patch.resolve({ person: { email: 'ada@cornell.edu', stage: 'coffee', status: 'active', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: true }, fields: { coffee: { completed: true, met_with: 'Rae' } }, trackVersion: 3, track: { fields: { coffee: { completed: { v: true, by: 'lead@cornell.edu', name: 'Lead', at: 7 } } } } } });
+  await setting;
+  assert.equal(st.people.byEmail['ada@cornell.edu'].done.coffee, true, 'the People row follows');
+  assert.match(f.app.querySelector('.pn-journey__step--current .pn-journey__state').textContent, /Here · done/, 'the journey follows');
+  assert.ok(f.app.querySelector('.pn-stage[data-stage="application"]').classList.contains('pn-stage--quiet'), 'a stage they have not reached stays quiet');
+  // A per-reviewer rating: mine, with everyone's average beside it.
+  const holder = f.app.appendChild(f.document.createElement('div'));
+  holder.innerHTML = f.run('recruitFieldControlHtml')({ key: 'score', type: 'rating', label: 'Score', max: 5, each: true }, { n: 2, avg: 3.5, mine: null }, { email: 'ada@cornell.edu', stage: 'application', name: 'Ada' });
+  assert.equal(holder.querySelectorAll('[data-action="recruit-field-rate"]').length, 5, 'a rating is a row of stars');
+  assert.match(holder.textContent, /avg 3.5 of 2/);
+  const rating = f.click(holder.querySelector('[data-action="recruit-field-rate"][data-v="4"]'));
+  same((await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/fields', 'PATCH')).body, { stage: 'application', field: 'score', value: 4 });
+  // Moving and deciding, from the head.
+  await f.click(f.app.querySelector('[data-action="recruit-person-move"]'));
+  same(f.menus.at(-1).items.map((i) => [i.label, i.selected]), [['Interest form', false], ['Coffee chats', true], ['Application form', false]], 'the move menu marks where they are');
+  f.menus.at(-1).items.find((i) => i.label === 'Application form').run();
+  const move = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST');
+  assert.equal(move.body.stage, 'application'); assert.match(move.body.requestId, /^rq-/);
+  assert.equal(st.people.byEmail['ada@cornell.edu'].stage, 'application', 'the move shows at once');
+  move.reject(Object.assign(new Error('Busy'), { status: 409 })); await f.settle();
+  assert.equal(st.people.byEmail['ada@cornell.edu'].stage, 'coffee', 'and goes back when it fails');
+  assert.equal(f.toasts.at(-1), 'Could not move: Busy');
+  await f.click(f.app.querySelector('[data-action="recruit-person-status"]'));
+  f.menus.at(-1).items.find((i) => i.label === 'Accepted').run();
+  const status = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST');
+  assert.equal(status.body.status, 'accepted');
+  status.resolve({ person: { email: 'ada@cornell.edu', stage: 'coffee', status: 'accepted', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: true }, fields: {}, trackVersion: 5 } }); await f.settle(5);
+  assert.equal(f.toasts.at(-1), 'Ada marked accepted');
+  // A comment about a stage: the draft survives, posts once, keeps its id on retry.
+  const field = f.app.querySelector('[data-m="recruit-person-comment"]');
+  f.type(field, 'New <comment>');
+  f.pick(f.app.querySelector('[data-m="recruit-person-comment-stage"]'), 'Coffee chats');
+  const draft = f.run('recruitPersonDraft')('ada@cornell.edu');
+  same([draft.text, draft.stage], ['New <comment>', 'coffee']);
+  assert.equal(JSON.parse(f.ctx.localStorage.getItem(draft.key)).stage, 'coffee', 'the draft and its stage are kept in storage');
+  const posting = f.run('recruitPostPersonComment')('ada@cornell.edu');
+  const post = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/comments', 'POST');
+  assert.match(post.body.id, /^ic-/); same([post.body.text, post.body.stage], ['New <comment>', 'coffee']);
+  post.reject(Object.assign(new Error('Timed out'), { name: 'TimeoutError' })); await posting;
+  assert.match(f.app.querySelector('[data-comment-error]').textContent, /retrying will not post it twice/);
+  const retry = f.run('recruitPostPersonComment')('ada@cornell.edu');
+  const post2 = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/comments', 'POST');
+  assert.equal(post2.body.id, post.body.id, 'a lost response is retried with the same id');
+  post2.resolve({ person: { email: 'ada@cornell.edu', flagged: true, reviewVersion: 4, review: { flagged: true, comments: [first, { id: post2.body.id, text: 'New <comment>', name: 'Lead', by: 'lead@cornell.edu', ts: 9, stage: 'coffee' }] } } }); await retry;
+  assert.equal(f.toasts.at(-1), 'Comment posted');
+  assert.equal(f.app.querySelector('[data-m="recruit-person-comment"]').value, '');
+  assert.equal(f.app.querySelectorAll('.interest-thread [data-comment-id]').length, 2);
+  assert.match(f.app.querySelector(`[data-comment-id="${post2.body.id}"] .rc-stage-chip`).textContent, /Coffee chats/, 'a comment shows the stage it is about');
+  assert.equal(st.people.byEmail['ada@cornell.edu'].comments, 2, 'the People row counts it');
+  // Deleting confirms inline.
+  f.run('recruitConfirmPersonCommentRemoval')('ada@cornell.edu', 'ic-first');
+  assert.match(f.app.querySelector('[data-comment-id="ic-first"]').innerHTML, /Delete this comment\?/);
+  const deleting = f.run('recruitDeletePersonComment')('ada@cornell.edu', 'ic-first');
+  (await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/comments/ic-first', 'DELETE')).resolve({ person: { email: 'ada@cornell.edu', flagged: true, reviewVersion: 5, review: { flagged: true, comments: [] } } }); await deleting;
+  assert.equal(f.toasts.at(-1), 'Comment deleted'); assert.equal(f.app.querySelector('[data-comment-id="ic-first"]'), null);
+  // The flag is the person's.
+  const flagging = f.run('recruitTogglePersonFlag')('ada@cornell.edu');
+  const flag = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/review', 'PATCH');
+  same(flag.body, { flagged: false });
+  flag.resolve({ person: { email: 'ada@cornell.edu', flagged: false, reviewVersion: 6, review: { flagged: false, comments: [] } } }); await flagging;
+  assert.equal(f.toasts.at(-1), 'Flag removed'); assert.equal(st.people.byEmail['ada@cornell.edu'].flagged, false);
+  assert.equal(f.renders.length, 0, 'the page repaints in place');
+  assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
+  await rating;
+  console.log('PASS: a person\'s page shows their journey, answers, checklists, comments and activity; ticks, ratings, moves and decisions show at once and go back on failure; stage comments post once');
+}
+
+/* ------------------------------- field values ---------------------------- */
+{
+  const f = fixture();
+  loadCycle(f);
+  const val = f.run('recruitFieldValue');
+  assert.equal(val({ type: 'number', label: 'Hours' }, ' 3.5 '), 3.5);
+  assert.throws(() => val({ type: 'number', label: 'Hours' }, 'lots'), /Hours must be a number/);
+  assert.equal(val({ type: 'date', label: 'On' }, '2026-10-03'), '2026-10-03');
+  assert.throws(() => val({ type: 'date', label: 'On' }, 'Oct 3'), /a date like 2026-10-03/);
+  assert.equal(val({ type: 'text', label: 'Met with' }, '   '), null, 'an emptied field clears the value');
+  const summary = f.run('recruitFieldSummaryOf');
+  same(summary({ type: 'rating', each: true }, { each: { 'a@x.co': { v: 4 }, 'lead@cornell.edu': { v: 2 } } }, 'lead@cornell.edu'), { n: 2, avg: 3, mine: 2 });
+  same(summary({ type: 'check' }, { v: true }, 'lead@cornell.edu'), true);
+  console.log('PASS: typed checklist values are parsed with plain errors, and per-reviewer values summarise with the reader\'s own');
+}
+
+/* ------------------------------- insights -------------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'insights' });
+  f.mount();
+  const view = f.app.querySelector('[data-rc="insights"]');
+  assert.ok(view, 'the insights view draws');
+  same(f.app.querySelectorAll('.ri-kpi').map((k) => k.querySelector('.ri-kpi__label').textContent), ['People', 'Still active', 'Accepted', 'Median time in cycle', 'Flagged']);
+  const funnel = f.app.querySelector('[data-chart="funnel"]');
+  const coffee = funnel.querySelectorAll('.ri-bar')[1];
+  assert.equal(coffee.querySelectorAll('.ri-bar__fill').length, 2, 'a stage with people not done yet stacks done and not done');
+  assert.match(coffee.querySelector('.ri-bar__track').getAttribute('data-tip'), /Coffee chats: 2 reached \(67% of everyone\), 1 done/);
+  assert.equal(funnel.querySelectorAll('.ri-bar')[0].querySelectorAll('.ri-bar__fill').length, 1, 'where everyone who reached it is done, the bar is all ink');
+  assert.match(f.app.querySelector('[data-chart="subteams"]').innerHTML, /&lt;b&gt;Bots&lt;\/b&gt;/); assert.doesNotMatch(f.app.innerHTML, /<b>Bots/);
+  assert.match(f.app.querySelector('[data-chart="ck-coffee"]').textContent, /1of 2 · 50%/, 'a checkbox reads as how many of those who reached the stage');
+  assert.match(f.app.querySelector('[data-chart="ck-application"]').textContent, /3.5average of 2 answers for 1 person/);
+  assert.equal(f.app.querySelectorAll('.ri-daily__row').length, 3, 'forms sent per day, one row per form');
+  assert.equal(f.app.querySelector('.ri-daily__cols').getAttribute('style'), '--days:3', 'every day between the first and the last');
+  // Every chart has a table.
+  const toggle = funnel.querySelector('[data-action="recruit-insight-table"]');
+  await f.click(toggle);
+  const table = f.app.querySelector('[data-chart="funnel"] .ri-table');
+  assert.ok(table, 'the table replaces the chart');
+  same(table.querySelectorAll('thead th').map((th) => th.textContent), ['Stage', 'Reached', 'Share of everyone', 'Done', 'Done of reached']);
+  same(table.querySelectorAll('tbody tr')[1].querySelectorAll('td').map((td) => td.textContent), ['Coffee chats', '2', '67%', '1', '50%']);
+  assert.ok(f.document.activeElement === f.app.querySelector('[data-chart="funnel"] [data-action="recruit-insight-table"]'), 'focus stays on the toggle');
+  assert.doesNotMatch(f.app.innerHTML, /NaN|undefined/, 'no missing numbers');
+  // No people yet; a failed load offers a retry.
+  st.insights.data = { ...insights(), people: 0 };
+  f.mount();
+  assert.match(f.app.innerHTML, /No one yet/);
+  st.insights = { key: st.key + ':cy-a', data: null, loading: false, error: 'boom' };
+  f.mount();
+  assert.match(f.app.innerHTML, /Could not load: boom/); assert.ok(f.app.querySelector('[data-action="recruit-insights-retry"]'));
+  // One request serves the chart, a stage's header and this view.
+  st.insights = undefined;
+  const loading = f.run('recruitLoadInsights()');
+  f.run('recruitLoadInsights()');
+  assert.equal(f.requests.filter((r) => r.url === '/recruit/cycles/cy-a/insights').length, 1, 'a load in flight is shared');
+  (await f.pending('/recruit/cycles/cy-a/insights')).resolve(insights()); await loading;
+  assert.equal(st.insights.data.people, 3);
+  console.log('PASS: insights draw KPIs, stacked reach and completion, status, daily forms, who applied and checklist summaries, each with a table, escaped and without gaps');
 }
 
 /* ------------------------------- loaders --------------------------------- */
-{
-  const f = fixture();
-  const st = loadCycle(f);
-  f.ctx.UI.route.params.sub = 'people';
-  const person = { email: 'ada@cornell.edu', name: 'Ada', flagged: true, comments: 1, sections: {}, last: 1 };
-  st.people = { rows: [person], byEmail: { [person.email]: person }, total: 1, q: '', filter: 'flagged' };
-  f.mount();
-  f.run("recruitAcceptPersonReview('ada@cornell.edu', { person: { email: 'ada@cornell.edu', flagged: false, review: { comments: [] }, reviewVersion: 2 } })");
-  assert.equal(f.run('recruitPeopleVisible().length'), 0, 'unflagging immediately removes a person from Flagged');
-  assert.equal(f.run('recruitPeopleFootText()'), '0 people', 'the filtered count follows review changes');
-  assert.match(f.app.querySelector('[data-rc="people-rows"]').textContent, /No one matches these filters/, 'an empty filter is distinct from an empty cycle');
-  person.comments = 1;
-  st.people.filter = 'comments';
-  f.run("recruitAcceptPersonReview('ada@cornell.edu', { person: { email: 'ada@cornell.edu', flagged: false, review: { comments: [] }, reviewVersion: 3 } })");
-  assert.equal(f.run('recruitPeopleVisible().length'), 0, 'deleting the last comment removes a person from Has comments');
-
-  st.people.next = 'next-page';
-  const more = f.run('recruitLoadPeople(true)');
-  f.requests.at(-1).resolve({ rows: [{ ...person, email: 'bo@cornell.edu', comments: 1 }], total: 1 });
-  await more;
-  assert.equal(f.run('recruitPeopleFootText()'), '1 person', 'paging after removal does not subtract the removed person twice');
-  assert.equal(st.people.rows.length, 1, 'paging drops rows that no longer match');
-
-  st.people.filter = '';
-  st.people.q = 'ada';
-  const oldLoad = f.run('recruitLoadPeople()');
-  const oldRequest = f.requests.at(-1);
-  assert.equal(f.app.querySelector('[data-rc="people-foot"]').textContent, 'Loading…');
-  const q = f.app.querySelector('[data-m="recruit-people-q"]');
-  q.value = 'nobody';
-  f.run('RECRUIT.input.bind(RECRUIT)')(q, { type: 'input' });
-  oldRequest.resolve({ rows: [person], total: 1 });
-  await oldLoad;
-  assert.equal(st.people.rows.length, 0, 'a previous search cannot repaint results during the next search debounce');
-  f.run('clearTimeout(recruitPeopleSearchTimer)');
-  const newLoad = f.run('recruitLoadPeople()');
-  assert.match(f.requests.at(-1).url, /q=nobody/);
-  f.requests.at(-1).resolve({ rows: [], total: 0 });
-  await newLoad;
-  assert.match(f.app.querySelector('[data-rc="people-rows"]').textContent, /No one matches these filters/);
-  assert.equal(f.app.querySelector('[data-rc="people-foot"]').textContent, '0 people');
-  console.log('PASS: People filters react to review changes, distinguish empty results, show loading, and discard stale searches');
-}
-
 {
   const f = fixture();
   f.run("RECRUIT.mount({ name: 'recruit', params: {} })");
@@ -724,37 +968,27 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   f.run("RECRUIT.mount({ name: 'recruit', params: {} })");
   assert.equal(f.requests[1].url, '/recruit/cycles?all=1');
   f.requests[1].resolve({ cycles: [{ id: 'cy-a', name: 'A', status: 'open', counts: { total: 1 } }, { id: 'cy-b', name: 'B', status: 'open', counts: { total: 0 } }], intakeCycleId: null, migration: { done: true } }); await f.settle();
-  same(f.backgrounds, ['recruit', 'recruit']);
   f.run("RECRUIT.mount({ name: 'recruit', params: {} })");
   assert.equal(f.navs.length, 0, 'two live cycles keep the index');
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a' } })");
   const cycleReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-a');
-  assert.ok(cycleReq); assert.ok(cycleReq.signal instanceof AbortSignal);
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-b' } })");   // switched before the answer
-  cycleReq.resolve({ cycle: cycleRow(), counts: { total: 1, bySection: {} }, me: { roles: ['admin'] } }); await f.settle();
+  cycleReq.resolve({ cycle: cycleRow(), sections: sections(), counts: { total: 1, bySection: {} }, me: { roles: ['admin'] } }); await f.settle();
   const st = f.run('recruitState()');
   assert.equal(st.cycleId, 'cy-b'); assert.equal(st.cycle?.loading, true, 'a late cycle answer after a switch is dropped');
-  const bReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-b');
-  bReq.resolve({ cycle: cycleRow({ id: 'cy-b', name: 'B' }), counts: { total: 0, bySection: {} }, me: { roles: ['admin'] } }); await f.settle();
-  assert.equal(st.cycle.data.id, 'cy-b'); assert.equal(st.cycle.role, 'admin');
+  f.requests.find((r) => r.url === '/recruit/cycles/cy-b').resolve({ cycle: cycleRow({ id: 'cy-b', name: 'B' }), sections: sections(), team: [{ email: 'lead@cornell.edu', name: 'Lead' }], counts: { total: 0, bySection: {} }, me: { email: 'lead@cornell.edu', roles: ['admin'] } }); await f.settle();
+  assert.equal(st.cycle.data.id, 'cy-b'); assert.equal(st.cycle.role, 'admin'); same(st.cycle.team.map((m) => m.email), ['lead@cornell.edu'], 'the cycle brings its team for member fields');
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-b' } })");
-  const peopleReq = f.requests.find((r) => r.url.startsWith('/recruit/cycles/cy-b/people?'));
-  assert.ok(peopleReq, 'a cycle opens on People, which loads everyone');
-  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-b', sub: 'interest' } };
-  f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-b', sub: 'interest' } })");
-  const listReq = f.requests.find((r) => r.url.startsWith('/recruit/cycles/cy-b/applications?'));
-  assert.ok(listReq, 'the section panel mount loads the first page');
+  const insightReq = f.requests.find((r) => r.url === '/recruit/cycles/cy-b/insights');
+  assert.ok(insightReq, 'a cycle opens on its flow, which loads the counts');
   f.run("RECRUIT.reset('cy-a')");
-  listReq.resolve({ rows: [{ id: 'in-9', name: 'Late', email: 'l@x.y', ts: 1 }], next: null, total: 1 });
-  peopleReq.resolve({ rows: [{ email: 'l@x.y', name: 'Late', latest: 'in-9', sections: { interest: { id: 'in-9' } } }], total: 1 }); await f.settle();
-  assert.equal(st.apps, undefined, 'a late list answer after a cycle switch is dropped');
-  assert.equal(st.people, undefined, 'a late people answer after a cycle switch is dropped');
+  insightReq.resolve(insights()); await f.settle();
+  assert.equal(st.insights, undefined, 'a late answer after a cycle switch is dropped');
   assert.ok(f.requests.every((r) => r.signal instanceof AbortSignal), 'every fetch carries an AbortSignal');
   assert.equal(f.renders.length, 0);
   // A signed-in member on another route still learns about their cycles once.
   const g = fixture({ admin: false }); g.ctx.UI.route = { name: 'home', params: {} };
   g.run("RECRUIT.mount({ name: 'home', params: {} })");
-  assert.equal(g.requests[0].url, '/recruit/me');
   g.requests[0].resolve({ admin: false, cycles: [{ id: 'cy-a', roles: ['reviewer'] }] }); await g.settle();
   same(g.backgrounds, ['home'], 'the sidebar link appears through a background repaint');
   g.run("RECRUIT.mount({ name: 'home', params: {} })");
@@ -773,156 +1007,49 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], counts = { total: 2, 
   const f = fixture();
   const st = loadCycle(f);
   f.mount();
-  assert.equal(f.app.querySelector('[data-rc-count="interest"]').textContent, '2');
   const tick = f.run('recruitSyncTick()');
-  assert.equal(f.requests[0].url, '/recruit/cycles?all=1');
-  f.requests[0].resolve({ cycles: [{ id: 'cy-a', name: 'Fall 2026', status: 'open', counts: { total: 7, bySection: { interest: 4, coffee: 3 } }, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true } });
+  (await f.pending('/recruit/cycles?all=1')).resolve({ cycles: [{ id: 'cy-a', name: 'Fall 2026', status: 'open', counts: { total: 7, bySection: { interest: 4, coffee: 3 } }, version: 3 }], intakeCycleId: 'cy-a', migration: { done: true } });
   await f.settle();
-  f.requests.at(-1).resolve({ cycle: st.cycle.data, sections: st.cycle.sections, counts: { total: 7, bySection: { interest: 4, coffee: 3 } } });
+  const s2 = sections(); s2.coffee.title = 'Coffee, renamed elsewhere';
+  (await f.pending('/recruit/cycles/cy-a')).resolve({ cycle: cycleRow({ version: 4 }), sections: s2, counts: { total: 7, bySection: { interest: 4, coffee: 3 } }, me: { roles: ['admin'] } });
   await f.settle();
-  assert.match(f.requests.at(-1).url, /applications\?/);
-  f.requests.at(-1).resolve({ rows: st.apps.rows, total: 4, counts: {bySection:{interest:4,coffee:3}} });
+  (await f.pending('/recruit/cycles/cy-a/insights')).resolve(insights());
   await tick;
-  assert.equal(f.app.querySelector('[data-rc-count="interest"]').textContent, '4', 'counts repaint in place');
-  assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'the sync loop never repaints the whole route');
+  assert.equal(f.run("recruitSectionTitle('coffee')"), 'Coffee, renamed elsewhere', 'a change made elsewhere arrives');
+  same(f.backgrounds, ['recruit'], 'a newer cycle repaints in the background');
+  assert.equal(f.renders.length, 0, 'the sync loop never renders directly');
   assert.ok(st._syncTimer, 'the loop rescheduled itself'); f.run('clearTimeout(recruitState()._syncTimer)');
+  // Unsaved stage work holds the cycle still.
+  st.stageDrafts = { 'cy-a:coffee': { id: 'cy-a:coffee', model: { title: 'Draft' }, saved: JSON.stringify({ title: 'Saved' }), saving: false } };
+  assert.ok(f.run('RECRUIT.dirty()'));
+  const tick2 = f.run('recruitSyncTick()');
+  (await f.pending('/recruit/cycles?all=1')).resolve({ cycles: [], intakeCycleId: 'cy-a', migration: { done: true } });
+  await tick2;
+  assert.ok(!f.requests.some((r) => !r.done && r.url === '/recruit/cycles/cy-a'), 'no cycle refresh over unsaved work');
+  f.run('clearTimeout(recruitState()._syncTimer)');
+  st.stageDrafts = {};
   f.ctx.UI.modal = { kind: 'confirm' };
-  const quiet = f.run('recruitSyncTick()'); await quiet;
-  assert.equal(f.requests.length, 3, 'no fetch while a dialog is open'); f.run('clearTimeout(recruitState()._syncTimer)');
+  const before = f.requests.length;
+  await f.run('recruitSyncTick()');
+  assert.equal(f.requests.length, before, 'no fetch while a dialog is open'); f.run('clearTimeout(recruitState()._syncTimer)');
   f.ctx.UI.modal = null; f.ctx.UI.route = { name: 'home', params: {} };
   f.run('RECRUIT.sync()'); assert.equal(st._syncTimer, null, 'leaving the route stops the loop');
-  console.log('PASS: the sync loop repaints counts in place and stays quiet behind dialogs');
+  console.log('PASS: the sync loop brings changes made elsewhere, holds still over unsaved work and behind dialogs, and never renders directly');
 }
 
-/* ------------------------------- person dialog --------------------------- */
+/* ------------------------------- drafts and dates ------------------------ */
 {
-  const f = fixture();
-  const st = loadCycle(f);
-  const email = '"x"@cornell.edu';
-  const path = '/recruit/cycles/cy-a/people/%22x%22%40cornell.edu';
-  const first = { id: 'ic-first', text: 'Existing <comment>', name: 'Reviewer', by: 'r@cornell.edu', ts: 1 };
-  st.persons = { [email]: { person: { email, name: '<img src=x onerror=alert(1)>', flagged: false, review: { comments: [first] }, reviewVersion: 1, latest: 'in-1' }, submissions: [
-    { application: { id: 'in-1', name: '<img src=x onerror=alert(1)>', email, ts: 1, section: 'interest', subteam: 'Electrical', year: 'Junior', answers: { project: 'A <robot>' }, files: [{ id: 'int-1', name: 'cv.pdf', size: 2048 }] }, form: { questions: [{ key: 'project', type: 'long', label: 'Coolest project' }] } },
-    { application: { id: 'in-1c', name: '<img src=x onerror=alert(1)>', email, ts: 5, section: 'coffee', subteam: '', year: null, answers: { availability: 'Tuesdays' }, files: [] }, form: { questions: [{ key: 'availability', type: 'long', label: 'When are you free?' }] } },
-  ], history: [{ cycleId: 'cy-old', cycleName: 'Spring 2025', section: 'interest', ts: 1 }] } };
-  f.ctx.UI.modal = { kind: 'recruit-person', email, form: 'interest' };
-  f.mount();
-  const veil = f.mountModal();
-  const html = veil.innerHTML;
-  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/); assert.doesNotMatch(html, /<img src=x/);
-  assert.match(html, /A &lt;robot&gt;/); assert.match(html, /Existing &lt;comment&gt;/);
-  assert.match(html, /href="\/api\/recruit\/files\/int-1" download="cv\.pdf"/, 'files link only the authenticated route');
-  const imageHtml = f.run('recruitAnswersHtml')({
-    application: { answers: { portfolio: '' }, files: [{ id: 'int-image', question: 'portfolio', name: 'robot.png', type: 'image/png', size: 68 }] },
-    form: { questions: [{ key: 'portfolio', type: 'longfile', label: 'Portfolio' }] },
-  });
-  assert.match(imageHtml, /href="\/api\/recruit\/files\/int-image" download="robot\.png"/, 'an image-only answer exposes its download even when its text is empty');
-  assert.match(imageHtml, /Portfolio: robot\.png/);
-  assert.match(imageHtml, /File attached below\./);
-  assert.doesNotMatch(imageHtml, /Left blank\./, 'an image-only answer is not labeled blank');
-  assert.match(html, /Also sent Spring 2025/); assert.doesNotMatch(html, /<select/);
-  assert.match(html, /1 of 2<\/span>/); assert.match(html, /data-action="modal-close"/);
-  assert.equal(veil.querySelectorAll('[data-action="recruit-person-form"]').length, 2, 'both forms they sent are offered');
-  assert.equal(veil.querySelector('[data-action="recruit-person-form"][data-form="interest"]').getAttribute('aria-current'), 'page');
-  // Switching forms repaints the answers, not the thread.
-  const thread = veil.querySelector('.interest-thread');
-  await f.run('RECRUIT.click.bind(RECRUIT)')('recruit-person-form', veil.querySelector('[data-action="recruit-person-form"][data-form="coffee"]'), { stopPropagation() {} }, () => {});
-  assert.match(veil.querySelector('[data-rc="person-main"]').innerHTML, /Tuesdays/, 'the coffee chat answers show');
-  assert.doesNotMatch(veil.querySelector('[data-rc="person-main"]').innerHTML, /A &lt;robot&gt;/);
-  assert.ok(veil.querySelector('.interest-thread') === thread, 'the thread is the person\'s, untouched by the form switch');
-  const field = veil.querySelector('.interest-compose textarea');
-  field.value = 'New <comment>';
-  assert.equal(f.run('RECRUIT.input.bind(RECRUIT)')(field, { type: 'input' }), true);
-  const draft = f.run('recruitPersonDraft')(email);
-  assert.equal(JSON.parse(f.ctx.localStorage.getItem(draft.key)).text, 'New <comment>');
-  assert.equal(draft.text, 'New <comment>');
-  const existingNode = veil.querySelector('[data-comment-id="ic-first"]');
-  // A background refresh brings a second comment and a changed answer.
-  const second = { id: 'ic-second', text: 'Later', name: 'Lead', ts: 2 };
-  f.run('recruitLoadPerson')(email, { quiet: true });
-  const req = f.requests.find((r) => r.url === path);
-  assert.ok(req.signal instanceof AbortSignal);
-  const before = st.persons[email];
-  req.resolve({ person: { ...before.person, review: { comments: [first, second] }, reviewVersion: 2 }, submissions: before.submissions.map((x) => (x.application.section === 'coffee' ? { ...x, application: { ...x.application, answers: { availability: 'Changed' } } } : x)), history: before.history });
-  await f.settle();
-  assert.equal(field.value, 'New <comment>', 'the composer keeps its unsent text across a background refresh');
-  assert.equal(field.isConnected, true, 'the composer node is never replaced');
-  assert.equal(draft.text, 'New <comment>');
-  assert.ok(veil.querySelector('[data-comment-id="ic-first"]') === existingNode, 'existing comments keep their DOM identity');
-  assert.ok(veil.querySelector('[data-comment-id="ic-second"]'), 'new comments are appended');
-  assert.equal(veil.querySelector('.interest-subhead .count').textContent, '2');
-  assert.match(veil.querySelector('[data-rc="person-main"]').innerHTML, /Changed/, 'answers repaint in place');
-  assert.equal(f.renders.length, 0); assert.equal(f.backgrounds.length, 0, 'the open dialog is never remounted');
-  // Posting keeps its id across a timeout, then succeeds.
-  const posting = f.run('recruitPostPersonComment')(email);
-  assert.equal(field.readOnly, true);
-  const post = f.requests.find((r) => r.method === 'POST' && r.url === path + '/comments');
-  assert.match(post.body.id, /^ic-/); assert.equal(post.body.text, 'New <comment>'); assert.ok(post.signal instanceof AbortSignal);
-  post.reject(Object.assign(new Error('Timed out'), { name: 'TimeoutError' })); await posting;
-  assert.match(veil.querySelector('[data-comment-error]').textContent, /retrying will not post it twice/);
-  assert.equal(field.value, 'New <comment>'); assert.equal(field.readOnly, false);
-  const retry = f.run('recruitPostPersonComment')(email);
-  const post2 = f.requests.filter((r) => r.method === 'POST' && r.url === path + '/comments')[1];
-  assert.equal(post2.body.id, post.body.id, 'a lost response is retried with the same ic- id');
-  const saved = { id: post2.body.id, text: 'New <comment>', name: 'Lead', ts: 3 };
-  post2.resolve({ person: { email, name: 'X', flagged: false, reviewVersion: 3, review: { comments: [first, second, saved] } } }); await retry;
-  assert.equal(f.toasts.at(-1), 'Comment posted'); assert.equal(field.value, '');
-  assert.match(veil.querySelector('.interest-thread').innerHTML, /New &lt;comment&gt;/);
-  assert.equal(f.renders.length, 0);
-  // Deleting confirms inline and toasts.
-  f.run('recruitConfirmPersonCommentRemoval')(email, 'ic-first');
-  assert.match(existingNode.innerHTML, /Delete this comment\?/);
-  const deleting = f.run('recruitDeletePersonComment')(email, 'ic-first');
-  const del = f.requests.find((r) => r.method === 'DELETE');
-  assert.equal(del.url, path + '/comments/ic-first');
-  del.resolve({ person: { email, name: 'X', flagged: false, reviewVersion: 4, review: { comments: [second, saved] } } }); await deleting;
-  assert.equal(f.toasts.at(-1), 'Comment deleted'); assert.equal(veil.querySelector('[data-comment-id="ic-first"]'), null);
-  // Flag round trip, on the person.
-  const flagging = f.run('recruitTogglePersonFlag')(email);
-  const patch = f.requests.find((r) => r.method === 'PATCH');
-  assert.equal(patch.url, path + '/review'); same(patch.body, { flagged: true });
-  patch.resolve({ person: { email, name: 'X', flagged: true, reviewVersion: 5, review: { flagged: true, comments: [second, saved] } } }); await flagging;
-  assert.equal(st.persons[email].person.flagged, true); assert.equal(f.toasts.at(-1), 'Flagged for follow-up');
-  assert.match(veil.querySelector('[data-rc="person-flag"]').innerHTML, /aria-pressed="true"/);
-  // Previous / Next walk the sheet by person.
-  f.run('recruitStepPerson(1)'); assert.equal(f.ctx.UI.modal.email, 'two@cornell.edu'); assert.equal(f.renders.length, 0, 'stepping swaps the person in place; the dialog never remounts');
-  console.log('PASS: the person dialog escapes everything, switches between the forms they sent, keeps a dirty comment draft across background refreshes, retries with the same ic- id, flags the person, and never remounts while open');
-}
-
-/* ------------------------------- merges + toasts ------------------------- */
-{
-  const f = fixture();
-  const st = loadCycle(f);
-  f.mount();
-  st.selected = new Set(['in-1', 'in-2']);
-  await f.run("RECRUIT.click('recruit-copy-emails', document.querySelector('[data-action=\"recruit-copy-emails\"]') || document.createElement('button'), { preventDefault() {}, stopPropagation() {} }, () => {})");
-  assert.equal(f.toasts.at(-1), 'Copied 2 emails as CSV');
-  // Bulk delete: a typed confirm, one DELETE per id, rows drop, dialog on a removed row closes.
-  f.run("recruitConfirmRemoval(['in-1', 'in-2'])");
-  assert.equal(f.ctx.UI.modal.kind, 'confirm'); assert.equal(f.ctx.UI.modal.typed, 'delete responses'); assert.equal(f.ctx.UI.modal.danger, true);
-  const go = f.ctx.UI.modal.onGo; f.ctx.UI.modal = { kind: 'recruit-person', email: '"x"@cornell.edu' };
-  const removing = go();
-  const dels = f.requests.filter((r) => r.method === 'DELETE');
-  assert.equal(dels.length, 2); dels.forEach((r) => r.resolve({ ok: true })); await removing;
-  assert.equal(st.apps.rows.length, 0); assert.equal(f.closes.length, 1, 'an open person dialog closes when submissions are deleted');
-  assert.equal(f.toasts.at(-1), 'Deleted 2 responses');
-  console.log('PASS: copy and delete toast their counts, and removal closes the open dialog');
-}
-
-console.log('PASS: recruit UI — registry, cycle index, sheet, dialog, sync and merges');
-
-{
-  const f = fixture(); const st = loadCycle(f);
+  const f = fixture(); loadCycle(f);
   const draft = f.run('recruitPersonDraft')('draft@example.test');
-  draft.text = 'Survives reload'; draft.id = 'ic-retry-persisted';
+  draft.text = 'Survives reload'; draft.id = 'ic-retry-persisted'; draft.stage = 'coffee';
   f.run('recruitSavePersonDraft')(draft);
-  st.drafts = {};
+  f.run('recruitState()').drafts = {};
   const restored = f.run('recruitPersonDraft')('draft@example.test');
-  assert.equal(restored.text, draft.text); assert.equal(restored.id, draft.id);
+  same([restored.text, restored.id, restored.stage], [draft.text, draft.id, 'coffee']);
   f.ctx.Store.me = () => ({ email: 'other@example.test' });
   assert.equal(f.run('recruitPersonDraft')('draft@example.test').text, '', 'another account cannot read this draft');
   f.ctx.Store.me = () => ({ email: 'lead@cornell.edu' });
-  f.ctx.localStorage.setItem(draft.key, JSON.stringify({text: 'Other tab', id: null}));
+  f.ctx.localStorage.setItem(draft.key, JSON.stringify({ text: 'Other tab', id: null }));
   restored.text = ''; restored.id = null; f.run('recruitSavePersonDraft')(restored);
   assert.equal(JSON.parse(f.ctx.localStorage.getItem(draft.key)).text, 'Other tab', 'posting does not erase newer work from another tab');
   const savedSet = f.ctx.localStorage.setItem;
@@ -935,5 +1062,7 @@ console.log('PASS: recruit UI — registry, cycle index, sheet, dialog, sync and
   assert.equal(f.run("recruitParseDate('2026-12-26', true)"), Date.parse('2026-12-27T04:59:59.999Z'));
   assert.equal(f.run("recruitDateInput(recruitParseDate('2026-09-26', true))"), '2026-09-26');
   assert.ok(Number.isNaN(f.run("recruitParseDate('2026-02-30', true)")));
-  console.log('PASS: comment reload persistence, retry IDs, account isolation, storage errors, cross-tab clearing and Eastern deadlines');
+  console.log('PASS: comment drafts survive reloads with their stage, stay per account, never erase another tab\'s work, report storage errors, and deadlines end on Eastern days');
 }
+
+console.log('PASS: recruit UI — registry, shell, index, settings, flow chart, stage page, People, person page, insights, loaders and sync');

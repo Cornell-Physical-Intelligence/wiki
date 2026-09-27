@@ -513,8 +513,10 @@ async function recruitRemoveRole(member) {
   st.busy.add('role');
   try {
     await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/roles/${encodeURIComponent(member)}`, { method: 'DELETE' });
+    // Admins stay on the team without a grant.
+    const admin = Boolean(st.mod.roles?.members.find((m) => m.email === member)?.admin);
     if (st.mod.roles) { st.mod.roles.roles = st.mod.roles.roles.filter((g) => g.member !== member); recruitSyncGrants(); }
-    if (st.cycle?.team) st.cycle.team = st.cycle.team.filter((m) => m.email !== member || recruitIsAdmin());
+    if (st.cycle?.team && !admin) st.cycle.team = st.cycle.team.filter((m) => m.email !== member);
     toast('Removed');
   } catch (e) { toast(`Could not remove: ${recruitError(e)}`); }
   finally { st.busy.delete('role'); recruitPaintRoles(); }
