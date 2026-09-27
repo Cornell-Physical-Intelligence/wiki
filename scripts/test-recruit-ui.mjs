@@ -216,12 +216,12 @@ const sections = () => ({
 const insights = () => ({
   people: 3, statuses: { active: 2, accepted: 1, waitlisted: 0, declined: 0, withdrew: 0 }, flagged: 1, commented: 1, medianDays: 4, firstAt: 1700000000000,
   stages: [
-    { key: 'interest', title: 'Interest form', kind: 'form', rank: 0, form: true, open: true, doneField: null, here: 1, reached: 3, done: 3, notDone: 0, responses: 3, declined: 0, fields: [] },
-    { key: 'coffee', title: 'Coffee chats', kind: 'meeting', rank: 1, form: true, open: false, doneField: 'Chat completed', here: 1, reached: 2, done: 1, notDone: 1, responses: 2, declined: 0, fields: [
+    { key: 'interest', title: 'Interest form', kind: 'form', rank: 0, form: true, open: true, doneField: null, here: 1, reached: 3, done: 3, notDone: 0, upNext: 0, responses: 3, declined: 0, fields: [] },
+    { key: 'coffee', title: 'Coffee chats', kind: 'meeting', rank: 1, form: true, open: false, doneField: 'Chat completed', here: 1, reached: 2, done: 1, notDone: 1, upNext: 1, responses: 2, declined: 0, fields: [
       { key: 'completed', label: 'Chat completed', type: 'check', each: false, summary: { yes: 1, of: 2 } },
       { key: 'met_with', label: 'Met with', type: 'text', each: false, summary: { n: 1, top: [{ value: '<Rae>', n: 1 }] } },
       { key: 'notes', label: 'Notes', type: 'note', each: false, summary: { n: 1 } }] },
-    { key: 'application', title: 'Application form', kind: 'form', rank: 2, form: true, open: false, doneField: null, here: 0, reached: 1, done: 1, notDone: 0, responses: 1, declined: 0, fields: [
+    { key: 'application', title: 'Application form', kind: 'form', rank: 2, form: true, open: false, doneField: null, here: 0, reached: 1, done: 1, notDone: 0, upNext: 1, responses: 1, declined: 0, fields: [
       { key: 'score', label: 'Score', type: 'rating', each: true, max: 5, summary: { n: 2, people: 1, avg: 3.5, max: 5, dist: [0, 0, 1, 1, 0] } },
       { key: 'notes', label: 'Review notes', type: 'note', each: true, summary: { n: 0 } }] },
   ],
@@ -312,6 +312,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const onStage = f.app.querySelectorAll('.rc-tabs [role="tab"]');
   assert.equal(onStage[0].getAttribute('aria-selected'), 'true'); assert.equal(onStage[0].getAttribute('aria-current'), null, 'the tab is marked but is not the page');
   assert.ok(f.app.querySelector('.rc-wrap--full'), 'a stage uses the whole width');
+  // Every view sits in the same frame, so switching tabs never moves the page.
+  const frame = () => { const content = f.app.querySelector('.rc-content'); const wrap = content?.children[0]; return content && [content, wrap, wrap?.children[0]].map((el) => el?.getAttribute('class')).join(' | '); };
+  const frames = ['flow', 'people', 'insights', 'stage', 'person'].map((sub) => { f.ctx.UI.route.params = { id: 'cy-a', sub, key: 'coffee', email: 'ada@cornell.edu' }; f.mount(); return frame(); });
+  assert.ok(frames[0], 'the frame is found');
+  same(frames, frames.map(() => frames[0]), 'Flow, People, Insights, a stage and a person share one frame');
   // Addresses from before the flow chart open that stage's page.
   f.ctx.UI.route.params = { id: 'cy-a', sub: 'coffee' };
   assert.equal(f.run('recruitActivePanel().id'), 'stage'); assert.equal(f.run('recruitStageKey()'), 'coffee');
@@ -460,18 +465,30 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   st.cycle.sections.interest.next = ['coffee', 'application'];
   st.cycle.sections.coffee.next = ['application'];
   const branched = f.run('recruitFlow()');
-  same([...branched.ranks], [['interest', 0], ['coffee', 1], ['application', 2]], 'a stage sits one column past the furthest stage leading into it');
+  same([...branched.ranks], [['interest', 0], ['coffee', 1], ['application', 2]], 'a stage sits one row below the furthest stage leading into it');
   assert.equal(f.run("recruitReaches(recruitFlow(), 'application', 'interest')"), true, 'application → interest would loop');
   assert.equal(f.run("recruitReaches(recruitFlow(), 'interest', 'application')"), false);
   same(f.run("recruitFlowTargets('coffee')"), [], 'coffee already leads everywhere it can without a loop');
   delete st.cycle.sections.interest.next; delete st.cycle.sections.coffee.next;
-  // Layout: columns left to right, then the outcomes; rows down a phone.
+  // Layout: a row per step from the top, then the outcomes across the bottom.
   const layout = f.run('recruitFlowLayout(recruitFlow())');
-  const xs = ['interest', 'coffee', 'application', '__outcome'].map((k) => layout.nodes.get(k).x);
-  assert.ok(xs[0] < xs[1] && xs[1] < xs[2] && xs[2] < xs[3], 'columns run left to right');
+  const at = (k) => layout.nodes.get(k);
+  assert.ok(at('interest').y < at('coffee').y && at('coffee').y < at('application').y && at('application').y < at('__outcome').y, 'rows run top to bottom');
+  assert.ok(at('interest').x === at('coffee').x && at('coffee').x === at('application').x, 'one stage a row stays in one column');
+  assert.ok(at('coffee').h > at('interest').h, 'a card with a progress bar gets a taller row');
+  assert.ok(at('__outcome').w >= at('interest').w, 'the outcomes span the chart');
   assert.equal(layout.edges.filter((e) => e.outcome).length, 1, 'the last stage leads to the outcomes');
-  const down = f.run('recruitFlowLayout(recruitFlow(), { vertical: true })');
-  assert.ok(down.nodes.get('interest').y < down.nodes.get('coffee').y && down.nodes.get('interest').x === down.nodes.get('coffee').x, 'down a phone the stages stack');
+  // Two stages in a row sit side by side; a connection past a card goes around it.
+  st.cycle.sections.interest.next = ['coffee', 'application'];
+  st.cycle.sections.coffee.next = [];
+  const wide = f.run('recruitFlowLayout(recruitFlow())');
+  assert.equal(wide.nodes.get('coffee').y, wide.nodes.get('application').y, 'stages after the same one share a row');
+  assert.ok(wide.nodes.get('coffee').x + wide.nodes.get('coffee').w < wide.nodes.get('application').x, 'side by side');
+  st.cycle.sections.interest.next = ['coffee', 'application'];
+  st.cycle.sections.coffee.next = ['application'];
+  const around = f.run('recruitFlowLayout(recruitFlow())').edges.find((e) => e.from === 'interest' && e.to === 'application');
+  assert.match(around.d, / L/, 'interest → application runs down beside coffee');
+  delete st.cycle.sections.interest.next; delete st.cycle.sections.coffee.next;
   // The chart: a card per stage with its counts, links and controls.
   f.mount();
   const cards = f.app.querySelectorAll('.fc-node[data-key]');
@@ -480,12 +497,15 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.equal(coffee.querySelector('.fc-node__main').getAttribute('href'), '#/applications/cy-a/stage?key=coffee', 'a card opens its stage');
   assert.match(coffee.querySelector('.fc-node__stats').textContent, /1 here\s*2 reached/);
   assert.match(coffee.querySelector('.fc-node__done').textContent, /1\/2 chat completed/, 'a stage with a done checkbox shows how many are done');
+  assert.equal(coffee.querySelector('.rc-kind-tag').textContent, 'Meeting', 'the kind is a quiet tag');
   assert.match(f.app.querySelector('.fc-node[data-key="interest"] .fc-web').textContent, /Open · \/apply/, 'the form at /apply says so');
   assert.equal(f.app.querySelectorAll('.fc-edge:not(.fc-edge--outcome)').length + f.app.querySelectorAll('.fc-edge--outcome').length, 4, 'two connections, one to the outcomes, and the draft line');
   assert.match(f.app.querySelector('.fc-outcome').textContent, /Accepted\s*1/);
   assert.match(f.app.querySelector('[data-rc="flow-summary"]').textContent, /3\s*people\s*2\s*active\s*1\s*accepted\s*1\s*flagged/);
-  assert.equal(f.app.querySelectorAll('.fc-cut').length, 2, 'every connection can be cut by a lead');
+  assert.ok(!f.app.querySelector('.fc-cut, .rc-status-dot, .rc-cycle-state__dot'), 'no hover X on connections and no dots');
   assert.equal(f.app.querySelectorAll('.fc-port').length, 3, 'every card has a port to connect from');
+  f.run("recruitFlowPortMenu")(f.app.querySelector('.fc-port[data-key="coffee"]'), 'coffee');
+  same(f.menus.at(-1).items.filter((i) => i !== '-').map((i) => i.label), ['Add a stage after', 'Connect to…', 'Split by an answer…'], 'the + adds, connects or splits');
   // Connecting saves every connection explicitly, with the order.
   const connecting = f.run("recruitFlowConnect('interest', 'application')");
   const put = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
@@ -496,7 +516,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   put.resolve({ cycle: cycleRow({ version: 4 }), sections: saved }); await connecting;
   assert.equal(f.toasts.at(-1), 'Interest form now leads to Application form');
   assert.equal(f.run('recruitCycleRow().version'), 4, 'the next save uses the new version');
-  assert.equal(f.app.querySelectorAll('.fc-cut').length, 3, 'the chart repainted in place');
+  assert.equal(f.app.querySelectorAll('.fc-edge[data-to]:not(.fc-edge--outcome)').length, 3, 'the chart repainted in place');
   assert.equal(f.renders.length, 0, 'editing the flow never re-renders the route');
   f.run("recruitFlowConnect('application', 'interest')");
   assert.match(f.toasts.at(-1), /comes before Application form; that connection would loop back/, 'a loop is refused before any request');
@@ -536,8 +556,127 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const r = fixture({ admin: false });
   loadCycle(r, { role: 'reviewer', roles: ['reviewer'] });
   r.mount();
-  assert.ok(r.app.querySelector('.fc-node') && !r.app.querySelector('.fc-port, .fc-cut, .fc-node__more'), 'reviewers read the chart');
-  console.log('PASS: the flow chart lays out columns, counts each stage, saves connections, removals and new stages as one versioned PUT, refuses loops, and puts itself back when a save fails');
+  assert.ok(r.app.querySelector('.fc-node') && !r.app.querySelector('.fc-port, .fc-node__more'), 'reviewers read the chart');
+  console.log('PASS: the flow chart lays out rows from the top, counts each stage, saves connections, removals and new stages as one versioned PUT, refuses loops, and puts itself back when a save fails');
+}
+
+/* ------------------------------- splits ---------------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f);
+  // A form per subteam after the application, both for everyone so far, then an interview.
+  const form = (title) => ({ title, description: '', open: false, kind: 'form', fields: [], done: null, required: ['name', 'email'], form: { questions: basics() } });
+  const flowWith = (over = {}) => {
+    const s = { ...sections(), elec: form('Electrical form'), sw: form('Software form'), interview: { title: 'Interview', description: '', open: false, kind: 'meeting', fields: [], done: null, required: [], form: null } };
+    s.interest.next = ['coffee']; s.coffee.next = ['application']; s.application.next = ['elec', 'sw']; s.elec.next = ['interview']; s.sw.next = ['interview']; s.interview.next = [];
+    return Object.assign(s, over);
+  };
+  st.cycle.sections = flowWith();
+  // An answer's first guess is the stage named for it, or for a short name clubs use.
+  const guess = (answer, titles) => f.run('recruitSplitGuess')(answer, titles.map((t, i) => ({ key: 'k' + i, title: t })));
+  assert.equal(guess('Mechanical', ['CS form', 'Mech form']), 'k1');
+  assert.equal(guess('Software', ['CS form', 'Mech form']), 'k0');
+  assert.equal(guess('Electrical', ['EE form', 'Mech form']), 'k0');
+  assert.equal(guess('Formula SAE', ['CS form', 'Mech form']), '', '"form" in every name is no match');
+  assert.equal(guess('Creative', ['CS form', 'Mech form']), '');
+  // The + under a stage offers the split.
+  f.run('recruitFlowPortMenu')(null, 'application');
+  f.menus.at(-1).items.find((i) => i.label === 'Split by an answer…').run();
+  const m = f.ctx.UI.modal;
+  assert.equal(m.kind, 'recruit-split');
+  assert.equal(m.pick, 'interest::subteam', 'a subteam question on an earlier form is the first choice');
+  same(m.routes, { Electrical: 'elec', Software: 'sw' }, 'each answer starts on the stage named for it');
+  let dialog = f.mountModal();
+  same(dialog.querySelectorAll('.sp-route__answer').map((el) => el.textContent), ['Electrical', 'Software', 'Anyone else']);
+  same(f.run("recruitSplitDestinations(recruitFlow(), 'application')"), ['elec', 'sw', 'interview'], 'a split sends people only to stages that do not lead back');
+  assert.doesNotMatch(dialog.innerHTML, /<select|<datalist/, 'every choice is the app\'s own menu');
+  // Unsaved settings on the stage wait while the split saves.
+  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'stage', key: 'application', tab: 'settings' } };
+  f.mount();
+  const tickInterview = f.app.querySelector('[data-action="recruit-ss-next"][data-to="interview"]');
+  tickInterview.checked = true;
+  await f.click(tickInterview);
+  same(f.run("recruitStageDraft(recruitCycleRow(), 'application').model.next"), ['elec', 'sw', 'interview']);
+  // Software gets a form of its own; the split saves the way people go, in one PUT.
+  f.pick(dialog.querySelector('[data-m="recruit-split-to"][data-answer="Software"]'), 'A new stage');
+  const saving = f.run('recruitSaveSplit()');
+  const put = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  const made = put.body.settings.sections['software-form'];
+  same([made.title, made.kind, made.open, made.form.questions.map((x) => x.key), made.next], ['Software form', 'form', false, ['name', 'email'], []], 'a new stage is a closed form with name and email');
+  same(put.body.settings.order, ['interest', 'coffee', 'application', 'software-form', 'elec', 'sw', 'interview'], 'it sits right after the split');
+  same(put.body.settings.sections.application, { next: ['sw', 'elec', 'software-form'], split: { stage: 'interest', q: 'subteam', routes: { Electrical: 'elec', Software: 'software-form' }, otherwise: null } }, 'the old connection stays for everyone');
+  // The server answers with the stages in their saved order.
+  const inOrder = (all) => Object.fromEntries(put.body.settings.order.map((k) => [k, all[k]]));
+  const savedSections = inOrder(flowWith({ 'software-form': { ...made, required: ['name', 'email'] } }));
+  savedSections.application.next = put.body.settings.sections.application.next;
+  savedSections.application.split = put.body.settings.sections.application.split;
+  put.resolve({ cycle: cycleRow({ version: 4 }), sections: savedSections }); await saving;
+  assert.equal(f.toasts.at(-1), 'Split saved');
+  assert.equal(f.ctx.UI.modal, null, 'the dialog closes');
+  assert.ok(f.requests.some((r) => r.url === '/recruit/cycles/cy-a/insights' && !r.done), 'the counts reload for the new flow');
+  // The stage's settings: the split's stages are set in the split; the unsaved tick survived.
+  f.mount();
+  same(f.app.querySelectorAll('.ss-next input[data-to]').map((i) => [i.dataset.to, i.checked, i.disabled]),
+    [['interest', false, true], ['coffee', false, true], ['software-form', true, true], ['elec', true, true], ['sw', true, false], ['interview', true, false]]);
+  same(f.app.querySelectorAll('.ss-next .is-routed small').map((el) => el.textContent), ['Software', 'Electrical'], 'each shows the answers that lead there');
+  assert.match(f.app.querySelector('.ss-split').textContent, /Split by Subteam on Interest form\s*Edit split…/);
+  same(f.run("recruitStageDraft(recruitCycleRow(), 'application').model.next"), ['sw', 'elec', 'software-form', 'interview'], 'the tick lands on top of the new connections');
+  const savingDraft = f.run('recruitSaveStage()');
+  const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put2.body.settings.sections.application, { next: ['sw', 'elec', 'software-form', 'interview'] }, 'the stage saves its ticks and keeps the split\'s stages');
+  const after = inOrder(flowWith({ 'software-form': savedSections['software-form'] }));
+  after.application.next = put2.body.settings.sections.application.next; after.application.split = savedSections.application.split;
+  put2.resolve({ cycle: cycleRow({ version: 5 }), sections: after }); await savingDraft;
+  // The chart: each way out of the split says which answers take it.
+  f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'flow' } };
+  f.mount();
+  same(f.app.querySelectorAll('.fc-when').map((b) => [b.dataset.to, b.textContent]), [['elec', 'Electrical'], ['software-form', 'Software']]);
+  same(f.app.querySelectorAll('.fc-edge--split').map((e) => e.dataset.to), ['elec', 'software-form'], 'only the split\'s ways are dashed');
+  assert.equal(f.app.querySelector('.fc-when').dataset.action, 'recruit-flow-split', 'a lead opens the split from a label');
+  // Cutting a way drops its answers; removing the split keeps the connections.
+  const unlinking = f.run("recruitFlowUnlink('application', 'elec')");
+  const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put3.body.settings.sections.application, { next: ['sw', 'software-form', 'interview'], split: { stage: 'interest', q: 'subteam', routes: { Software: 'software-form' }, otherwise: null } });
+  put3.reject(Object.assign(new Error('No'), { status: 400 })); await unlinking;
+  assert.ok(f.run("recruitFlow().splits.get('application').routes.Electrical"), 'a failed save puts the answer back');
+  f.run("recruitOpenSplit('application')");
+  dialog = f.mountModal();
+  assert.ok(dialog.querySelector('[data-action="recruit-split-remove"]'), 'a saved split can be removed');
+  const removing = f.run('recruitRemoveSplit()');
+  const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put4.body.settings.sections.application, { next: ['sw', 'elec', 'software-form', 'interview'], split: null });
+  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...after, application: { ...after.application, split: undefined } } }); await removing;
+  assert.match(f.toasts.at(-1), /Split removed/);
+  // Without a choice question before it, the dialog says what to add.
+  f.run("recruitOpenSplit('interest')");
+  f.ctx.UI.modal.pick = '';
+  st.cycle.sections.interest.form.questions = basics();
+  dialog = f.mountModal();
+  assert.match(dialog.textContent, /No form before Interest form asks a choose-one, choose-many or checkbox question/);
+  assert.ok(!dialog.querySelector('[data-action="recruit-split-save"]'));
+  console.log('PASS: a split guesses each answer\'s stage, saves in one PUT with any new forms, labels its ways on the chart, keeps unsaved stage settings, and goes when its answers do');
+}
+
+/* ------------------------------- a person on a split --------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'person', params: { email: 'ada@cornell.edu' } });
+  const form = (title) => ({ title, description: '', open: false, kind: 'form', fields: [], done: null, required: ['name', 'email'], form: { questions: basics() } });
+  st.cycle.sections = { ...sections(), elec: form('Electrical form'), sw: form('Software form') };
+  st.cycle.sections.application.next = ['elec', 'sw'];
+  st.cycle.sections.application.split = { stage: 'interest', q: 'subteam', routes: { Electrical: 'elec', Software: 'sw' }, otherwise: null };
+  const ada = { ...people()[0], stage: 'application', states: { interest: 'done', coffee: 'done', application: 'current', elec: 'offpath', sw: 'ahead' }, done: { interest: true, coffee: true }, next: ['sw'] };
+  st.people = { id: `${st.key}:cy-a`, rows: [ada], byEmail: { [ada.email]: ada }, next: null, total: 1, counts: null, loading: false, loaded: true, error: null, q: '', filters: {}, sort: 'last', view: 'table', selected: new Set(), appliedParams: '' };
+  f.mount();
+  same(f.app.querySelectorAll('.pn-journey__step').map((li) => [li.querySelector('.pn-journey__name').textContent, li.querySelector('.pn-journey__state').textContent]),
+    [['Interest form', 'Done'], ['Coffee chats', 'Done'], ['Application form', 'Here now'], ['Software form', 'Up next']], 'the stage their answer sent them away from is not on their page');
+  same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'sw']);
+  assert.match(f.app.querySelector('.pn-stage[data-stage="sw"] .pn-state').textContent, /Up next/);
+  assert.match(f.app.querySelector('.pn-tile').textContent, /Forms sent\s*2\s*of 4/, 'forms they will never get are not counted');
+  // A new answer that sends them the other way changes the cards in place.
+  f.run('recruitAcceptTrack')('ada@cornell.edu', { stage: 'application', status: 'active', states: { ...ada.states, elec: 'ahead', sw: 'offpath' }, done: ada.done, fields: {}, trackVersion: 9, next: ['elec'] });
+  same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'elec']);
+  console.log('PASS: a person\'s page leaves out the stages a split sent them away from, marks where they go next, and follows a changed answer');
 }
 
 /* ------------------------------- a stage's page -------------------------- */
@@ -687,7 +826,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'stage', key: 'coffee' } })");
   const list = await f.pending(/\/people\?/);
   assert.match(list.url, /reached=coffee/); assert.match(list.url, /sort=name/);
-  same(f.app.querySelectorAll('[data-rc="stage-chips"] .rc-chip').map((c) => c.textContent), ['Everyone who reached it2', 'Here now1', 'Done1', 'Not done1'], 'the chips count each list');
+  same(f.app.querySelectorAll('[data-rc="stage-chips"] .rc-chip').map((c) => c.textContent), ['Everyone who reached it2', 'Here now1', 'Done1', 'Not done1', 'Up next1'], 'the chips count each list');
   list.resolve({ rows: people().slice(0, 1), total: 1 }); await f.settle();
   const row = f.app.querySelector('[data-rc="stage-people-rows"] tr[data-email="ada@cornell.edu"]');
   assert.ok(row, 'one row per person');
@@ -716,6 +855,9 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="here"]'));
   const here = (await f.pending(/\/people\?/)).url;
   assert.match(here, /stage=coffee/); assert.match(here, /status=active/);
+  await f.click(f.app.querySelector('[data-action="recruit-stage-filter"][data-filter="next"]'));
+  const next = (await f.pending(/\/people\?/)).url;
+  assert.match(next, /next=coffee/); assert.match(next, /status=active/);
   console.log('PASS: a stage\'s people load by filter, show its checklist as columns, save a tick at once and put a failed value back');
 }
 

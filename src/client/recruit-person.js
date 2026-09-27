@@ -33,7 +33,7 @@ function recruitPersonRows(email) {
 function recruitAcceptTrack(email, p) {
   if (!p) return;
   const fresh = (have) => Number(p.trackVersion ?? 0) >= Number(have?.trackVersion ?? 0);
-  const view = { stage: p.stage, status: p.status, states: p.states, done: p.done, fields: p.fields, trackVersion: p.trackVersion };
+  const view = { stage: p.stage, status: p.status, states: p.states, done: p.done, fields: p.fields, trackVersion: p.trackVersion, ...(Array.isArray(p.next) ? { next: p.next } : {}) };
   for (const row of recruitPersonRows(email)) if (fresh(row)) Object.assign(row, view);
   const d = recruitPerson(email);
   if (d?.person && fresh(d.person)) Object.assign(d.person, view, p.track ? { track: p.track } : {});
@@ -353,7 +353,7 @@ function recruitPersonHeadHtml(cycle, p) {
     ? `<button class="btn interest-flag ${p.flagged ? 'is-flagged' : ''}" data-action="recruit-person-flag" data-email="${MD.esc(p.email)}" aria-pressed="${Boolean(p.flagged)}" title="${p.flagged ? 'Remove the flag' : 'Flag for follow-up'}">${RC_ICONS.flag}<span>${p.flagged ? 'Flagged' : 'Flag'}</span></button>`
     : p.flagged ? `<span class="interest-flag-readonly">${RC_ICONS.flag}Flagged</span>` : '';
   const status = lead
-    ? `<button class="btn pn-status pn-status--${MD.esc(p.status || 'active')}" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu"><span class="rc-status-dot rc-status-dot--${MD.esc(p.status || 'active')}"></span>${MD.esc(recruitStatusLabel(p.status))}${I.chev || ''}</button>`
+    ? `<button class="btn pn-status pn-status--${MD.esc(p.status || 'active')}" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${MD.esc(recruitStatusLabel(p.status))}${I.chev || ''}</button>`
     : recruitStatusPill(p.status);
   const move = lead
     ? `<button class="btn" data-action="recruit-person-move" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${recruitKindIcon(flow.sections[p.stage]?.kind)}<span>${MD.esc(stageLabel)}</span>${I.chev || ''}</button>`
@@ -368,7 +368,8 @@ function recruitPersonHeadHtml(cycle, p) {
 // how long they have been in the cycle.
 function recruitPersonStatsHtml(cycle, p, d) {
   const flow = recruitFlow(cycle);
-  const forms = flow.keys.filter((k) => flow.sections[k].form);
+  const keys = recruitTheirKeys(p, flow);
+  const forms = keys.filter((k) => flow.sections[k].form);
   const sent = forms.filter((k) => p.sections?.[k] || (d?.submissions || []).some((s) => s.application.section === k));
   const reached = flow.keys.filter((k) => ['current', 'done', 'open'].includes(p.states?.[k]));
   const done = reached.filter((k) => p.done?.[k]);
@@ -380,28 +381,28 @@ function recruitPersonStatsHtml(cycle, p, d) {
     ['Comments', recruitNum((d?.person?.review?.comments || []).length || p.comments || 0)],
     ['In the cycle', days === null ? '—' : `${recruitNum(days)}<small>${days === 1 ? 'day' : 'days'}</small>`],
   ];
-  const journey = `<ol class="pn-journey" aria-label="Where ${MD.esc(p.name || '')} is in the flow">${flow.keys.map((k) => {
-    const state = p.states?.[k] || 'ahead';
+  const journey = `<ol class="pn-journey" aria-label="Where ${MD.esc(p.name || '')} is in the flow">${keys.map((k) => {
+    const state = recruitStateOf(p, k);
     const isDone = Boolean(p.done?.[k]);
     return `<li class="pn-journey__step pn-journey__step--${state} ${isDone ? 'is-done' : ''}"><a href="#pn-stage-${MD.esc(k)}" data-action="recruit-person-jump" data-stage="${MD.esc(k)}"><span class="pn-journey__dot" aria-hidden="true">${isDone ? I.check : ''}</span><span class="pn-journey__name">${MD.esc(recruitSectionTitle(k, cycle))}</span><span class="pn-journey__state">${state === 'current' ? (isDone ? 'Here · done' : 'Here now') : RECRUIT_STATE_LABELS[state]}</span></a></li>`;
   }).join('')}</ol>`;
   return `<div class="pn-stats">${tiles.map(([label, v]) => `<div class="pn-tile"><span class="pn-tile__label">${label}</span><span class="pn-tile__value">${v}</span></div>`).join('')}</div>${journey}`;
 }
 
-const RECRUIT_STATE_CHIPS = { current: 'Here now', done: 'Done', open: 'Not done', skipped: 'Skipped', ahead: 'Not yet' };
+const RECRUIT_STATE_CHIPS = { current: 'Here now', done: 'Done', open: 'Not done', skipped: 'Skipped', ahead: 'Not yet', next: 'Up next' };
 
 function recruitPersonStagesHtml(cycle, p, d) {
   const flow = recruitFlow(cycle);
   if (d?.loading && !d.submissions) return '<p class="sheet__note">Loading…</p>';
-  return flow.keys.map((k) => recruitPersonStageHtml(cycle, flow, k, p, d)).join('');
+  return recruitTheirKeys(p, flow).map((k) => recruitPersonStageHtml(cycle, flow, k, p, d)).join('');
 }
 
 function recruitPersonStageHtml(cycle, flow, key, p, d) {
   const s = flow.sections[key];
-  const state = p.states?.[key] || 'ahead';
+  const state = recruitStateOf(p, key);
   const isDone = Boolean(p.done?.[key]);
   const sub = (d?.submissions || []).find((x) => x.application.section === key);
-  const quiet = (state === 'ahead' || state === 'skipped') && !sub && !(s.fields || []).some((f) => p.fields?.[key]?.[f.key] !== undefined);
+  const quiet = (state === 'ahead' || state === 'next' || state === 'skipped') && !sub && !(s.fields || []).some((f) => p.fields?.[key]?.[f.key] !== undefined);
   const stored = d?.person?.track?.fields?.[key] || {};
   const comments = (d?.person?.review?.comments || []).filter((c) => c.stage === key).length;
   const chip = `<span class="pn-state pn-state--${state} ${isDone ? 'is-done' : ''}">${state === 'current' && isDone ? 'Here · done' : RECRUIT_STATE_CHIPS[state]}</span>`;
@@ -467,9 +468,14 @@ function recruitPaintPerson(email, whole = false) {
   const head = $('[data-rc="pn-head"]', page);
   if (head) { const holder = document.createElement('div'); holder.innerHTML = recruitPersonHeadHtml(cycle, p); const fresh = holder.firstElementChild || holder.children?.[0]; if (fresh) recruitRepaint(head, fresh.innerHTML); }
   recruitRepaint($('[data-rc="pn-stats"]', page), recruitPersonStatsHtml(cycle, p, d));
-  // Stage cards repaint one by one, and never the one being typed in.
+  // Stage cards repaint one by one, and never the one being typed in. When a
+  // split sends them another way, the cards change with it.
   const flow = recruitFlow(cycle);
-  for (const k of flow.keys) {
+  const keys = recruitTheirKeys(p, flow);
+  const stages = $('[data-rc="pn-stages"]', page);
+  const typing = () => stages.contains(document.activeElement) && document.activeElement?.matches?.('textarea, input:not([type="checkbox"])');
+  if ($$('.pn-stage[data-stage]', stages).map((el) => el.dataset.stage).join('\n') !== keys.join('\n') && !typing()) recruitRepaint(stages, recruitPersonStagesHtml(cycle, p, d));
+  else for (const k of keys) {
     const card = $$('.pn-stage[data-stage]', page).find((el) => el.dataset.stage === k);
     if (!card) continue;
     if (card.contains(document.activeElement) && document.activeElement?.matches?.('textarea, input:not([type="checkbox"])')) continue;

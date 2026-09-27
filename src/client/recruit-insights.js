@@ -14,20 +14,28 @@
 
 // The counts behind the chart cards, the stage headers and this view. One
 // request serves all three; each repaints when it lands.
-function recruitLoadInsights({ quiet = false } = {}) {
+// `again` is for a change that lands while a request is out: its answer may
+// predate the change, so one more follows.
+function recruitLoadInsights({ quiet = false, again = false } = {}) {
   const st = recruitState();
   const cycle = recruitCycleRow();
   if (!cycle) return Promise.resolve();
   const key = st.key + ':' + cycle.id;
   if (!st.insights || st.insights.key !== key) st.insights = { key, data: null, loading: false, error: null, promise: null };
   const box = st.insights;
-  if (box.loading) return box.promise;
+  if (box.loading) { if (again) box.again = true; return box.promise; }
   box.loading = true;
+  box.again = false;
   if (!quiet) box.error = null;
   box.promise = RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/insights`)
     .then((data) => { if (st.insights === box) { box.data = data; box.error = null; } })
     .catch((e) => { if (st.insights === box && !box.data) box.error = recruitError(e); })
-    .finally(() => { box.loading = false; if (st.insights === box) recruitInsightsChanged(); });
+    .finally(() => {
+      box.loading = false;
+      if (st.insights !== box) return;
+      recruitInsightsChanged();
+      if (box.again) recruitLoadInsights({ quiet: true });
+    });
   return box.promise;
 }
 

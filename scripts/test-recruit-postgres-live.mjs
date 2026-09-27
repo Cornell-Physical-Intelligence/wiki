@@ -127,7 +127,14 @@ try {
   const moved = await kit.people.moveMany(flowCycle.id,[{email:'ann@example.com',name:'Ann',entry:{n:1}},{email:'ben@example.com',name:'Ben',entry:{n:2}}],{patch:{stage:'interview',stageAt:50},now:50});
   assert.deepEqual(moved.sort(),['ann@example.com','ben@example.com']);
   assert.deepEqual(await kit.people.usage(flowCycle.id,'interview'),{placed:2,recorded:0});
-  console.log('PASS: real Postgres flow tracking — concurrent checklist writes across connections, per-reviewer scores, bulk moves');
+  // Splits read only the answers they name, newest form last.
+  await kit.apps.create(flowCycle,{name:'Cy',email:'cy@example.com',section:'application',answers:{subteam:'Software',why:'x'},by:'test',now:60});
+  await kit.apps.create(flowCycle,{name:'Di',email:'di@example.com',section:'application',answers:{why:'y'},by:'test',now:61});
+  const picked = await kit.apps.routeAnswers(flowCycle.id,new Map([['application',new Set(['subteam'])],['interest',new Set(['subteam'])]]));
+  assert.deepEqual(picked.get('cy@example.com'),{application:{subteam:'Software'}});
+  assert.deepEqual(picked.get('di@example.com'),{application:{}},'a form without the answer reads as unanswered');
+  assert.deepEqual(picked.get('ben@example.com'),{interest:{}});
+  console.log('PASS: real Postgres flow tracking — concurrent checklist writes across connections, per-reviewer scores, bulk moves, split answers');
   console.log('PASS: real Postgres — 8 concurrent admissions at capacity 1, replacement while full, receipt replay, removal rollback, list and people queries');
 } finally {
   // pg-pool can resolve end() as soon as clients leave its list, before their
