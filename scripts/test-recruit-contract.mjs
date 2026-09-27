@@ -17,7 +17,7 @@ const { ACCESS_LEVELS } = await import(pathToFileURL(join(root, 'lib/recruit/per
 
 const serverFiles = existsSync(modulesDir) ? readdirSync(modulesDir).filter((f) => f.endsWith('.js')).sort() : [];
 const clientFiles = existsSync(clientDir) ? readdirSync(clientDir).filter((f) => /^recruit-[a-z]+\.js$/.test(f) && f !== 'recruit-core.js').sort() : [];
-const ALLOWED_IMPORTS = /^(node:[a-z_/]+|\.\.\/fixed-form\.js|\.\.\/sections\.js|\.\.\/mailer\.js|\.\.\/migrate\.js|\.\.\/permissions\.js)$/;
+const ALLOWED_IMPORTS = /^(node:[a-z_/]+|\.\.\/fixed-form\.js|\.\.\/flow\.js|\.\.\/sections\.js|\.\.\/mailer\.js|\.\.\/migrate\.js|\.\.\/permissions\.js)$/;
 const KERNEL = new Set(['cycles', 'applications', 'people', 'roles', 'site']);
 
 test('every server module file exports the module object shape', async () => {
