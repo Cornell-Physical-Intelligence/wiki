@@ -28,6 +28,25 @@ assert.equal(svg['content-type'], 'image/svg+xml'); assert.match(svg['content-di
 
 const pdf = attachmentHeaders({ type: 'application/pdf', name: 'sch.pdf' });
 assert.equal(pdf['content-type'], 'application/pdf'); assert.equal(pdf['content-security-policy'], undefined, 'the PDF viewer needs no sandbox');
+assert.match(pdf['content-disposition'], /^inline;/, 'PDFs open in the native browser viewer');
+
+for (const type of ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation', 'application/rtf', 'text/rtf', 'text/plain']) {
+  const document = attachmentHeaders({ type, name: 'document' });
+  assert.equal(document['content-type'], type, 'document MIME types reach the browser viewer intact');
+  assert.match(document['content-disposition'], /^inline;/, 'supported document viewers can open the file');
+  assert.equal(document['x-content-type-options'], 'nosniff');
+  assert.equal(document['content-security-policy'], 'sandbox');
+}
+for (const type of ['text/html', 'application/xhtml+xml', 'application/javascript', 'application/xml', 'application/octet-stream']) {
+  const disguised = attachmentHeaders({ type, name: 'looks-like-a-document.pdf' });
+  assert.equal(disguised['content-type'], 'application/octet-stream');
+  assert.match(disguised['content-disposition'], /^attachment;/, 'a filename cannot promote active content into an inline document');
+  assert.equal(disguised['content-security-policy'], 'sandbox');
+}
 
 const stl = attachmentHeaders({ type: 'model/stl', name: 'bracket v2.stl' });
 assert.equal(stl['content-type'], 'application/octet-stream'); assert.match(stl['content-disposition'], /^attachment; filename="bracket%20v2\.stl"/);

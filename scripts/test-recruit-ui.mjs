@@ -318,6 +318,10 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const frames = ['flow', 'people', 'insights', 'stage', 'person'].map((sub) => { f.ctx.UI.route.params = { id: 'cy-a', sub, key: 'coffee', email: 'ada@cornell.edu' }; f.mount(); return frame(); });
   assert.ok(frames[0], 'the frame is found');
   same(frames, frames.map(() => frames[0]), 'Flow, People, Insights, a stage and a person share one frame');
+  assert.equal(f.app.querySelector('.rc-cycle-head'), null, 'a person page omits the repeated cycle heading');
+  assert.equal(f.app.querySelector('.rc-tabs'), null, 'a person page omits the cycle tabs');
+  assert.match(f.app.querySelector('.crumbs').textContent, /Fall 2026/, 'the breadcrumb keeps the cycle context');
+  assert.equal(f.app.querySelector('.pn-back').getAttribute('href'), '#/applications/cy-a/people', 'the person page still links back to People');
   // Addresses from before the flow chart open that stage's page.
   f.ctx.UI.route.params = { id: 'cy-a', sub: 'coffee' };
   assert.equal(f.run('recruitActivePanel().id'), 'stage'); assert.equal(f.run('recruitStageKey()'), 'coffee');
@@ -690,11 +694,8 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const ada = { ...people()[0], first: Date.UTC(2026, 8, 25, 16), stage: 'application', states: { interest: 'done', coffee: 'done', application: 'current', elec: 'offpath', sw: 'ahead' }, done: { interest: true, coffee: true }, next: ['sw'] };
   st.people = { id: `${st.key}:cy-a`, rows: [ada], byEmail: { [ada.email]: ada }, next: null, total: 1, counts: null, loading: false, loaded: true, error: null, q: '', filters: {}, sort: 'last', view: 'table', selected: new Set(), appliedParams: '' };
   f.mount();
-  same(f.app.querySelectorAll('.pn-journey__step').map((li) => [li.querySelector('.pn-journey__name').textContent, li.querySelector('.pn-journey__state').textContent]),
-    [['Interest form', 'Done'], ['Coffee chats', 'Done'], ['Application form', 'Here now'], ['Software form', 'Up next']], 'the stage their answer sent them away from is not on their page');
-  same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'sw']);
+  same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'sw'], 'the stage their answer sent them away from is not on their page');
   assert.match(f.app.querySelector('.pn-stage[data-stage="sw"] .pn-state').textContent, /Up next/);
-  assert.match(f.app.querySelector('.pn-meta time').textContent, /^Submitted Sep 25\b/, 'when they first sent a form sits under their name');
   // A new answer that sends them the other way changes the cards in place.
   f.run('recruitAcceptTrack')('ada@cornell.edu', { stage: 'application', status: 'active', states: { ...ada.states, elec: 'ahead', sw: 'offpath' }, done: ada.done, fields: {}, trackVersion: 9, next: ['elec'] });
   same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), ['interest', 'coffee', 'application', 'elec']);
@@ -724,7 +725,6 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const ada = { ...people()[0], ...personFlow(flow, submissions, track), fields: { coffee: { completed: true } }, sections: Object.fromEntries(submissions.map((s) => [s.section, { id: `p-${s.section}`, section: s.section, ts: s.ts }])) };
   st.people = { id: `${st.key}:cy-a`, rows: [ada], byEmail: { [email]: ada }, next: null, total: 1, counts: null, loading: false, loaded: true, error: null, q: '', filters: {}, sort: 'last', view: 'table', selected: new Set(), appliedParams: '' };
   const assertPersonStages = (keys, message) => {
-    same(f.app.querySelectorAll('.pn-journey__name').map((el) => el.textContent), keys.map((k) => st.cycle.sections[k].title), `${message}: journey`);
     same(f.app.querySelectorAll('.pn-stage[data-stage]').map((el) => el.dataset.stage), keys, `${message}: stage cards`);
   };
   const assertPeopleTrack = (keys, message) => {
@@ -738,7 +738,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   };
   f.mount();
   assertPersonStages(['interest', 'coffee', 'sw'], 'a Software column answer excludes the other applications');
-  assert.equal(f.app.querySelector('.pn-stage[data-stage="sw"] .pn-state').textContent, 'Here · done');
+  assert.equal(f.app.querySelector('.pn-stage[data-stage="sw"] .pn-state').textContent, 'Current');
   assertPeopleTrack(['interest', 'coffee', 'sw'], 'a Software column answer excludes the other applications');
 
   submissions[1].answers = { subteam: ['Software', 'Mechanical'] };
@@ -750,7 +750,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   f.run('recruitAcceptTrack')(email, { ...personFlow(flow, blank, track), fields: ada.fields, trackVersion: 10 });
   assertPersonStages(['interest', 'coffee'], 'a submitted blank stops at the split');
   assertPeopleTrack(['interest', 'coffee'], 'a submitted blank stops at the split');
-  console.log('PASS: real server routing hides unrelated branches in the journey, stage cards and People progress for column-only answers, multiple choices and a submitted blank');
+  console.log('PASS: real server routing hides unrelated branches in stage cards and People progress for column-only answers, multiple choices and a submitted blank');
 }
 
 // Saving a split refreshes previously visited people as well as list rows.
@@ -1112,7 +1112,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   st.people = { id: `${st.key}:cy-a`, rows, byEmail: Object.fromEntries(rows.map((r) => [r.email, r])), next: null, total: 2, counts: null, loading: false, loaded: true, error: null, q: '', filters: {}, sort: 'last', view: 'table', selected: new Set(), appliedParams: '' };
   st.personNav = { emails: ['ada@cornell.edu', 'bo@cornell.edu'], label: 'People', href: '#/applications/cy-a/people', cycleId: 'cy-a' };
   f.mount();
-  assert.match(f.app.querySelector('.pn-head h2').textContent, /Ada/, 'the list row names the person before their detail arrives');
+  assert.match(f.app.querySelector('.pn-head h1').textContent, /Ada/, 'the list row names the person before their detail arrives');
   assert.match(f.app.querySelector('.pn-step').textContent, /1 of 2/, 'Previous and Next walk the list it was opened from');
   f.run("RECRUIT.mount({ name: 'recruit', params: { id: 'cy-a', sub: 'person', email: 'ada@cornell.edu' } })");
   const detail = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu');
@@ -1123,7 +1123,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
     person: { ...people()[0], review: { flagged: true, comments: [first] }, reviewVersion: 3, trackVersion: 2,
       track: { stage: null, fields: { coffee: { completed: { v: false, by: 'rae@cornell.edu', name: 'Rae', at: 5 }, met_with: { v: 'Rae', by: 'rae@cornell.edu', name: 'Rae', at: 6 } } }, moves: [] } },
     submissions: [
-      { application: { id: 'p-a1', section: 'interest', name: 'Ada', email: 'ada@cornell.edu', ts: 1, answers: { project: 'A <robot>' }, files: [{ id: 'f-1', question: 'file', name: 'cv.pdf', size: 2048 }] }, form: { questions: sections().interest.form.questions } },
+      { application: { id: 'p-a1', section: 'interest', name: 'Ada', email: 'ada@cornell.edu', subteam: 'Software', year: 'Senior', ts: 1, answers: { project: 'A <robot>' }, files: [{ id: 'f-1', question: 'file', name: 'cv.pdf', size: 2048 }] }, form: { questions: sections().interest.form.questions } },
       { application: { id: 'p-a2', section: 'coffee', name: 'Ada', email: 'ada@cornell.edu', ts: 3, answers: { topics: 'Time' }, files: [] }, form: { questions: basics() } },
     ],
     history: [{ cycleId: 'cy-old', cycleName: 'Spring 2025', section: 'interest', sectionTitle: 'Interest form' }],
@@ -1131,25 +1131,48 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   await f.settle();
   const html = f.app.innerHTML;
   assert.match(html, /A &lt;robot&gt;/); assert.match(html, /Existing &lt;comment&gt;/); assert.doesNotMatch(html, /<robot>|<comment>/);
-  assert.match(html, /href="\/api\/recruit\/files\/f-1" download="cv\.pdf"/, 'files link only the authenticated route');
-  same(f.app.querySelectorAll('.pn-journey__step').map((s) => s.querySelector('.pn-journey__state').textContent), ['Done', 'Here now', 'Not yet']);
+  const attachment = f.app.querySelector('a[href="/api/recruit/files/f-1"]');
+  assert.ok(attachment, 'files link only the authenticated route');
+  assert.equal(attachment.getAttribute('download'), null, 'opening a response file does not force a download');
+  assert.equal(attachment.getAttribute('target'), '_blank', 'opening a file keeps the person page in place');
+  assert.match(attachment.getAttribute('rel'), /\bnoopener\b/);
+  assert.equal(f.app.querySelector('.pn-journey'), null, 'stage sections are not duplicated by a progress strip');
   same(f.app.querySelectorAll('.pn-stage').map((s) => s.dataset.stage), ['interest', 'coffee', 'application'], 'a card per stage');
+  const interest = f.app.querySelector('.pn-stage[data-stage="interest"]');
   const coffee = f.app.querySelector('.pn-stage[data-stage="coffee"]');
+  const interestAnswers = interest.querySelectorAll('.pn-answer').map((answer) => [answer.querySelector('h4').textContent, answer.querySelector('p').textContent]);
+  assert.equal(interestAnswers.some(([label]) => label === 'Subteam'), false, 'an answer already shown in the person header is not repeated');
+  assert.ok(interestAnswers.some(([label, value]) => label === 'Year' && value === 'Senior'), 'a historical answer that differs from the header remains visible');
+  assert.equal(interest.querySelector('.pn-stage__details').open, false, 'a completed prior form starts collapsed');
+  assert.equal(interest.querySelector('.pn-answers'), null, 'a form without a checklist opens its answers directly');
+  assert.equal(interest.querySelector('.pn-state'), null, 'the submission date is enough for a completed form');
+  assert.equal(coffee.querySelector('.pn-stage__details').open, true, 'the current stage starts expanded');
+  assert.equal(coffee.querySelector('.pn-answers').open, false, 'the current checklist comes before the optional form response');
   assert.match(coffee.querySelector('.pn-field--check').textContent, /Rae · /, 'who set a value and when');
   assert.match(coffee.querySelector('.pn-stage__comments').textContent, /1/, 'a stage counts the comments about it');
   assert.match(html, /Also in Spring 2025 · Interest form/);
   assert.match(f.app.querySelector('[data-rc="pn-activity"]').textContent, /Sent the Coffee chats form/);
   assert.match(f.app.querySelector('[data-rc="pn-activity"]').textContent, /Sent the Interest form/, 'a title that already says form is not doubled');
+  assert.equal(f.app.querySelector('.pn-history').open, false, 'activity stays available in a collapsed disclosure');
+  // Native disclosure choices survive the checklist response and repaint.
+  interest.querySelector('.pn-stage__details').open = true;
+  coffee.querySelector('.pn-answers').open = true;
+  f.app.querySelector('.pn-history').open = true;
   // A checklist value from the page.
   const tick = coffee.querySelector('[data-action="recruit-field-check"]');
   tick.checked = true;
   const setting = f.click(tick);
   const patch = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/fields', 'PATCH');
   same(patch.body, { stage: 'coffee', field: 'completed', value: true });
+  coffee.querySelector('.pn-stage__details').open = false;
   patch.resolve({ person: { email: 'ada@cornell.edu', stage: 'coffee', status: 'active', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: true }, fields: { coffee: { completed: true, met_with: 'Rae' } }, trackVersion: 3, track: { fields: { coffee: { completed: { v: true, by: 'lead@cornell.edu', name: 'Lead', at: 7 } } } } } });
   await setting;
   assert.equal(st.people.byEmail['ada@cornell.edu'].done.coffee, true, 'the People row follows');
-  assert.match(f.app.querySelector('.pn-journey__step--current .pn-journey__state').textContent, /Here · done/, 'the journey follows');
+  assert.equal(f.app.querySelector('.pn-stage[data-stage="coffee"] [data-action="recruit-field-check"]').checked, true, 'the current checklist follows the saved value');
+  assert.equal(f.app.querySelector('.pn-stage[data-stage="interest"] .pn-stage__details').open, true, 'a previously opened form remains open');
+  assert.equal(f.app.querySelector('.pn-stage[data-stage="coffee"] .pn-stage__details').open, false, 'a manually collapsed current stage stays collapsed after saving');
+  assert.equal(f.app.querySelector('.pn-stage[data-stage="coffee"] .pn-answers').open, true, 'an opened form response remains open beside the updated checklist');
+  assert.equal(f.app.querySelector('.pn-history').open, true, 'activity remains open while its contents update');
   assert.ok(f.app.querySelector('.pn-stage[data-stage="application"]').classList.contains('pn-stage--quiet'), 'a stage they have not reached stays quiet');
   // A per-reviewer rating: mine, with everyone's average beside it.
   const holder = f.app.appendChild(f.document.createElement('div'));
@@ -1159,7 +1182,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const rating = f.click(holder.querySelector('[data-action="recruit-field-rate"][data-v="4"]'));
   same((await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/fields', 'PATCH')).body, { stage: 'application', field: 'score', value: 4 });
   // Moving and deciding, from the head.
-  await f.click(f.app.querySelector('[data-action="recruit-person-move"]'));
+  assert.equal(f.app.querySelector('[data-action="recruit-person-move"]'), null, 'stage moves live in the decision menu');
+  const decisions = f.app.querySelector('[data-action="recruit-person-status"]');
+  assert.equal(decisions.getAttribute('aria-label'), 'More decisions', 'the icon menu has an accessible name');
+  await f.click(decisions);
+  f.menus.at(-1).items.find((i) => i.label === 'Move to stage…').run();
   same(f.menus.at(-1).items.map((i) => [i.label, i.selected]), [['Interest form', false], ['Coffee chats', true], ['Application form', false]], 'the move menu marks where they are');
   f.menus.at(-1).items.find((i) => i.label === 'Application form').run();
   const move = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST');
@@ -1184,9 +1211,9 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   status.resolve({ person: { email: 'ada@cornell.edu', stage: 'coffee', status: 'accepted', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: true }, fields: {}, trackVersion: 5 } }); await accepting;
   assert.equal(f.toasts.at(-1), 'Ada marked accepted');
   assert.equal(f.app.querySelector('[data-action="recruit-person-accept"]'), null, 'accepted people are not offered acceptance again');
-  assert.match(f.app.querySelector('[data-action="recruit-person-status"]').textContent, /Change decision/);
+  assert.equal(f.app.querySelector('[data-action="recruit-person-status"]').textContent, 'Accepted');
   await f.click(f.app.querySelector('[data-action="recruit-person-status"]'));
-  same(f.menus.at(-1).items.map((i) => [i.label, i.selected]), [['Reactivate', false], ['Accepted', true], ['Waitlist', false], ['Decline', false], ['Mark withdrawn', false]], 'the custom decision menu names actions and marks the current decision');
+  same(f.menus.at(-1).items.filter((i) => typeof i.selected === 'boolean').map((i) => [i.label, i.selected]), [['Reactivate', false], ['Accepted', true], ['Waitlist', false], ['Decline', false], ['Mark withdrawn', false]], 'the custom decision menu names actions and marks the current decision');
   f.menus.at(-1).items.find((i) => i.label === 'Waitlist').run();
   const waitlist = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST');
   assert.equal(waitlist.body.status, 'waitlisted');
@@ -1228,7 +1255,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.equal(f.renders.length, 0, 'the page repaints in place');
   assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
   await rating;
-  console.log('PASS: a person\'s page shows their journey, answers, checklists, comments and activity; ticks, ratings, moves and decisions show at once and go back on failure; stage comments post once');
+  console.log('PASS: a person\'s page keeps answers, checklists and activity accessible in disclosures; file previews preserve the page; ticks, ratings, moves and decisions show at once and go back on failure; stage comments post once');
 }
 
 /* ------------------------------- field values ---------------------------- */

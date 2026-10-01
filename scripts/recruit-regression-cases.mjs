@@ -19,7 +19,13 @@ export async function recruitmentRegressions({lib,recruit,anon,R,ctxFor,admin,pl
   const filesPerson=(await recruit('GET','/recruit/cycles/cy-interest/people/files%40example.com')).data;
   const row=filesPerson.submissions[0].application;
   assert.deepEqual(row.files.map(f=>f.question),['resume','portfolio']);
-  for(const f of row.files) assert.equal((await recruit('GET',`/recruit/files/${f.id}`)).status,200);
+  for (const f of row.files) {
+    const served = await recruit('GET', `/recruit/files/${f.id}`);
+    assert.equal(served.status, 200);
+    assert.equal(served.headers['content-type'], 'application/pdf');
+    assert.match(served.headers['content-disposition'], /^inline;/, 'recruitment PDFs open in the browser viewer');
+    assert.equal(served.headers['x-content-type-options'], 'nosniff');
+  }
   // A real PNG travels through both file question types, the receipt journal,
   // the person-review payload, and the authenticated download route unchanged.
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');

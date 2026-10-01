@@ -124,8 +124,8 @@ function recruitQueueModalHtml(m) {
         ${has('year') || r.year ? `<dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>` : ''}
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
-        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" download="${MD.esc(f.name)}">${MD.esc(f.name)}</a></dd>`).join('')}
-        ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
+        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" target="_blank" rel="noopener">${MD.esc(f.name)}</a></dd>`).join('')}
+        ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" target="_blank" rel="noopener">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
       ${recruitAnswersHtml({ application: { answers: r.answers || {}, files: [], section: r.section }, form: { questions } })}
     </div>

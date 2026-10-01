@@ -1085,7 +1085,7 @@ function interestPendingModalHtml(id) {
         <dt>Received</dt><dd>${MD.esc(new Date(r.receivedAt).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl
-          ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>`
+          ? `<a class="interest-download" href="${MD.esc(fileUrl)}" target="_blank" rel="noopener">${MD.esc(r.fileName)}</a>`
           : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
       <h4 class="interest-subhead">Coolest project they've done</h4>
@@ -1270,7 +1270,7 @@ function interestRowModalHtml(id) {
         </dl>
         <h4 class="interest-subhead">Coolest project</h4>
         <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">No project provided.</span>'}</p>
-        ${r.fileId ? `<a class="interest-attachment" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}">${INTEREST_ICONS.download}<span>${MD.esc(r.fileName || 'Attachment')}<small>${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</small></span></a>` : ''}
+        ${r.fileId ? `<a class="interest-attachment" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noopener">${I.page}<span>${MD.esc(r.fileName || 'Attachment')}<small>${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</small></span></a>` : ''}
       </section>
       <section class="interest-discussion" aria-labelledby="interest-comments-heading">
         <h4 class="interest-subhead" id="interest-comments-heading">Comments <span class="count">${comments.length}</span><span class="interest-private">Admins only</span></h4>

@@ -837,11 +837,15 @@ function recruitCycleShellHtml(id) {
     return `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${on}" ${on && active?.tab ? 'aria-current="page"' : ''} tabindex="${on ? 0 : -1}">${p.icon}<span>${MD.esc(p.label)}</span></a>`;
   }).join('')}</nav>` : '';
   const here = active && !active.tab && typeof active.module.crumb === 'function' ? active.module.crumb(cycle, active.id) : '';
-  const crumbHtml = here
+  const crumbHtml = active?.id === 'person'
+    ? crumbs(`<a href="${recruitPanelHref(cycle.id, '')}">${MD.esc(cycle.name)}</a>`)
+    : here
     ? crumbs(`<a href="${recruitPanelHref(cycle.id, '')}">${MD.esc(cycle.name)}</a><span class="crumbs__sep">/</span><span class="crumbs__here">${here}</span>`)
     : crumbs(`<span class="crumbs__here">${MD.esc(cycle.name)}</span>`);
   const head = `<header class="rc-cycle-head"><div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>${recruitCycleMetaHtml(cycle)}${nav}</header>`;
-  return recruitShellHtml(crumbHtml, head + body, right);
+  // A person is a focused detail view; the breadcrumb and back link retain
+  // the cycle context without repeating its entire dashboard header.
+  return recruitShellHtml(crumbHtml, (active?.id === 'person' ? '' : head) + body, active?.id === 'person' ? '' : right);
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {

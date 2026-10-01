@@ -2016,7 +2016,7 @@ body { transition: background-color 160ms ease, color 160ms ease; }
 :root[data-theme='dark'] { --rc-soft: #6b6b6b; }
 
 /* The wiki shapes corners as superellipses; dots and round handles stay circles. */
-.rc-track__dot, .fc-port, .fe-mark--radio, .fe-switch__track, .fe-switch__track::after, .pn-journey__dot { corner-shape: round; }
+.rc-track__dot, .fc-port, .fe-mark--radio, .fe-switch__track, .fe-switch__track::after { corner-shape: round; }
 
 /* Every Applications view shares one width, and the scrollbar keeps its
    room, so moving between views never shifts the page. */
@@ -2674,8 +2674,8 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 
 /* ---------------------------------------------------------------------------
    A person's page. */
-.pn-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
-.pn-back { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.pn-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 18px; }
+.pn-back { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; font-size: 13px; color: var(--muted); text-decoration: none; }
 .pn-back:hover { color: var(--fg); }
 .pn-back svg { width: 15px; height: 15px; }
 .pn-step { display: inline-flex; align-items: center; gap: 8px; }
@@ -2683,68 +2683,43 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .pn-step .btn svg { width: 14px; height: 14px; }
 .pn-step .btn.is-disabled { opacity: 0.4; pointer-events: none; }
 .pn-step__at { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
-.pn-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; margin-bottom: 18px; }
+.pn-head { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; margin-bottom: 28px; }
 .pn-id { min-width: 0; }
-.pn-id h2 { margin: 0 0 6px; font-size: clamp(24px, 3.2vw, 32px); font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
+.pn-name { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pn-id h1 { margin: 0; font-size: clamp(24px, 3.2vw, 32px); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.pn-name .interest-flag { flex: none; width: 40px; height: 40px; background: transparent; border: 0; }
+.pn-name .interest-flag:not(.is-flagged) { color: var(--faint); }
 .pn-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--muted); }
 .pn-meta span { overflow-wrap: anywhere; }
-.pn-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 100%; }
-.pn-decision, .pn-actions__secondary { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
-.pn-decision > .rc-status { margin-right: 4px; }
-.pn-actions__secondary { gap: 8px 18px; }
-.pn-ctl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
-.pn-ctl > .btn { min-width: 0; }
-.pn-ctl > .btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pn-actions__label { font-size: 12px; color: var(--faint); }
-.pn-actions .btn { min-height: 40px; gap: 8px; }
-.pn-actions .btn svg { width: 15px; height: 15px; }
-.pn-at { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
-.pn-at svg { width: 15px; height: 15px; color: var(--muted); }
-/* Where they are, stage by stage, as a line of steps. */
-.pn-journey { list-style: none; display: flex; margin: 0 0 22px; padding: 14px 12px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--rc-canvas); overflow-x: auto; }
-.pn-journey__step { position: relative; flex: 1 0 110px; min-width: 0; }
-.pn-journey__step + .pn-journey__step::before { content: ''; position: absolute; top: 11px; left: calc(-50% + 14px); right: calc(50% + 14px); height: 2px; background: var(--hairline); }
-.pn-journey__step--done::before, .pn-journey__step--current::before, .pn-journey__step--open::before { background: var(--rule) !important; }
-.pn-journey__step a { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0 4px; color: inherit; text-decoration: none; text-align: center; border-radius: 8px; }
-.pn-journey__step a:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-.pn-journey__dot { position: relative; z-index: 1; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--rule); background: var(--page); color: var(--page); }
-.pn-journey__dot svg { width: 13px; height: 13px; }
-.pn-journey__step.is-done .pn-journey__dot { background: var(--fg); border-color: var(--fg); }
-.pn-journey__step--current .pn-journey__dot { border-color: var(--fg); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fg) 12%, transparent); }
-.pn-journey__step--open .pn-journey__dot { border-color: var(--fg); background: linear-gradient(90deg, var(--fg) 50%, var(--page) 50%); }
-.pn-journey__step--skipped .pn-journey__dot { border-style: dashed; }
-.pn-journey__name { font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.pn-journey__state { font-size: 11.5px; color: var(--faint); }
-.pn-journey__step--current .pn-journey__state { color: var(--fg); }
-.pn-journey__step--next .pn-journey__dot { border-color: var(--muted); }
-.pn-journey__step--next .pn-journey__state { color: var(--muted); }
-.pn-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 20px; align-items: start; }
-.pn-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.pn-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; position: sticky; top: 12px; }
-.pn-card { padding: 18px; border: 1px solid var(--hairline); border-radius: 14px; background: var(--page); min-width: 0; }
+.pn-decision { display: inline-flex; align-items: stretch; gap: 0; flex: none; }
+.pn-decision .btn { min-height: 40px; gap: 8px; }
+.pn-decision .btn svg { width: 15px; height: 15px; }
+.pn-decision .btn--primary { border-radius: 8px 0 0 8px; padding-inline: 20px; }
+.pn-decision .pn-decision__more { width: 40px; padding: 0; border-radius: 0 8px 8px 0; }
+.pn-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 36px; align-items: start; border-top: 1px solid var(--hairline); }
+.pn-main { display: flex; flex-direction: column; min-width: 0; }
+.pn-side { display: flex; flex-direction: column; gap: 24px; min-width: 0; padding-top: 18px; }
+.pn-card { min-width: 0; }
 .pn-card__title { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 600; }
-.pn-card__title .count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 7px; background: var(--hover); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.pn-stage { border: 1px solid var(--hairline); border-radius: 14px; background: var(--page); scroll-margin-top: 16px; }
-.pn-stage--current { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
-.pn-stage--quiet { background: transparent; border-style: dashed; }
-.pn-stage--quiet .pn-stage__head { padding-bottom: 12px; opacity: 0.75; }
-.pn-stage__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 16px 10px; }
+.pn-stage { border-bottom: 1px solid var(--hairline); scroll-margin-top: 16px; }
+.pn-stage--quiet .pn-stage__head { color: var(--muted); }
+.pn-stage__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 56px; padding: 14px 0; cursor: pointer; list-style: none; }
+.pn-stage__head::-webkit-details-marker { display: none; }
+.pn-stage__head:focus-visible, .pn-history > summary:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 4px; }
 .pn-stage__head h3 { margin: 0; font-size: 15px; font-weight: 600; min-width: 0; }
-.pn-stage__head h3 a { color: inherit; text-decoration: none; }
-.pn-stage__head h3 a:hover { text-decoration: underline; text-underline-offset: 2px; }
-.pn-stage__icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--hover); color: var(--muted); }
-.pn-stage__icon svg { width: 15px; height: 15px; }
-.pn-stage__when { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+.pn-stage__chevron { display: flex; flex: none; color: var(--faint); transform: rotate(-90deg); }
+.pn-stage__chevron svg { width: 14px; height: 14px; }
+.pn-stage__details[open] > summary .pn-stage__chevron { transform: none; }
+.pn-stage__when { font-size: 11.5px; color: var(--faint); margin-left: auto; }
 .pn-stage__comments { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 12px; color: var(--muted); text-decoration: none; }
 .pn-stage__comments svg { width: 14px; height: 14px; }
-.pn-stage__empty { margin: 0; padding: 0 16px 14px; font-size: 13px; color: var(--faint); }
-.pn-state { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; background: var(--hover); color: var(--muted); white-space: nowrap; }
-.pn-state--current { background: var(--fg); color: var(--page); }
-.pn-state--done, .pn-state.is-done { background: var(--good-bg); color: var(--good); }
-.pn-state--current.is-done { background: var(--fg); color: var(--page); }
-.pn-state--open { background: var(--accent-soft); color: var(--accent); }
+.pn-stage__empty { margin: 0; padding: 0 22px 18px; font-size: 13px; color: var(--faint); }
+.pn-state { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+.pn-state--current { color: var(--fg); }
+.pn-state--done { color: var(--muted); }
+.pn-state--open { color: var(--accent); }
 .pn-state--next { color: var(--fg); }
-.pn-fields { display: flex; flex-direction: column; padding: 0 16px 6px; }
+.pn-fields { display: flex; flex-direction: column; padding: 0 0 12px 22px; }
 .pn-field { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr); align-items: center; gap: 6px 14px; padding: 9px 0; border-top: 1px solid var(--hairline); }
 .pn-field:first-child { border-top: 0; }
 .pn-field--note { align-items: start; }
@@ -2757,11 +2732,11 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .pn-each li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .pn-each b { font-weight: 500; }
 .pn-fields--sample .pn-field { grid-template-columns: minmax(0, 1fr) auto; }
-.pn-answers { border-top: 1px solid var(--hairline); }
-.pn-answers > summary { padding: 11px 16px; font-size: 13px; color: var(--muted); cursor: pointer; list-style-position: inside; }
+.pn-answers > summary { padding: 10px 0 10px 22px; min-height: 40px; font-size: 13px; color: var(--muted); cursor: pointer; list-style-position: inside; }
 .pn-answers > summary:hover { color: var(--fg); }
-.pn-answers__body { padding: 2px 16px 16px; }
-.pn-answer h4 { margin: 12px 0 4px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.pn-answers__body { padding: 0 0 24px 22px; }
+.pn-answer h4 { margin: 20px 0 6px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.pn-answer:first-child h4 { margin-top: 4px; }
 .pn-answer p { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pn-answers__body .interest-attachment { margin-top: 12px; }
 .pn-answers__delete { margin-top: 14px; color: var(--bad); }
@@ -2770,21 +2745,25 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .pn-activity li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--hairline); line-height: 1.45; }
 .pn-activity li:first-child { border-top: 0; padding-top: 0; }
 .pn-activity time { flex: none; font-size: 12px; color: var(--faint); white-space: nowrap; }
+.pn-history { border-top: 1px solid var(--hairline); }
+.pn-history > summary { min-height: 40px; padding: 12px 0; font-size: 13px; color: var(--muted); cursor: pointer; }
 .rc-history { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
 .pn .interest-thread { gap: 10px; margin-bottom: 14px; }
 .pn .interest-thread__empty { margin: 0; padding: 6px 0; }
-.pn .interest-comment { padding: 12px 14px; border-radius: 12px; background: var(--rc-canvas); box-shadow: 0 0 0 1px var(--hairline); }
+.pn .interest-comment { padding: 0 0 14px; border-radius: 0; background: transparent; box-shadow: none; border: 0; }
+.pn .interest-comment + .interest-comment { border-top: 1px solid var(--hairline); padding-top: 14px; }
 .pn .interest-comment__meta { align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .rc-comment-author { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-top: 2px; }
 .pn .interest-comment__meta time { margin-left: 0; font-size: 11.5px; color: var(--faint); }
 .pn .interest-comment__text { margin-top: 8px; }
-.pn .interest-comment__delete { flex: none; width: 36px; height: 36px; min-height: 36px; margin: -6px -8px -6px auto; padding: 0; color: var(--faint); }
+.pn .interest-comment__delete { flex: none; width: 40px; height: 40px; min-height: 40px; margin: -6px 0 -6px auto; padding: 0; color: var(--faint); }
 .pn .interest-comment__delete:hover { color: var(--bad); background: var(--bad-bg); }
 .pn .interest-compose { overflow: hidden; border: 1px solid var(--hairline); border-radius: 12px; background: var(--page); transition: border-color 160ms, box-shadow 160ms; }
 .pn .interest-compose:focus-within { border-color: var(--rule); box-shadow: 0 0 0 2px var(--hover); }
-.pn .interest-compose textarea { min-height: 80px; padding: 12px 14px 6px; border: 0; border-radius: 0; background: transparent; box-shadow: none; line-height: 1.6; }
+.pn .interest-compose textarea { min-height: 64px; padding: 12px 14px 6px; border: 0; border-radius: 0; background: transparent; box-shadow: none; line-height: 1.6; }
 .pn .interest-compose__foot { align-items: center; justify-content: space-between; gap: 8px; margin-top: 0; padding: 6px 8px 8px 12px; flex-wrap: wrap; }
-.pn .interest-compose__foot .btn { border-radius: 8px; font-size: 12px; }
+.pn .interest-compose__foot .btn { border-radius: 8px; min-height: 40px; font-size: 12px; }
+.pn .interest-compose__foot .dd__trigger { min-height: 40px; }
 .pn .interest-compose .field-error { margin: 8px 14px; }
 .pn-about { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--faint); min-width: 0; }
 .pn-about .dd { max-width: 190px; }
@@ -2864,9 +2843,8 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 @media (max-width: 760px) {
   .ri-grid { grid-template-columns: minmax(0, 1fr); }
   .ri-bar { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) minmax(36px, auto); gap: 8px; }
-  .pn-head { flex-direction: column; }
-  .pn-actions { align-items: flex-start; width: 100%; }
-  .pn-decision, .pn-actions__secondary { justify-content: flex-start; }
+  .pn-head { align-items: flex-start; }
+  .pn-stage__when { width: 100%; margin-left: 22px; }
   .pn-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .pn-each { grid-column: 1; }
   .ss-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -6916,7 +6894,7 @@ function interestPendingModalHtml(id) {
         <dt>Received</dt><dd>${MD.esc(new Date(r.receivedAt).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
         ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl
-          ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>`
+          ? `<a class="interest-download" href="${MD.esc(fileUrl)}" target="_blank" rel="noopener">${MD.esc(r.fileName)}</a>`
           : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
       <h4 class="interest-subhead">Coolest project they've done</h4>
@@ -7101,7 +7079,7 @@ function interestRowModalHtml(id) {
         </dl>
         <h4 class="interest-subhead">Coolest project</h4>
         <p class="interest-project">${r.project ? MD.esc(r.project) : '<span class="faint">No project provided.</span>'}</p>
-        ${r.fileId ? `<a class="interest-attachment" href="/api/interest/file/${MD.esc(r.fileId)}" download="${MD.esc(r.fileName || 'file')}">${INTEREST_ICONS.download}<span>${MD.esc(r.fileName || 'Attachment')}<small>${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</small></span></a>` : ''}
+        ${r.fileId ? `<a class="interest-attachment" href="/api/interest/file/${MD.esc(r.fileId)}" target="_blank" rel="noopener">${I.page}<span>${MD.esc(r.fileName || 'Attachment')}<small>${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</small></span></a>` : ''}
       </section>
       <section class="interest-discussion" aria-labelledby="interest-comments-heading">
         <h4 class="interest-subhead" id="interest-comments-heading">Comments <span class="count">${comments.length}</span><span class="interest-private">Admins only</span></h4>
@@ -9876,11 +9854,15 @@ function recruitCycleShellHtml(id) {
     return `<a role="tab" id="rc-tab-${MD.esc(p.id)}" href="${recruitPanelHref(cycle.id, p.id)}" aria-selected="${on}" ${on && active?.tab ? 'aria-current="page"' : ''} tabindex="${on ? 0 : -1}">${p.icon}<span>${MD.esc(p.label)}</span></a>`;
   }).join('')}</nav>` : '';
   const here = active && !active.tab && typeof active.module.crumb === 'function' ? active.module.crumb(cycle, active.id) : '';
-  const crumbHtml = here
+  const crumbHtml = active?.id === 'person'
+    ? crumbs(`<a href="${recruitPanelHref(cycle.id, '')}">${MD.esc(cycle.name)}</a>`)
+    : here
     ? crumbs(`<a href="${recruitPanelHref(cycle.id, '')}">${MD.esc(cycle.name)}</a><span class="crumbs__sep">/</span><span class="crumbs__here">${here}</span>`)
     : crumbs(`<span class="crumbs__here">${MD.esc(cycle.name)}</span>`);
   const head = `<header class="rc-cycle-head"><div class="plain-head plain-head--cycle"><h1>${recruitCycleTitleHtml(cycle, switchOptions)}</h1></div>${recruitCycleMetaHtml(cycle)}${nav}</header>`;
-  return recruitShellHtml(crumbHtml, head + body, right);
+  // A person is a focused detail view; the breadcrumb and back link retain
+  // the cycle context without repeating its entire dashboard header.
+  return recruitShellHtml(crumbHtml, (active?.id === 'person' ? '' : head) + body, active?.id === 'person' ? '' : right);
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -10017,8 +9999,8 @@ function recruitQueueModalHtml(m) {
         ${has('year') || r.year ? `<dt>Year</dt><dd>${MD.esc(r.year || 'Not provided')}</dd>` : ''}
         <dt>Received</dt><dd>${MD.esc(new Date(Number(r.receivedAt)).toLocaleString())}</dd>
         <dt>Receipt</dt><dd>${MD.esc(r.id)}</dd>
-        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" download="${MD.esc(f.name)}">${MD.esc(f.name)}</a></dd>`).join('')}
-        ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" download="${MD.esc(r.fileName)}">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
+        ${(r.files || []).map((f) => `<dt>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'File')}</dt><dd><a class="interest-download" href="${MD.esc(f.url)}" target="_blank" rel="noopener">${MD.esc(f.name)}</a></dd>`).join('')}
+        ${r.fileName ? `<dt>File</dt><dd>${r.fileUrl ? `<a class="interest-download" href="${MD.esc(fileUrl)}" target="_blank" rel="noopener">${MD.esc(r.fileName)}</a>` : MD.esc(r.fileName)} <span class="faint">${Math.max(1, Math.round((r.fileSize || 0) / 1024))} KB</span></dd>` : ''}
       </dl>
       ${recruitAnswersHtml({ application: { answers: r.answers || {}, files: [], section: r.section }, form: { questions } })}
     </div>
@@ -13406,7 +13388,8 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
     d.person.fields = { ...(d.person.fields || {}), [stageKey]: { ...(d.person.fields?.[stageKey] || {}), [fieldKey]: next } };
   }
   const busy = `field:${email}:${stageKey}:${fieldKey}`;
-  st.busy.add(busy);
+  const pending = st.busy;
+  pending.add(busy);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/fields`, { method: 'PATCH', body: JSON.stringify({ stage: stageKey, field: fieldKey, value }) });
     if (!guard.sameCycle()) return;
@@ -13418,9 +13401,9 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
       rows.forEach((r, i) => { r.fields ||= {}; r.fields[stageKey] = { ...(r.fields[stageKey] || {}), [fieldKey]: before[i] }; });
       if (d?.person?.track?.fields?.[stageKey]) d.person.track.fields[stageKey][fieldKey] = storedBefore;
       recruitPersonChanged(email);
-    }
+    } else recruitLoadPerson(email, { quiet: true });
     toast(`Could not save ${f.label}: ${recruitError(e)}`);
-  } finally { st.busy.delete(busy); }
+  } finally { pending.delete(busy); }
 }
 
 /* ------------------------------- moves ----------------------------------- */
@@ -13449,7 +13432,7 @@ async function recruitMovePerson(email, { stage, status }) {
     if (guard.current()) {
       for (const p of prior) Object.assign(p.r, { stage: p.stage, status: p.status, states: p.states });
       recruitPersonChanged(email);
-    }
+    } else recruitLoadPerson(email, { quiet: true });
     toast(`Could not move: ${recruitError(e)}`);
   }
 }
@@ -13477,9 +13460,14 @@ function recruitStatusMenu(anchor, emails, current = null) {
 function recruitDecisionMenu(anchor, email, current = 'active') {
   if (!recruitCanEdit()) return;
   const actions = { active: 'Reactivate', accepted: 'Accept', waitlisted: 'Waitlist', declined: 'Decline', withdrew: 'Mark withdrawn' };
-  openMenu(RECRUIT_STATUSES.map((s) => recruitMenuItem(s.value === current ? s.label : actions[s.value], s.value === current, () => {
+  const items = RECRUIT_STATUSES.map((s) => recruitMenuItem(s.value === current ? s.label : actions[s.value], s.value === current, () => {
     if (s.value !== current) recruitMovePerson(email, { status: s.value });
-  })), anchor);
+  }));
+  items.push('-', { label: 'Move to stage…', run: () => {
+    const p = recruitPerson(email)?.person || recruitPersonRows(email)[0];
+    recruitMoveMenu(anchor, [email], p?.stage);
+  } });
+  openMenu(items, anchor);
 }
 
 /* ------------------------------- flag and review cell -------------------- */
@@ -13518,7 +13506,7 @@ async function recruitTogglePersonFlag(email) {
 /* ------------------------------- answers --------------------------------- */
 
 // One submission's answers, by the labels of the form it was sent through.
-function recruitAnswersHtml(d) {
+function recruitAnswersHtml(d, person = null) {
   const a = d.application;
   const questions = Array.isArray(d.form?.questions) ? d.form.questions : [];
   const answers = a.answers || {};
@@ -13530,17 +13518,19 @@ function recruitAnswersHtml(d) {
     shown.add(q.key);
     const v = answers[q.key] ?? (['subteam', 'year'].includes(q.key) ? a[q.key] : null);
     const text = Array.isArray(v) ? v.join(', ') : v == null ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v);
+    if (['subteam', 'year'].includes(q.key) && text && text === String(person?.[q.key] || '')) continue;
     const hasFile = (a.files || []).some((f) => f.question === q.key);
     blocks.push(`<div class="pn-answer"><h4>${MD.esc(q.label || q.key)}</h4><p>${text ? (q.type === 'link' && /^https?:\/\//.test(text) ? `<a href="${MD.esc(text)}" target="_blank" rel="noopener noreferrer">${MD.esc(text)}</a>` : MD.esc(text)) : hasFile ? '<span class="faint">File attached below.</span>' : '<span class="faint">Left blank.</span>'}</p></div>`);
   }
   for (const [k, v] of Object.entries(answers)) {
     if (shown.has(k) || system.has(k)) continue;
     const text = Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v);
+    if (['subteam', 'year'].includes(k) && text && text === String(person?.[k] || '')) continue;
     const label = k.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
     blocks.push(`<div class="pn-answer"><h4>${MD.esc(label)}</h4><p>${text ? MD.esc(text) : '<span class="faint">Left blank.</span>'}</p></div>`);
   }
-  if (!blocks.length) blocks.push('<p class="faint">No answers beyond the basics.</p>');
-  const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" download="${MD.esc(f.name || 'file')}">${RC_ICONS.download}<span>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'Attachment')}: ${MD.esc(f.name || 'Attachment')}<small>${Math.max(1, Math.round(Number(f.size || 0) / 1024))} KB</small></span></a>`).join('');
+  if (!blocks.length && !person) blocks.push('<p class="faint">No answers beyond the basics.</p>');
+  const files = (a.files || []).map((f) => `<a class="interest-attachment" href="/api/recruit/files/${MD.esc(f.id)}" target="_blank" rel="noopener noreferrer"><span>${MD.esc(questions.find((q) => q.key === f.question)?.label || f.question || 'Attachment')}: ${MD.esc(f.name || 'Attachment')}</span></a>`).join('');
   return blocks.join('') + files;
 }
 
@@ -13561,6 +13551,7 @@ function recruitLoadPerson(email, { quiet = false } = {}) {
       persons[email] = { person: out.person || null, submissions: Array.isArray(out.submissions) ? out.submissions : [], history: out.history || [] };
       if (out.person) { recruitAcceptTrack(email, out.person); recruitAcceptReview(email, { person: out.person }); }
       if (!recruitPaintPerson(email)) recruitPersonChanged(email);
+      if (!quiet && email === recruitPersonEmail()) recruitRevealPersonAnchor();
     })
     .catch((e) => { if (st.key !== key || st.persons !== persons) return; persons[email] = { error: recruitError(e), status: e.status }; recruitPaintPerson(email, true); });
 }
@@ -13598,47 +13589,27 @@ function recruitPersonInnerHtml(cycle, email) {
   if (!row && (!d || d.loading)) return top + '<p class="sheet__note">Loading…</p>';
   if (d?.error && !row) return top + `<div class="empty">${I.info}<b>${d.status === 404 ? 'Not in this cycle' : 'Could not load'}</b><p>${MD.esc(d.status === 404 ? 'Nothing from this person is here, or it is outside your subteams.' : d.error)}</p><button class="btn" data-action="recruit-person-retry" data-email="${MD.esc(email)}">Retry</button></div>`;
   const p = { ...row, email };
-  return top + recruitPersonHeadHtml(cycle, p) + `<div data-rc="pn-journey">${recruitPersonJourneyHtml(cycle, p)}</div>
-    <div class="pn-grid">
+  return top + recruitPersonHeadHtml(cycle, p) + `<div class="pn-grid">
       <div class="pn-main" data-rc="pn-stages">${recruitPersonStagesHtml(cycle, p, d)}</div>
       <aside class="pn-side">
         <section class="pn-card" id="pn-comments" aria-labelledby="recruit-comments-heading" data-rc="person-comments">${recruitPersonDiscussionHtml(email)}</section>
-        <section class="pn-card" aria-labelledby="pn-activity-h" data-rc="pn-activity">${recruitPersonActivityHtml(cycle, p, d)}</section>
+        <details class="pn-history"><summary>Activity</summary><div data-rc="pn-activity">${recruitPersonActivityHtml(cycle, p, d)}</div></details>
       </aside>
     </div>`;
 }
 
 function recruitPersonHeadHtml(cycle, p) {
   const lead = recruitCanEdit(cycle);
-  const flow = recruitFlow(cycle);
-  const first = Number(p.first);
-  const sent = Number.isFinite(first) && first > 0 ? `<time datetime="${MD.esc(new Date(first).toISOString())}" title="${MD.esc(new Date(first).toLocaleString())}">Submitted ${MD.esc(recruitDay(first))}</time>` : '';
-  const meta = [p.email, p.subteam, p.year, p.cornell === false ? 'Outside cornell.edu' : ''].filter(Boolean).map((x) => `<span>${MD.esc(x)}</span>`).join('') + sent;
-  const stageLabel = p.stage ? recruitSectionTitle(p.stage, cycle) : 'Not placed';
-  const flag = recruitCanReview(cycle)
-    ? `<button class="btn interest-flag ${p.flagged ? 'is-flagged' : ''}" data-action="recruit-person-flag" data-email="${MD.esc(p.email)}" aria-pressed="${Boolean(p.flagged)}" title="${p.flagged ? 'Remove the flag' : 'Flag for follow-up'}">${RC_ICONS.flag}<span>${p.flagged ? 'Flagged' : 'Flag'}</span></button>`
-    : p.flagged ? `<span class="interest-flag-readonly">${RC_ICONS.flag}Flagged</span>` : '';
-  const decision = `<div class="pn-decision" role="group" aria-label="Decision for ${MD.esc(p.name || p.email)}">${recruitStatusPill(p.status)}${lead ? `${p.status !== 'accepted' ? `<button type="button" class="btn btn--primary" data-action="recruit-person-accept" data-email="${MD.esc(p.email)}">${I.check}<span>Accept</span></button>` : ''}<button type="button" class="btn" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu" aria-expanded="false">${p.status === 'accepted' ? 'Change decision' : 'More decisions'}${I.chev || ''}</button>` : ''}</div>`;
-  const move = lead
-    ? `<button class="btn" data-action="recruit-person-move" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${recruitKindIcon(flow.sections[p.stage]?.kind)}<span>${MD.esc(stageLabel)}</span>${I.chev || ''}</button>`
-    : `<span class="pn-at">${recruitKindIcon(flow.sections[p.stage]?.kind)}${MD.esc(stageLabel)}</span>`;
+  const meta = [p.email, p.subteam, p.year, p.cornell === false ? 'Outside cornell.edu' : ''].filter(Boolean).map((x) => `<span>${MD.esc(x)}</span>`).join('');
+  const accepted = p.status === 'accepted';
+  const decision = lead ? `<div class="pn-decision" role="group" aria-label="Decision for ${MD.esc(p.name || p.email)}">${!accepted ? `<button type="button" class="btn btn--primary" data-action="recruit-person-accept" data-email="${MD.esc(p.email)}">Accept</button>` : ''}<button type="button" class="btn ${accepted ? '' : 'pn-decision__more'}" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-label="${accepted ? 'Accepted — change decision' : 'More decisions'}" title="${accepted ? 'Change decision' : 'More decisions'}" aria-haspopup="menu" aria-expanded="false">${accepted ? '<span>Accepted</span>' : ''}${I.chev || ''}</button></div>` : '';
   return `<header class="pn-head" data-rc="pn-head">
-    <div class="pn-id"><h2>${MD.esc(p.name || p.email)}</h2><div class="pn-meta">${meta}</div></div>
-    <div class="pn-actions">${decision}<div class="pn-actions__secondary"><span class="pn-ctl"><span class="pn-actions__label">Stage</span>${move}</span>${flag}</div></div>
+    <div class="pn-id"><div class="pn-name"><h1>${MD.esc(p.name || p.email)}</h1>${recruitPersonRowFlagHtml(p)}${p.status !== 'active' && !(lead && accepted) ? recruitStatusPill(p.status) : ''}</div><div class="pn-meta">${meta}</div></div>
+    ${decision}
   </header>`;
 }
 
-// Where they are in the flow: each stage on their path and how far they got.
-function recruitPersonJourneyHtml(cycle, p) {
-  const keys = recruitTheirKeys(p, recruitFlow(cycle));
-  return `<ol class="pn-journey" aria-label="Where ${MD.esc(p.name || '')} is in the flow">${keys.map((k) => {
-    const state = recruitStateOf(p, k);
-    const isDone = Boolean(p.done?.[k]);
-    return `<li class="pn-journey__step pn-journey__step--${state} ${isDone ? 'is-done' : ''}"><a href="#pn-stage-${MD.esc(k)}" data-action="recruit-person-jump" data-stage="${MD.esc(k)}"><span class="pn-journey__dot" aria-hidden="true">${isDone ? I.check : ''}</span><span class="pn-journey__name">${MD.esc(recruitSectionTitle(k, cycle))}</span><span class="pn-journey__state">${state === 'current' ? (isDone ? 'Here · done' : 'Here now') : RECRUIT_STATE_LABELS[state]}</span></a></li>`;
-  }).join('')}</ol>`;
-}
-
-const RECRUIT_STATE_CHIPS = { current: 'Here now', done: 'Done', open: 'Not done', skipped: 'Skipped', ahead: 'Not yet', next: 'Up next' };
+const RECRUIT_STATE_CHIPS = { current: 'Current', done: 'Done', open: 'Not done', skipped: 'Skipped', ahead: 'Not yet', next: 'Up next' };
 
 function recruitPersonStagesHtml(cycle, p, d) {
   const flow = recruitFlow(cycle);
@@ -13654,20 +13625,22 @@ function recruitPersonStageHtml(cycle, flow, key, p, d) {
   const quiet = (state === 'ahead' || state === 'next' || state === 'skipped') && !sub && !(s.fields || []).some((f) => p.fields?.[key]?.[f.key] !== undefined);
   const stored = d?.person?.track?.fields?.[key] || {};
   const comments = (d?.person?.review?.comments || []).filter((c) => c.stage === key).length;
-  const chip = `<span class="pn-state pn-state--${state} ${isDone ? 'is-done' : ''}">${state === 'current' && isDone ? 'Here · done' : RECRUIT_STATE_CHIPS[state]}</span>`;
+  const chip = state === 'done' && sub && !(s.fields || []).length ? '' : `<span class="pn-state pn-state--${state} ${isDone ? 'is-done' : ''}">${RECRUIT_STATE_CHIPS[state]}</span>`;
   const when = sub ? `Sent ${recruitDay(sub.application.ts)}${sub.application.updated && sub.application.updated !== sub.application.ts ? ` · updated ${recruitDay(sub.application.updated)}` : ''}` : '';
   const fields = (s.fields || []).map((f) => {
     const entry = stored[f.key];
     const by = !f.each && entry?.at && entry.v !== null && entry.v !== undefined ? `<span class="pn-field__by">${MD.esc(entry.name || entry.by || '')} · ${MD.esc(recruitAgo(entry.at))}</span>` : '';
     const others = f.each ? Object.entries(entry?.each || {}).filter(([who, e]) => who !== recruitMyEmail() && e && e.v !== null && e.v !== '') : [];
     const theirs = others.length ? `<ul class="pn-each">${others.map(([, e]) => `<li><b>${MD.esc(e.name || 'Reviewer')}</b> ${f.type === 'rating' ? recruitStarsHtml(f, Number(e.v), null) : `<span>${MD.esc(String(e.v))}</span>`}<span class="pn-field__by">${MD.esc(recruitAgo(e.at))}</span></li>`).join('')}</ul>` : '';
-    return `<div class="pn-field pn-field--${f.type}"><span class="pn-field__label">${recruitFieldIcon(f.type)}${MD.esc(f.label)}${f.each ? '<span class="pn-field__each">each reviewer</span>' : ''}${s.done === f.key ? '<span class="pn-field__each">marks done</span>' : ''}</span>
+    return `<div class="pn-field pn-field--${f.type}"><span class="pn-field__label">${MD.esc(f.label)}${f.each ? '<span class="pn-field__each">each reviewer</span>' : ''}</span>
       <span class="pn-field__value">${recruitFieldControlHtml(f, p.fields?.[key]?.[f.key], { email: p.email, stage: key, name: p.name })}${by}</span>${theirs}</div>`;
   }).join('');
-  const answers = sub ? `<details class="pn-answers" ${state === 'current' || !(s.fields || []).length ? 'open' : ''}><summary>Answers${when ? ` · ${MD.esc(when)}` : ''}</summary><div class="pn-answers__body">${recruitAnswersHtml(sub)}${recruitCan('admin') && cycle.status !== 'archived' ? `<button type="button" class="btn btn--ghost btn--sm pn-answers__delete" data-action="recruit-response-delete" data-id="${MD.esc(sub.application.id)}" data-stage="${MD.esc(key)}">${I.trash} Delete this response</button>` : ''}</div></details>` : '';
+  const response = sub ? `<div class="pn-answers__body">${recruitAnswersHtml(sub, p)}${recruitCan('admin') && cycle.status !== 'archived' ? `<button type="button" class="btn btn--ghost btn--sm pn-answers__delete" data-action="recruit-response-delete" data-id="${MD.esc(sub.application.id)}" data-stage="${MD.esc(key)}">Delete response</button>` : ''}</div>` : '';
+  const answers = response && fields ? `<details class="pn-answers"><summary>Form response</summary>${response}</details>` : response;
   return `<section class="pn-stage pn-stage--${state} ${quiet ? 'pn-stage--quiet' : ''}" id="pn-stage-${MD.esc(key)}" data-stage="${MD.esc(key)}" aria-labelledby="pn-stage-${MD.esc(key)}-h">
-    <header class="pn-stage__head"><span class="pn-stage__icon">${recruitKindIcon(s.kind)}</span><h3 id="pn-stage-${MD.esc(key)}-h"><a href="${recruitStageHref(key)}">${MD.esc(s.title)}</a></h3>${chip}${when && !answers ? `<span class="pn-stage__when">${MD.esc(when)}</span>` : ''}${comments ? `<a class="pn-stage__comments" href="#pn-comments" data-action="recruit-person-comments-stage" data-stage="${MD.esc(key)}">${RC_ICONS.comment}${comments}</a>` : ''}</header>
+    <details class="pn-stage__details" ${state === 'current' || state === 'open' ? 'open' : ''}><summary class="pn-stage__head"><span class="pn-stage__chevron" aria-hidden="true">${I.chev}</span><h3 id="pn-stage-${MD.esc(key)}-h">${MD.esc(s.title)}</h3>${chip}${when ? `<span class="pn-stage__when">${MD.esc(when)}</span>` : ''}${comments ? `<a class="pn-stage__comments" href="#pn-comments" data-action="recruit-person-comments-stage" data-stage="${MD.esc(key)}">${RC_ICONS.comment}${comments}</a>` : ''}</summary>
     ${quiet ? '' : `${fields ? `<div class="pn-fields">${fields}</div>` : ''}${answers}${!fields && !answers ? `<p class="pn-stage__empty">${state === 'current' ? 'Here now. Nothing to record at this stage.' : 'Nothing recorded.'}</p>` : ''}`}
+    </details>
   </section>`;
 }
 
@@ -13700,8 +13673,7 @@ function recruitPersonActivityHtml(cycle, p, d) {
   }
   events.sort((a, b) => b.at - a.at);
   const others = (d?.history || []).filter((h) => h.cycleId !== cycle.id);
-  return `<h3 class="pn-card__title" id="pn-activity-h">Activity</h3>
-    ${events.length ? `<ol class="pn-activity">${events.slice(0, 40).map((e) => `<li><span>${MD.esc(e.text)}</span><time datetime="${MD.esc(new Date(Number(e.at)).toISOString())}" title="${MD.esc(new Date(Number(e.at)).toLocaleString())}">${MD.esc(recruitAgo(e.at))}</time></li>`).join('')}</ol>` : '<p class="faint">Nothing yet.</p>'}
+  return `${events.length ? `<ol class="pn-activity">${events.slice(0, 40).map((e) => `<li><span>${MD.esc(e.text)}</span><time datetime="${MD.esc(new Date(Number(e.at)).toISOString())}" title="${MD.esc(new Date(Number(e.at)).toLocaleString())}">${MD.esc(recruitAgo(e.at))}</time></li>`).join('')}</ol>` : '<p class="faint">Nothing yet.</p>'}
     ${others.length ? `<p class="rc-history">Also in ${others.map((h) => `${MD.esc(h.cycleName || h.cycleId)} · ${MD.esc(h.sectionTitle || h.section || '')}`).join(', ')}</p>` : ''}`;
 }
 
@@ -13716,7 +13688,6 @@ function recruitPaintPerson(email, whole = false) {
   const p = { ...row, email };
   const head = $('[data-rc="pn-head"]', page);
   if (head) { const holder = document.createElement('div'); holder.innerHTML = recruitPersonHeadHtml(cycle, p); const fresh = holder.firstElementChild || holder.children?.[0]; if (fresh) recruitRepaint(head, fresh.innerHTML); }
-  recruitRepaint($('[data-rc="pn-journey"]', page), recruitPersonJourneyHtml(cycle, p));
   // Stage cards repaint one by one, and never the one being typed in. When a
   // split sends them another way, the cards change with it.
   const flow = recruitFlow(cycle);
@@ -13732,11 +13703,11 @@ function recruitPaintPerson(email, whole = false) {
     holder.innerHTML = recruitPersonStageHtml(cycle, flow, k, p, d);
     const fresh = holder.firstElementChild || holder.children?.[0];
     if (!fresh) continue;
-    const open = $('details', card)?.open;
+    const disclosures = ['.pn-stage__details', '.pn-answers'].map((selector) => ({ selector, open: $(selector, card)?.open }));
     if (card.innerHTML !== fresh.innerHTML) {
       recruitRepaint(card, fresh.innerHTML);
       card.className = fresh.className;
-      if (open !== undefined && $('details', card)) $('details', card).open = open;
+      for (const { selector, open } of disclosures) if (open !== undefined && $(selector, card)) $(selector, card).open = open;
     }
   }
   recruitRepaint($('[data-rc="pn-activity"]', page), recruitPersonActivityHtml(cycle, p, d));
@@ -13766,6 +13737,19 @@ function recruitNavFrom(listName) {
 function recruitPrefetchNeighbours() {
   const n = recruitPersonNav();
   for (const e of [n.next, n.prev]) if (e && recruitPerson(e) === undefined) recruitLoadPerson(e);
+}
+
+// Links from a checklist still reveal the requested stage when earlier
+// stages start collapsed. Background refreshes preserve the reader's choice.
+function recruitRevealPersonAnchor() {
+  const hash = String(location.hash || '');
+  const want = UI.route?.params?.anchor || (hash.includes('#pn-') ? hash.slice(hash.lastIndexOf('#') + 1) : '');
+  if (!want) return;
+  const target = document.getElementById?.(want);
+  if (!target?.closest?.('[data-rc="person"]')) return;
+  const detail = target.querySelector?.('.pn-stage__details');
+  if (detail) detail.open = true;
+  target.scrollIntoView?.({ block: 'start' });
 }
 
 /* ------------------------------- the thread ------------------------------ */
@@ -13821,14 +13805,14 @@ function recruitPersonDiscussionHtml(email) {
   const draft = recruitPersonDraft(email);
   const row = d?.person || recruitPersonRows(email)[0];
   const canComment = recruitCanReview(cycle);
-  const stages = [{ value: '', label: 'The whole application' }, ...recruitFlow(cycle).keys.map((k) => ({ value: k, label: recruitSectionTitle(k, cycle) }))];
+  const stages = [{ value: '', label: 'General' }, ...recruitFlow(cycle).keys.map((k) => ({ value: k, label: recruitSectionTitle(k, cycle) }))];
   const about = draft.stage ?? '';
-  return `<h3 class="pn-card__title" id="recruit-comments-heading">Comments <span class="count">${comments.length}</span><span class="interest-private">Team only</span></h3>
+  return `<h3 class="pn-card__title" id="recruit-comments-heading">Team comments</h3>
     <div class="interest-thread" role="log" aria-label="Comments" aria-live="polite" aria-relevant="additions removals">${d?.loading && !d.person ? '<p class="interest-thread__empty">Loading…</p>' : comments.length ? comments.map((c) => recruitPersonCommentHtml(c, email)).join('') : '<p class="interest-thread__empty">No comments yet.</p>'}</div>
     ${canComment ? `<form class="interest-compose" data-action="recruit-person-comment-form" data-email="${MD.esc(email)}">
-      <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment…" rows="3" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
+      <textarea class="text-input" data-m="recruit-person-comment" data-email="${MD.esc(email)}" aria-label="Comment on ${MD.esc(row?.name || 'this person')}" placeholder="Add a comment…" rows="2" maxlength="4000" ${draft.sending ? 'readonly' : ''}>${MD.esc(draft.text)}</textarea>
       <p class="field-error" data-comment-error role="alert" ${recruitPersonDraftError(draft) ? '' : 'hidden'}>${MD.esc(recruitPersonDraftError(draft))}</p>
-      <div class="interest-compose__foot"><span class="pn-about">About ${recruitDd('recruit-person-comment-stage', stages, about, `data-email="${MD.esc(email)}"`, { small: true })}</span><button type="submit" class="btn btn--primary" ${draft.sending || !draft.text.trim() ? 'disabled' : ''}>${draft.sending ? 'Posting…' : 'Post comment'}</button></div>
+      <div class="interest-compose__foot"><span class="pn-about">${recruitDd('recruit-person-comment-stage', stages, about, `data-email="${MD.esc(email)}" aria-label="Comment about"`, { small: true })}</span><button type="submit" class="btn btn--primary" ${draft.sending || !draft.text.trim() ? 'disabled' : ''}>${draft.sending ? 'Posting…' : 'Post'}</button></div>
     </form>` : '<p class="interest-readonly">Read only</p>'}`;
 }
 
@@ -13868,10 +13852,8 @@ function recruitPaintPersonDiscussion(email, { posted = false } = {}) {
       if (action && !removal?.busy) $(`[data-action="${action}"]`, controls)?.focus({ preventScroll: true });
     }
   }
-  const count = $('.pn-card__title .count', host);
-  if (count) count.textContent = comments.length;
   if (field) { field.readOnly = draft.sending; if (posted) field.value = ''; }
-  if (button) { button.disabled = draft.sending || !draft.text.trim(); button.textContent = draft.sending ? 'Posting…' : 'Post comment'; }
+  if (button) { button.disabled = draft.sending || !draft.text.trim(); button.textContent = draft.sending ? 'Posting…' : 'Post'; }
   if (error) { error.textContent = recruitPersonDraftError(draft); error.hidden = !error.textContent; }
   if (restoreAfterRemoval) ($('[data-action="recruit-person-comment-delete"]', thread) || field)?.focus({ preventScroll: true });
   if (posted && (document.activeElement === document.body || document.activeElement === button || document.activeElement === field)) field?.focus({ preventScroll: true });
@@ -13978,9 +13960,7 @@ RECRUIT.register({
     const d = recruitPerson(email);
     if (d === undefined || d?.error) recruitLoadPerson(email);
     recruitPrefetchNeighbours();
-    const hash = String(location.hash || '');
-    const want = UI.route?.params?.anchor || (hash.includes('#pn-') ? hash.slice(hash.lastIndexOf('#') + 1) : '');
-    if (want) setTimeout(() => document.getElementById?.(want)?.scrollIntoView?.({ block: 'start' }), 0);
+    setTimeout(recruitRevealPersonAnchor, 0);
   },
   refresh: { load: () => { const e = recruitPersonEmail(); if (e && !$('[data-rc="person"] :focus')) recruitLoadPerson(e, { quiet: true }); }, every: RECRUIT_SYNC_MS },
   personChanged: (email) => recruitPaintPerson(email),
@@ -14002,8 +13982,6 @@ RECRUIT.register({
       return saving;
     },
     'recruit-person-status': (el) => { const r = recruitPerson(el.dataset.email)?.person || recruitPersonRows(el.dataset.email)[0]; recruitDecisionMenu(el, el.dataset.email, r?.status); },
-    'recruit-person-move': (el) => { const r = recruitPerson(el.dataset.email)?.person; recruitMoveMenu(el, [el.dataset.email], r?.stage); },
-    'recruit-person-jump': (el, ev) => { ev?.preventDefault?.(); const card = document.getElementById?.('pn-stage-' + el.dataset.stage); card?.scrollIntoView?.({ behavior: recruitReducedMotion() ? 'auto' : 'smooth', block: 'start' }); card?.querySelector?.('a, input, button, textarea')?.focus?.({ preventScroll: true }); },
     'recruit-person-comments-stage': (el, ev) => { ev?.preventDefault?.(); $('#pn-comments')?.scrollIntoView?.({ block: 'start' }); },
     'recruit-person-comment-form': (form) => recruitPostPersonComment(form.dataset.email),
     'recruit-person-comment-delete': (el) => recruitConfirmPersonCommentRemoval(el.dataset.email, el.dataset.cid),
@@ -15211,7 +15189,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const att = Store.att(el.dataset.id);
       if (att && /^image\//.test(att.type)) openLightbox(att.dataUri || att.url, att.name);
-      else if (att && att.url) window.open(att.url, '_blank');
+      else if (att && att.url) window.open(att.url, '_blank', 'noopener');
       else toast("Downloads aren't available in the preview; the live wiki serves the original file.");
       break;
     }

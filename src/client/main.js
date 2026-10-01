@@ -844,7 +844,7 @@ document.addEventListener('click', async (ev) => {
       stop();
       const att = Store.att(el.dataset.id);
       if (att && /^image\//.test(att.type)) openLightbox(att.dataUri || att.url, att.name);
-      else if (att && att.url) window.open(att.url, '_blank');
+      else if (att && att.url) window.open(att.url, '_blank', 'noopener');
       else toast("Downloads aren't available in the preview; the live wiki serves the original file.");
       break;
     }

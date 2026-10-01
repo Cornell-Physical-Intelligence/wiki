@@ -26,6 +26,43 @@ if (!process.env.INTEREST_ATTACHMENT_TEST_ROOT) {
   const { handleInterest } = await import(pathToFileURL(join(root, 'lib/interest.js')));
   const { putFile, getFile } = await import(pathToFileURL(join(root, 'lib/db.js')));
   for (const r of [a, b, c]) await putFile({ id: r.fileId, name: 'fixture.txt', type: 'text/plain', size: 7, data: Buffer.from('fixture') });
+  async function attachment(path, context = {}) {
+    const res = { headers: {}, setHeader(key, value) { this.headers[key.toLowerCase()] = value; }, end(value) { this.body = value; } };
+    await handleInterest({ method: 'GET', headers: {} }, res, path, { me: async () => ({ role: 'admin' }), ...context });
+    return res;
+  }
+  const pdfBytes = Buffer.from('%PDF-1.4\n%%EOF');
+  await putFile({ id: 'int-previewpdf', name: 'Resume.pdf', type: 'application/pdf', size: pdfBytes.length, data: pdfBytes });
+  const pdf = await attachment('/interest/file/int-previewpdf');
+  assert.equal(pdf.statusCode, 200);
+  assert.equal(pdf.headers['content-type'], 'application/pdf');
+  assert.match(pdf.headers['content-disposition'], /^inline;/);
+  assert.equal(pdf.headers['x-content-type-options'], 'nosniff');
+  assert.equal(pdf.headers['cache-control'], 'private, max-age=3600');
+  assert.deepEqual(pdf.body, pdfBytes, 'the browser receives the original PDF');
+  const receipt = 'jr-1789600000000-' + 'a'.repeat(24);
+  const queue = { journal: {
+    getEntry: async () => ({ id: receipt, fileName: 'Resume.pdf', fileType: 'application/pdf', fileSize: pdfBytes.length }),
+    getFile: async () => pdfBytes,
+  } };
+  const queued = await attachment(`/interest/queue/${receipt}/file`, queue);
+  assert.equal(queued.statusCode, 200);
+  assert.equal(queued.headers['content-type'], 'application/pdf');
+  assert.match(queued.headers['content-disposition'], /^inline;/, 'held submissions preview too');
+  assert.equal(queued.headers['cache-control'], 'private, no-store');
+  assert.equal(queued.headers['x-content-type-options'], 'nosniff');
+  assert.deepEqual(queued.body, pdfBytes);
+  for (const [me, status] of [[null, 401], [{ role: 'member' }, 403]]) {
+    assert.equal((await attachment('/interest/file/int-previewpdf', { me: async () => me })).statusCode, status);
+    assert.equal((await attachment(`/interest/queue/${receipt}/file`, { ...queue, me: async () => me })).statusCode, status);
+  }
+  const unsafe = Buffer.from('<script>alert(1)</script>');
+  await putFile({ id: 'int-previewhtml', name: 'Resume.pdf', type: 'text/html', size: unsafe.length, data: unsafe });
+  const html = await attachment('/interest/file/int-previewhtml');
+  assert.equal(html.headers['content-type'], 'application/octet-stream');
+  assert.match(html.headers['content-disposition'], /^attachment;/, 'active content remains a download even with a PDF filename');
+  assert.equal(html.headers['content-security-policy'], 'sandbox');
+  console.log('PASS: legacy and queued PDFs preview inline with original bytes, private access, and safe attachment headers');
   async function request(method, path, body = {}) {
     const req = { method, headers: {} }, res = { setHeader() {}, end(value) { this.body = value; } };
     await handleInterest(req, res, path, { readJson: async () => body, me: async () => ({ role: 'admin' }) });
