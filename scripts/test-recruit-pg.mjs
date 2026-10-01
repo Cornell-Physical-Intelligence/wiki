@@ -113,7 +113,7 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
 
   const db = globalThis.recruitDb = {
     trace: [], schema: [], failTarget: false, files: new Map(),
-    settings: null, cycles: [], applications: [], applicants: [], receipts: new Map(), audit: [], requests: [], roles: [],
+    settings: null, cycles: [], applications: [], applicants: [], people: [], receipts: new Map(), audit: [], requests: [], roles: [],
     interest_submissions: [], interest_archives: [], interest_events: [], legacyTables: true,
     async sql(strings, ...v) {
       assert.ok(Array.isArray(strings) && 'raw' in strings, 'every statement arrives as a tagged template (raw present)');
@@ -212,6 +212,16 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
         const counts = new Map();
         for (const a of db.applications) if (!v[0] || v[0].includes(a.cycle_id)) { const k = a.cycle_id + '|' + a.stage + '|' + (a.section || 'interest'); counts.set(k, (counts.get(k) || 0) + 1); }
         return result([...counts].map(([k, n]) => ({ cycle_id: k.split('|')[0], stage: k.split('|')[1], section: k.split('|')[2], n })));
+      }
+      if (text.startsWith("SELECT p.cycle_id, count(*)::int AS n FROM recruit_people p WHERE p.track->>'status' = 'accepted'")) {
+        assert.match(text, /EXISTS \(SELECT 1 FROM recruit_applications a WHERE a\.cycle_id = p\.cycle_id AND a\.email = p\.email AND a\.erased_at IS NULL/);
+        assert.match(text, /GROUP BY p\.cycle_id$/);
+        const ids = text.includes('AND p.cycle_id = ANY(') ? v[0] : null;
+        const restricted = text.includes('a.cycle_id <> ALL(') ? v.at(-2) : [];
+        const visible = restricted.length ? v.at(-1) : [];
+        const counts = new Map();
+        for (const p of db.people) if (p.track?.status === 'accepted' && (!ids || ids.includes(p.cycle_id)) && db.applications.some((a) => a.cycle_id === p.cycle_id && a.email === p.email && a.erased_at == null && (!restricted.includes(a.cycle_id) || visible.includes(a.id)))) counts.set(p.cycle_id, (counts.get(p.cycle_id) || 0) + 1);
+        return result([...counts].map(([cycle_id, n]) => ({ cycle_id, n })));
       }
 
       /* legacy tables */

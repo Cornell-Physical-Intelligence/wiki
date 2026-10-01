@@ -163,12 +163,7 @@ const RECRUIT = {
     st.me = UI.recruitMe;
     if (!st.me || st.me.loading || st.me.error) return;
     if (!st.me.admin && !st.me.cycles.length) return;
-    if (st.cycles === undefined) {
-      st.cycles = { loading: true };
-      this.api('/recruit/cycles?all=1')
-        .then((out) => { recruitAdoptCycles(out); renderBackground('recruit'); })
-        .catch((e) => { st.cycles = { error: recruitError(e) }; renderBackground('recruit'); });
-    }
+    if (st.cycles === undefined) recruitLoadCycles();
     const id = r.params.id || null;
     if (!id) {
       if (st.cycleId) this.reset(null);
@@ -302,6 +297,25 @@ function recruitAdoptCycles(out) {
     const mine = list.find((c) => c.id === st.cycle.data.id);
     if (mine?.counts) st.cycle.counts = mine.counts;
   }
+}
+
+function recruitLoadCycles({ quiet = false } = {}) {
+  const st = recruitState();
+  const box = { ...st.cycles, loading: !quiet || !st.cycles?.list };
+  st.cycles = box;
+  return RECRUIT.api('/recruit/cycles?all=1')
+    .then((out) => {
+      if (recruitState() !== st || st.cycles !== box) return;
+      recruitAdoptCycles(out);
+      if (UI.route?.name !== 'recruit') return;
+      if (!quiet || !UI.route.params?.id) renderBackground('recruit');
+      else recruitPaintCounts();
+    })
+    .catch((e) => {
+      if (recruitState() !== st || st.cycles !== box) return;
+      st.cycles = box.list ? { ...box, loading: false } : { error: recruitError(e) };
+      if (UI.route?.name === 'recruit' && (!quiet || !UI.route.params?.id)) renderBackground('recruit');
+    });
 }
 
 function recruitId(prefix) {
@@ -473,12 +487,41 @@ const RECRUIT_STATE_LABELS = { current: 'Here now', done: 'Done', open: 'Not don
 const recruitTheirKeys = (person, flow = recruitFlow()) => flow.keys.filter((k) => person?.states?.[k] !== 'offpath');
 // A stage's state for someone, with the stages they go to next marked.
 const recruitStateOf = (person, key) => { const state = person?.states?.[key] || 'ahead'; return state === 'ahead' && person?.next?.includes(key) ? 'next' : state; };
-function recruitTrackHtml(person, flow = recruitFlow()) {
-  const states = person?.states || {};
+// Until the source form is submitted, a split is one pending choice. Its
+// alternatives are not separate requirements. Actual work and shared joins
+// keep their own steps; answered splits already omit off-path stages.
+function recruitProgressSteps(person, flow = recruitFlow()) {
   const keys = recruitTheirKeys(person, flow);
-  return `<span class="rc-track" role="img" aria-label="${MD.esc(keys.map((k) => `${recruitSectionTitle(k)}: ${RECRUIT_STATE_LABELS[states[k]] || 'Not yet'}${states[k] === 'current' && person?.done?.[k] ? ', done' : ''}`).join('; '))}">${keys.map((k) => {
-    const state = states[k] || 'ahead';
-    return `<span class="rc-track__dot rc-track__dot--${state}${state === 'current' && person?.done?.[k] ? ' is-done' : ''}" title="${MD.esc(recruitSectionTitle(k) + ': ' + (RECRUIT_STATE_LABELS[state] || ''))}"></span>`;
+  const visible = new Set(keys);
+  const groups = new Map();
+  if (person?.sections && typeof person.sections === 'object') {
+    for (const [owner, split] of flow.splits) {
+      if (!visible.has(owner) || person.sections[split.stage]) continue;
+      const targets = [...recruitSplitTargets(split)].filter((key) => visible.has(key)
+        && ['ahead', 'skipped'].includes(person.states?.[key] || 'ahead')
+        && (flow.into.get(key) || []).every((from) => from === owner));
+      if (targets.length < 2) continue;
+      const state = targets.every((key) => person.states?.[key] === 'skipped') ? 'skipped' : 'ahead';
+      const group = { state, title: `Path after ${recruitSectionTitle(owner)}: ${state === 'skipped' ? 'Skipped' : 'Not selected'}` };
+      for (const key of targets) groups.set(key, group);
+    }
+  }
+  const emitted = new Set();
+  return keys.flatMap((key) => {
+    const group = groups.get(key);
+    if (group) {
+      if (emitted.has(group)) return [];
+      emitted.add(group);
+      return [group];
+    }
+    const state = person?.states?.[key] || 'ahead';
+    return [{ state, done: state === 'current' && person?.done?.[key], title: `${recruitSectionTitle(key)}: ${RECRUIT_STATE_LABELS[state] || 'Not yet'}` }];
+  });
+}
+function recruitTrackHtml(person, flow = recruitFlow()) {
+  const steps = recruitProgressSteps(person, flow);
+  return `<span class="rc-track" role="img" aria-label="${MD.esc(steps.map((step) => step.title + (step.done ? ', done' : '')).join('; '))}">${steps.map((step) => {
+    return `<span class="rc-track__dot rc-track__dot--${step.state}${step.done ? ' is-done' : ''}" title="${MD.esc(step.title)}"></span>`;
   }).join('')}</span>`;
 }
 
@@ -685,9 +728,10 @@ async function recruitSyncTick() {
   const quiet = !UI.editor && !UI.modal && !UI.menu && !UI.palette && !(REMOTE.pending > 0);
   if (quiet && st.cycles?.list) {
     const key = st.key;
+    const cycles = st.cycles;
     try {
       const out = await RECRUIT.api('/recruit/cycles?all=1');
-      if (st.key === key && UI.route?.name === 'recruit') { recruitAdoptCycles(out); recruitPaintCounts(); }
+      if (st.key === key && st.cycles === cycles && UI.route?.name === 'recruit') { recruitAdoptCycles(out); recruitPaintCounts(); }
     } catch { /* the next tick tries again */ }
     if (st.cycle?.data && !RECRUIT.dirty() && !st.busy.size) {
       try {
@@ -723,6 +767,7 @@ function recruitStatusText(cycle, intakeCycleId) {
 // Counts repaint in place: every [data-rc-count] node.
 function recruitPaintCounts() {
   const st = recruitState();
+  if (typeof recruitPaintCycleCounts === 'function') recruitPaintCycleCounts();
   const cycle = st.cycle?.data;
   if (!cycle) return;
   const counts = st.cycle.counts || { total: 0, bySection: {} };

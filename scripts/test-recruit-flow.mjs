@@ -268,6 +268,8 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   assert.deepEqual(cycle.sections.interest.next, ['coffee', 'application'], 'coffee chats are optional in the default flow');
   assert.deepEqual(cycle.team.map((m) => m.email), ['admin@example.com'], 'the team is the admins until roles are granted');
   assert.equal(cycle.me.email, 'admin@example.com');
+  assert.equal(cycle.counts.accepted, 0, 'new cycles have no accepted people');
+  assert.equal(ok(await call('GET', '/recruit/cycles?all=1'), 'cycle index').cycles.find((c) => c.id === id).counts.accepted, 0);
   ok(await call('PUT', `/recruit/cycles/${id}/roles/lead@example.com`, { requestId: rq(), roles: ['lead'], subteams: [] }), 'grant lead');
   ok(await call('PUT', `/recruit/cycles/${id}/roles/rev@example.com`, { requestId: rq(), roles: ['reviewer'], subteams: [] }), 'grant reviewer');
   ok(await call('PUT', `/recruit/cycles/${id}/roles/sub@example.com`, { requestId: rq(), roles: ['reviewer'], subteams: ['software'] }), 'grant scoped reviewer');
@@ -295,6 +297,11 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   assert.deepEqual(list.counts.byStatus, { active: 4, accepted: 0, waitlisted: 0, declined: 0, withdrew: 0 });
   assert.deepEqual(list.counts.byStage, { coffee: 2, application: 1, interest: 1 });
   assert.ok(!('_track' in list.rows[0]) && !('_submissions' in list.rows[0]), 'internal fields never leave the server');
+  const legacyDecision = kit.mem.applications.find((a) => a.email === 'dan@cornell.edu');
+  const beforeLegacyDecision = { stage: legacyDecision.stage, outcome: legacyDecision.outcome };
+  Object.assign(legacyDecision, { stage: 'accepted', outcome: 'accepted' });
+  assert.equal(ok(await call('GET', '/recruit/cycles?all=1'), 'legacy cycle index').cycles.find((c) => c.id === id).counts.accepted, 0, 'legacy submission outcomes do not override the current person status');
+  Object.assign(legacyDecision, beforeLegacyDecision);
 
   // Checklist values: a reviewer ticks the chat, the value is the person's.
   const field = (email, stage, key, value, as = 'rev@example.com') => call('PATCH', `/recruit/cycles/${id}/people/${encodeURIComponent(email)}/fields`, { stage, field: key, value }, as);
@@ -343,6 +350,16 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   out = ok(await move('ann@cornell.edu', { requestId: rq(), status: 'accepted' }), 'accept');
   assert.equal(out.person.status, 'accepted');
   assert.deepEqual(out.person.track.moves.at(-1).status, { from: 'active', to: 'accepted' });
+  const indexedCount = async (as = 'admin@example.com') => ok(await call('GET', '/recruit/cycles?all=1', null, as), 'cycle index').cycles.find((c) => c.id === id)?.counts.accepted;
+  assert.equal(await indexedCount(), 1, 'Ann counts once despite sending two forms');
+  assert.equal(await indexedCount('sub@example.com'), 1, 'a scoped reviewer sees accepted people in their subteam');
+  ok(await move('ben@cornell.edu', { requestId: rq(), status: 'accepted' }), 'accept Mechanical applicant');
+  assert.equal(await indexedCount(), 2);
+  assert.equal(await indexedCount('sub@example.com'), 1, 'accepted applicants outside the reviewer scope are not counted');
+  assert.equal(ok(await call('GET', `/recruit/cycles/${id}`, null, 'sub@example.com'), 'scoped cycle').counts.accepted, 1, 'cycle detail respects the same scope');
+  ok(await move('ben@cornell.edu', { requestId: rq(), status: 'active' }), 'reactivate Mechanical applicant');
+  assert.equal(await indexedCount(), 1, 'reactivation removes the person from Accepted');
+  assert.equal((await call('GET', '/recruit/cycles?all=1', null, 'outsider@example.com')).status, 403);
 
   // Bulk: one move for many, each keeps where they came from.
   tick();

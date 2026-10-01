@@ -127,6 +127,23 @@ try {
   const moved = await kit.people.moveMany(flowCycle.id,[{email:'ann@example.com',name:'Ann',entry:{n:1}},{email:'ben@example.com',name:'Ben',entry:{n:2}}],{patch:{stage:'interview',stageAt:50},now:50});
   assert.deepEqual(moved.sort(),['ann@example.com','ben@example.com']);
   assert.deepEqual(await kit.people.usage(flowCycle.id,'interview'),{placed:2,recorded:0});
+  assert.equal((await kit.cycles.counts([flowCycle.id]))[flowCycle.id].accepted, 0);
+  await kit.apps.create(flowCycle,{name:'Ann',email:'ann@example.com',section:'interest',answers:{},by:'test',now:51});
+  await kit.people.move(flowCycle.id,'ann@example.com','Ann',{patch:{status:'accepted'},entry:{},now:52});
+  assert.equal((await kit.cycles.counts([flowCycle.id]))[flowCycle.id].accepted, 1, 'two forms from one accepted person count once');
+  await kit.people.move(flowCycle.id,'ben@example.com','Ben',{patch:{status:'accepted'},entry:{},now:53});
+  const acceptedCounts = (await kit.cycles.counts([flowCycle.id]))[flowCycle.id];
+  assert.equal(acceptedCounts.accepted, 2);
+  assert.equal(acceptedCounts.total, 3, 'existing form response counts remain unchanged');
+  const annForms = await kit.apps.allByEmail(flowCycle.id,'ann@example.com');
+  assert.equal((await kit.cycles.counts([flowCycle.id], {scopes:new Map([[flowCycle.id,new Set(annForms.map((a)=>a.id))]])}))[flowCycle.id].accepted, 1, 'only visible accepted people count');
+  assert.equal((await kit.cycles.counts([flowCycle.id], {scopes:new Map([[flowCycle.id,new Set()]])}))[flowCycle.id].accepted, 0, 'an empty scope counts nobody');
+  await kit.people.move(flowCycle.id,'ann@example.com','Ann',{patch:{status:'active'},entry:{},now:54});
+  assert.equal((await kit.cycles.counts([flowCycle.id]))[flowCycle.id].accepted, 1, 'reactivated people are no longer accepted');
+  await sql`UPDATE recruit_applications SET erased_at=1 WHERE cycle_id=${flowCycle.id} AND email='ben@example.com'`;
+  assert.equal((await kit.cycles.counts([flowCycle.id]))[flowCycle.id].accepted, 0, 'erased submissions cannot keep an old accepted track in the count');
+  await sql`UPDATE recruit_applications SET erased_at=NULL WHERE cycle_id=${flowCycle.id} AND email='ben@example.com'`;
+  await kit.people.move(flowCycle.id,'ben@example.com','Ben',{patch:{status:'active'},entry:{},now:55});
   // Splits read only the answers they name, newest form last.
   await kit.apps.create(flowCycle,{name:'Cy',email:'cy@example.com',section:'application',answers:{subteam:'Software',why:'x'},by:'test',now:60});
   await kit.apps.create(flowCycle,{name:'Di',email:'di@example.com',section:'application',answers:{why:'y'},by:'test',now:61});

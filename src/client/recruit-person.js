@@ -196,6 +196,7 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
 async function recruitMovePerson(email, { stage, status }) {
   const cycle = recruitCycleRow();
   if (!cycle || !recruitCanEdit(cycle)) return;
+  const st = recruitState();
   const guard = recruitTrackGuard(cycle);
   const rows = recruitPersonRows(email);
   const d = recruitPerson(email);
@@ -204,6 +205,7 @@ async function recruitMovePerson(email, { stage, status }) {
   recruitPersonChanged(email);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/move`, { method: 'POST', body: JSON.stringify({ requestId: recruitId('rq'), ...(stage ? { stage } : {}), ...(status ? { status } : {}) }) });
+    if (status && recruitState() === st) recruitLoadCycles({ quiet: true });
     if (!guard.sameCycle()) return;
     if (guard.current()) recruitAcceptTrack(email, out.person);
     else recruitLoadPerson(email, { quiet: true });
@@ -224,12 +226,16 @@ async function recruitMovePerson(email, { stage, status }) {
 async function recruitBulkMove(emails, change) {
   const cycle = recruitCycleRow();
   if (!cycle || !recruitCanEdit(cycle) || !emails.length) return;
+  const st = recruitState();
+  const guard = recruitTrackGuard(cycle);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/moves`, { method: 'POST', body: JSON.stringify({ requestId: recruitId('rq'), emails, ...change }) });
+    if (change.status && recruitState() === st) recruitLoadCycles({ quiet: true });
+    if (!guard.sameCycle()) return;
     toast(`${recruitPlural(out.moved || 0, 'person', 'people')} ${change.stage ? `moved to ${recruitSectionTitle(change.stage)}` : `marked ${recruitStatusLabel(change.status).toLowerCase()}`}`);
     for (const m of RECRUIT.modules) { try { m.peopleMoved?.(); } catch (e) { console.error(e); } }
     recruitLoadInsights({ quiet: true });
-  } catch (e) { toast(`Could not move: ${recruitError(e)}`); }
+  } catch (e) { if (guard.sameCycle()) toast(`Could not move: ${recruitError(e)}`); }
 }
 
 function recruitMoveMenu(anchor, emails, current = null) {

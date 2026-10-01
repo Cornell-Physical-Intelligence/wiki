@@ -374,7 +374,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   st.cycles = { list: [], intakeCycleId: null, migration: { done: true, orphans: 0 } };
   assert.match(f.run('viewRecruit()'), /No cycle yet/);
   st.cycles = { list: [
-    { id: 'cy-a', name: '<b>Fall</b> 2026', term: 'Fall 2026', status: 'open', counts: { total: 12, bySection: { interest: 10, coffee: 2 } }, updated: 1 },
+    { id: 'cy-a', name: '<b>Fall</b> 2026', term: 'Fall 2026', status: 'open', counts: { total: 12, accepted: 2, bySection: { interest: 10, coffee: 2 } }, updated: 1 },
     { id: 'cy-old', name: 'Spring 2025', term: 'Spring 2025', status: 'archived', counts: { total: 3 }, updated: 1 },
   ], intakeCycleId: 'cy-a', migration: { done: false, legacyLive: 40, legacyArchives: [{ id: 'ar-1' }], orphans: 0 } };
   f.mount();
@@ -382,6 +382,15 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.match(html, /&lt;b&gt;Fall&lt;\/b&gt; 2026/, 'cycle names are escaped'); assert.doesNotMatch(html, /<b>Fall<\/b>/);
   const card = f.app.querySelector('.rc-cycle-card[data-id="cy-a"]');
   same(card.querySelectorAll('.rc-cycle-card__stage').map((s) => [s.querySelector('.rc-cycle-card__label').textContent, s.querySelector('.rc-cycle-card__n').textContent]), [['Interest form', '10'], ['Coffee chats', '2'], ['Application form', '0']], 'each card counts its stages');
+  assert.equal(card.querySelector('.rc-cycle-card__accepted .rc-cycle-card__n').textContent, '2', 'the cycle card displays the server\'s accepted-person count');
+  assert.match(card.querySelector('.rc-cycle-card__accepted').textContent, /Accepted/);
+  assert.equal(f.app.querySelector('.rc-cycle-card[data-id="cy-old"] .rc-cycle-card__accepted .rc-cycle-card__n').textContent, '0', 'older count data defaults to no acceptances');
+  card.focus();
+  st.cycles.list[0].counts.accepted = 3;
+  f.run('recruitPaintCounts()');
+  assert.equal(card.querySelector('.rc-cycle-card__accepted .rc-cycle-card__n').textContent, '3', 'a background count refresh updates the cycle index');
+  assert.equal(f.app.querySelector('.rc-cycle-card[data-id="cy-a"]'), card, 'a count refresh keeps the existing cycle link');
+  assert.equal(f.document.activeElement, card, 'a count refresh preserves keyboard focus');
   assert.ok(card.querySelector('.rc-cycle-card__live'), 'the cycle taking the website\'s forms says so');
   assert.match(html, /Archived<\/h2>/, 'archived cycles sit under a second heading');
   assert.match(html, /Import the current list and archives/); assert.match(html, /40 submissions and 1 archive/);
@@ -684,6 +693,52 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
 }
 
 /* ------------------------------- a person on a split --------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'people' });
+  const form = (title, next = []) => ({ title, kind: 'form', fields: [], form: { questions: basics() }, next });
+  const base = sections();
+  st.cycle.sections = {
+    interest: { ...base.interest, next: ['coffee'] },
+    coffee: { ...base.coffee, next: ['elec', 'sw', 'mech'], split: { stage: 'coffee', q: 'subteam', routes: { Electrical: 'elec', Software: 'sw', Mechanical: 'mech' }, otherwise: null } },
+    elec: form('Electrical form'), sw: form('Software form'), mech: form('Mechanical form'),
+  };
+  const table = f.run('recruitPeopleState()');
+  const first = { section: 'interest', ts: 1, answers: {} };
+  const show = (submissions, track = {}) => {
+    const person = { ...people()[0], ...personFlow(flowOf(st.cycle.sections), submissions, track), sections: Object.fromEntries(submissions.map((s) => [s.section, { section: s.section, ts: s.ts }])) };
+    Object.assign(table, { rows: [person], byEmail: { [person.email]: person }, loaded: true, total: 1 });
+    f.mount();
+    return f.app.querySelectorAll('.rc-track__dot');
+  };
+  let dots = show([first]);
+  assert.equal(dots.length, 3, 'before the source form is sent, three alternative applications count as one pending step');
+  assert.equal(dots[2].getAttribute('title'), 'Path after Coffee chats: Not selected');
+  assert.ok(dots[2].classList.contains('rc-track__dot--ahead'), 'the unresolved path has a neutral pending state');
+  assert.doesNotMatch(f.app.querySelector('.rc-track').getAttribute('aria-label'), /Electrical form|Software form|Mechanical form/, 'the accessible progress label also describes one unresolved path');
+
+  dots = show([first, { section: 'sw', ts: 2, answers: {} }]);
+  assert.ok(dots.some((dot) => dot.getAttribute('title').startsWith('Software form:') && dot.classList.contains('rc-track__dot--current')), 'a reached branch remains visible even without the split source form');
+  dots = show([first, { section: 'elec', ts: 2, answers: {} }, { section: 'sw', ts: 3, answers: {} }]);
+  assert.ok(dots.some((dot) => dot.getAttribute('title').startsWith('Electrical form:') && dot.classList.contains('rc-track__dot--done')), 'completed branch forms are never folded into a pending step');
+
+  // Connections for everyone remain independent, and a rejoin appears once.
+  st.cycle.sections.coffee.next.push('welcome');
+  st.cycle.sections.welcome = form('Welcome', ['finish']);
+  st.cycle.sections.finish = form('Finish');
+  for (const key of ['elec', 'sw', 'mech']) st.cycle.sections[key].next = ['finish'];
+  dots = show([first]);
+  assert.equal(dots.length, 5, 'only the conditional alternatives are grouped');
+  assert.equal(dots.filter((dot) => dot.getAttribute('title').startsWith('Welcome:')).length, 1, 'an unconditional parallel stage remains separate');
+  assert.equal(dots.filter((dot) => dot.getAttribute('title').startsWith('Finish:')).length, 1, 'a shared downstream stage is counted once');
+  dots = show([first], { stage: 'finish', stageAt: 5 });
+  assert.ok(dots.some((dot) => dot.getAttribute('title') === 'Path after Coffee chats: Skipped' && dot.classList.contains('rc-track__dot--skipped')), 'moving past the entire unresolved split keeps its skipped state');
+  st.cycle.sections.interest.next.push('elec');
+  dots = show([first]);
+  assert.ok(dots.some((dot) => dot.getAttribute('title').startsWith('Electrical form:')), 'a split target also reached by an independent connection is not folded away');
+  console.log('PASS: unresolved splits count as one pending progress step while reached branches, unconditional connections and shared downstream stages remain visible');
+}
+
 {
   const f = fixture();
   const st = loadCycle(f, { sub: 'person', params: { email: 'ada@cornell.edu' } });
@@ -1087,6 +1142,18 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   moves.resolve({ moved: 2, emails: moves.body.emails, missing: [] }); await f.settle();
   assert.equal(f.toasts.at(-1), '2 people moved to Application form');
   assert.equal(f.run('recruitState().people.selected.size'), 0, 'the selection clears after a move');
+  const cachedCycleCounts = st.cycles;
+  const failedDecision = f.run('recruitBulkMove')(['ada@cornell.edu', 'bo@cornell.edu'], { status: 'accepted' });
+  (await f.pending('/recruit/cycles/cy-a/moves', 'POST')).reject(new Error('Unavailable'));
+  await failedDecision;
+  assert.equal(st.cycles, cachedCycleCounts, 'a failed bulk decision preserves the cached cycle counts');
+  const bulkDecision = f.run('recruitBulkMove')(['ada@cornell.edu', 'bo@cornell.edu'], { status: 'accepted' });
+  (await f.pending('/recruit/cycles/cy-a/moves', 'POST')).resolve({ moved: 2, missing: [] });
+  await bulkDecision;
+  assert.notEqual(st.cycles, cachedCycleCounts, 'a successful bulk decision replaces the cached cycle request');
+  (await f.pending('/recruit/cycles?all=1')).resolve({ cycles: [{ ...cycleRow(), counts: { accepted: 2 } }], intakeCycleId: 'cy-a', migration: { done: true } });
+  await f.settle();
+  assert.equal(st.cycles.list[0].counts.accepted, 2, 'bulk acceptance counts refresh without leaving the page');
   // The board: a column per stage, active people by default.
   f.ctx.UI.route.params = { id: 'cy-a', sub: 'people' };
   await f.click(f.app.querySelector('[data-action="recruit-people-unfilter-all"]'));
@@ -1196,6 +1263,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.equal(st.people.byEmail['ada@cornell.edu'].stage, 'coffee', 'and goes back when it fails');
   assert.equal(f.toasts.at(-1), 'Could not move: Busy');
   assert.equal(f.app.querySelector('[data-action="recruit-person-accept"]').textContent.trim(), 'Accept', 'acceptance is a visible action');
+  const cachedCycleCounts = st.cycles;
   const failedAccept = f.click(f.app.querySelector('[data-action="recruit-person-accept"]'));
   const refused = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST');
   assert.equal(refused.body.status, 'accepted');
@@ -1203,6 +1271,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   refused.reject(new Error('Decision could not be saved'));
   await failedAccept;
   assert.equal(st.people.byEmail['ada@cornell.edu'].status, 'active', 'a failed acceptance restores the prior decision');
+  assert.equal(st.cycles, cachedCycleCounts, 'a failed acceptance preserves the cached cycle counts');
   assert.ok(f.app.querySelector('[data-action="recruit-person-accept"]'), 'the Accept action returns after failure');
   const accepting = f.click(f.app.querySelector('[data-action="recruit-person-accept"]'));
   const status = await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST');
@@ -1210,6 +1279,10 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.match(status.body.requestId, /^rq-/);
   status.resolve({ person: { email: 'ada@cornell.edu', stage: 'coffee', status: 'accepted', states: { interest: 'done', coffee: 'current', application: 'ahead' }, done: { interest: true, coffee: true }, fields: {}, trackVersion: 5 } }); await accepting;
   assert.equal(f.toasts.at(-1), 'Ada marked accepted');
+  assert.notEqual(st.cycles, cachedCycleCounts, 'a successful acceptance replaces the cached cycle request');
+  (await f.pending('/recruit/cycles?all=1')).resolve({ cycles: [{ ...cycleRow(), counts: { accepted: 1 } }], intakeCycleId: 'cy-a', migration: { done: true } });
+  await f.settle();
+  assert.equal(st.cycles.list[0].counts.accepted, 1, 'the acceptance count refreshes while the person page stays open');
   assert.equal(f.app.querySelector('[data-action="recruit-person-accept"]'), null, 'accepted people are not offered acceptance again');
   assert.equal(f.app.querySelector('[data-action="recruit-person-status"]').textContent, 'Accepted');
   await f.click(f.app.querySelector('[data-action="recruit-person-status"]'));
@@ -1376,6 +1449,27 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   await assert.rejects(p, (e) => e.message === 'The request timed out. Try again.' && e.name === 'TimeoutError');
   h.run("RECRUIT.api('/cycles')"); assert.equal(h.requests[1].url, '/recruit/cycles', 'paths without the prefix get it');
   console.log('PASS: loaders complete through renderBackground, every fetch is bounded, late answers after a cycle switch are dropped, and /recruit/me loads once');
+}
+
+// A cycle-index response started before a decision cannot restore its old
+// accepted count after the successful decision starts a newer count request.
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'person', params: { email: 'ada@cornell.edu' } });
+  st.cycles = undefined;
+  f.run('RECRUIT.mount(UI.route)');
+  const staleIndex = await f.pending('/recruit/cycles?all=1');
+  const deciding = f.run('recruitMovePerson')('ada@cornell.edu', { status: 'accepted' });
+  (await f.pending('/recruit/cycles/cy-a/people/ada%40cornell.edu/move', 'POST')).resolve({ person: { ...people()[0], status: 'accepted', trackVersion: 3 } });
+  await deciding;
+  const refreshing = st.cycles;
+  staleIndex.resolve({ cycles: [{ ...cycleRow(), counts: { accepted: 0 } }], intakeCycleId: 'cy-a', migration: { done: true } });
+  await f.settle();
+  assert.equal(st.cycles, refreshing, 'the stale index cannot replace the newer count request');
+  (await f.pending('/recruit/cycles?all=1')).resolve({ cycles: [{ ...cycleRow(), counts: { accepted: 1 } }], intakeCycleId: 'cy-a', migration: { done: true } });
+  await f.settle();
+  assert.equal(st.cycles.list[0].counts.accepted, 1, 'the following index fetch supplies the saved acceptance count');
+  console.log('PASS: a delayed cycle-index response cannot restore stale acceptance counts after a decision');
 }
 
 /* ------------------------------- sync ------------------------------------ */

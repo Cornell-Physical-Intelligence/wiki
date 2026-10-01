@@ -28,7 +28,17 @@ function recruitCycleRowHtml(c, intakeCycleId) {
       ${receiving ? `<span class="rc-cycle-card__live">${RC_ICONS.globe}Website</span>` : ''}</span>
     ${meta ? `<span class="rc-cycle-card__meta">${MD.esc(meta)}</span>` : ''}
     <span class="rc-cycle-card__stages">${stages.map((s) => `<span class="rc-cycle-card__stage"><span class="rc-cycle-card__bar"><span style="width:${Math.round((s.n / max) * 100)}%"></span></span><span class="rc-cycle-card__label">${MD.esc(s.title)}</span><span class="rc-cycle-card__n">${recruitNum(s.n)}</span></span>`).join('')}</span>
+    <span class="rc-cycle-card__accepted"><span>Accepted</span><span class="rc-cycle-card__n" data-rc="cycle-accepted">${recruitNum(Number(c.counts?.accepted || 0))}</span></span>
   </a>`;
+}
+
+function recruitPaintCycleCounts() {
+  const cycles = new Map((recruitState().cycles?.list || []).map((c) => [c.id, c]));
+  for (const card of $$('.rc-cycle-card[data-id]')) {
+    const cycle = cycles.get(card.dataset.id);
+    const count = $('[data-rc="cycle-accepted"]', card);
+    if (cycle && count) count.textContent = recruitNum(Number(cycle.counts?.accepted || 0));
+  }
 }
 
 function recruitIndexHtml() {
