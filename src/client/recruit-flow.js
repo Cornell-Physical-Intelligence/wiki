@@ -23,9 +23,9 @@ const FC = {
   W_MIN: 184, W_MAX: 300, PAD: 24,
   GAP: 56, GAP_MIN: 44, GAP_GROW: 40, GAP_LABEL: 200, ENTRY: 40, WHY: 112,
   STACK: 28, LANE: 14, LANE_GAP: 14,
-  OUT_W: 112, OUT_H: 150,
+  OUT_W: 140, OUT_H: 184,
   FORK: 20, BEND: 10, SCALE_MIN: 0.8,
-  NARROW: 700, V_W: 272, V_GAP: 64, V_STACK: 20, V_OUT_H: 52, V_ENTRY: 44,
+  NARROW: 700, V_W: 272, V_GAP: 64, V_STACK: 20, V_OUT_H: 100, V_ENTRY: 44,
 };
 const FC_OUTCOME = '__outcome';
 
@@ -222,20 +222,14 @@ function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } 
   const main = [FC.PAD + entry];
   for (let i = 0; i < gapCount; i += 1) main.push(main[i] + span + gaps[i]);
 
-  // The outcomes: across, a card as tall as its rows, centred on the
-  // connections that end there (they merge into it); down, a bar the
-  // chart's width.
+  // Outcomes are centred on the connections that end there. Down, keep
+  // the card as narrow as a stage so every label and count stays together.
   const ends = edges.filter((e) => e.outcome).map((e) => c.get(e.chain.at(-1)));
   let outLow = 0, outHigh = 0;
   if (withOutcome && ends.length) {
-    if (across) {
-      const m = (Math.min(...ends) + Math.max(...ends)) / 2;
-      outLow = m - FC.OUT_H / 2; outHigh = m + FC.OUT_H / 2;
-    } else {
-      outLow = Math.min(...[...items.values()].map((it) => c.get(it.id) - size(it) / 2));
-      outHigh = Math.max(...[...items.values()].map((it) => c.get(it.id) + size(it) / 2));
-      if (outHigh - outLow < 300) { const m = (outLow + outHigh) / 2; outLow = m - 150; outHigh = m + 150; }
-    }
+    const m = (Math.min(...ends) + Math.max(...ends)) / 2;
+    const extent = across ? FC.OUT_H : Wd;
+    outLow = m - extent / 2; outHigh = m + extent / 2;
   }
   let low = Infinity, high = -Infinity;
   for (const it of items.values()) { low = Math.min(low, c.get(it.id) - size(it) / 2); high = Math.max(high, c.get(it.id) + size(it) / 2); }
@@ -292,7 +286,7 @@ function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } 
       cross([main[it.col], mid(it.id)]);
       if (it.kind === 'lane') { here = [main[it.col] + span, mid(it.id)]; d += `L${P(...here)}`; }
     }
-    if (e.outcome) cross([main[n], across ? outLow + shift + FC.OUT_H / 2 : here[1]]);
+    if (e.outcome) cross([main[n], shift + (outLow + outHigh) / 2]);
     return { from: e.from, to: e.to, outcome: e.outcome, split: e.split, label: e.label, d, ...(e.outcome ? {} : place) };
   });
   // Into each first stage: a short arrow from the chart's edge.

@@ -274,12 +274,11 @@ button.fc-flow:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px
 .fc-node.is-open { z-index: 3; border-color: var(--fg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 10%, transparent), 0 18px 40px rgba(0, 0, 0, 0.12); }
 .fc-node--outcome { flex-direction: column; justify-content: center; padding: 8px; }
 .fc-outcome { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-.fc-outcome a { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.fc-outcome li { min-width: 0; margin: 0; }
+.fc-outcome a { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 40px; padding: 0 10px; border-radius: 6px; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .fc-outcome a:hover { background: var(--hover); color: var(--fg); }
 .fc-outcome b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
-.fc-canvas--down .fc-outcome { flex-direction: row; }
-.fc-canvas--down .fc-outcome li { flex: 1; min-width: 0; }
-.fc-canvas--down .fc-outcome a { justify-content: center; }
+.fc-canvas--down .fc-outcome { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
 /* Add a stage: a + inside the chart. */
 .fc-add {
   position: absolute; top: 10px; right: 10px; z-index: 5; width: 32px; height: 32px; padding: 0;
@@ -686,13 +685,16 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .pn-id h2 { margin: 0 0 6px; font-size: clamp(24px, 3.2vw, 32px); font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
 .pn-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--muted); }
 .pn-meta span { overflow-wrap: anywhere; }
-.pn-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 18px; }
-.pn-ctl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.pn-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 100%; }
+.pn-decision, .pn-actions__secondary { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+.pn-decision > .rc-status { margin-right: 4px; }
+.pn-actions__secondary { gap: 8px 18px; }
+.pn-ctl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.pn-ctl > .btn { min-width: 0; }
+.pn-ctl > .btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pn-actions__label { font-size: 12px; color: var(--faint); }
-.pn-actions .btn { min-height: 36px; gap: 8px; }
+.pn-actions .btn { min-height: 40px; gap: 8px; }
 .pn-actions .btn svg { width: 15px; height: 15px; }
-.pn-status--accepted { color: var(--good); }
-.pn-status--declined { color: var(--bad); }
 .pn-at { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
 .pn-at svg { width: 15px; height: 15px; color: var(--muted); }
 /* Where they are, stage by stage, as a line of steps. */
@@ -860,7 +862,8 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .ri-grid { grid-template-columns: minmax(0, 1fr); }
   .ri-bar { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) minmax(36px, auto); gap: 8px; }
   .pn-head { flex-direction: column; }
-  .pn-actions { justify-content: flex-start; width: 100%; }
+  .pn-actions { align-items: flex-start; width: 100%; }
+  .pn-decision, .pn-actions__secondary { justify-content: flex-start; }
   .pn-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .pn-each { grid-column: 1; }
   .ss-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); }

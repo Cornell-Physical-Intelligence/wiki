@@ -637,8 +637,11 @@ function recruitPutSite(settings) {
 function recruitAdoptCycle(row, sections) {
   const st = recruitState();
   if (row && st.cycle?.data?.id === row.id) {
+    const changed = sections && st.cycle.data.version !== row.version;
     st.cycle.data = row;
     if (sections) st.cycle.sections = sections;
+    // Person paths and list summaries are derived from these settings too.
+    if (changed) for (const m of RECRUIT.modules) { try { m.cycleChanged?.(); } catch (e) { console.error(e); } }
   }
   if (st.cycles?.list && row) st.cycles.list = st.cycles.list.map((c) => (c.id === row.id ? { ...c, name: row.name, status: row.status, version: row.version, closesAt: row.closesAt } : c));
 }

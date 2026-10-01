@@ -1230,7 +1230,10 @@ RECRUIT.register({
     recruitStageClose();
     return true;
   },
-  cycleChanged() { const st = recruitState(); if (st.stagePeople) st.stagePeople.loaded = false; },
+  cycleChanged() {
+    const sp = recruitState().stagePeople;
+    if (sp) { sp.seq = (sp.seq || 0) + 1; Object.assign(sp, { loaded: false, loading: false, rows: [], next: null }); }
+  },
   reset() { const st = recruitState(); st.stagePeople = undefined; clearTimeout(recruitStageSearchTimer); },
 });
 

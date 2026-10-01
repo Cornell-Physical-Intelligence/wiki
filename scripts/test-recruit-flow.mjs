@@ -165,14 +165,31 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     assert.deepEqual([...flow.routeOf(split, sub({ team: ['Electrical'] }))], ['cs']);
     assert.deepEqual([...flow.routeOf(split, sub({ team: ['Software', 'Mechanical'] }))].sort(), ['cs', 'mech'], 'several answers, several ways');
     assert.deepEqual([...flow.routeOf(split, sub({ team: ['Creative'] }))], ['gen'], 'anyone else');
+    assert.deepEqual([...flow.routeOf(split, sub({ team: ['Software', 'Creative'] }))].sort(), ['cs', 'gen'], 'each unmapped selection also goes to Anyone else');
     assert.deepEqual([...flow.routeOf(split, sub({ team: ' software ' }))], ['cs'], 'an answer matches whatever its case or spacing');
     assert.deepEqual([...flow.routeOf(split, [{ section: 'app', ts: 1, answers: { team: ['Mechanical'] } }, { section: 'app', ts: 2, answers: { team: ['Software'] } }])], ['cs'], 'the newest answer counts');
+    for (const value of [undefined, null, '', []]) {
+      assert.deepEqual([...flow.routeOf(split, sub({ team: value }))], ['gen'], 'a submitted empty optional answer takes Anyone else');
+      assert.deepEqual([...flow.routeOf({ ...split, otherwise: null }, sub({ team: value }))], [], 'a submitted empty answer stops when Anyone else goes nowhere');
+    }
+    assert.deepEqual([...flow.routeOf(split, [{ section: 'app', ts: 1, answers: { team: ['Mechanical'] } }, { section: 'app', ts: 2, answers: {} }])], ['gen'], 'the newest form replaces an earlier answer even when the question is omitted');
+
+    // Older submissions store built-in answers in columns outside answers.
+    const bySubteam = { ...split, q: 'subteam' };
+    const legacy = (answers = {}) => [{ section: 'app', ts: 1, subteam: 'Software', year: 'Junior', answers }];
+    assert.deepEqual([...flow.routeOf(bySubteam, legacy())], ['cs'], 'a legacy subteam column picks the same path as its displayed answer');
+    assert.deepEqual([...flow.routeOf(bySubteam, legacy({ subteam: null }))], ['cs'], 'a null answer falls back to the legacy column');
+    assert.deepEqual([...flow.routeOf(bySubteam, legacy({ subteam: 'Mechanical' }))], ['mech'], 'a recorded answer wins over the legacy column');
+    for (const value of ['', []]) assert.deepEqual([...flow.routeOf(bySubteam, legacy({ subteam: value }))], ['gen'], 'an explicit empty answer never revives a legacy column');
+    assert.deepEqual([...flow.routeOf({ ...bySubteam, routes: { No: 'mech' } }, legacy({ subteam: false }))], ['mech'], 'false is an answer and never revives a legacy column');
+    assert.deepEqual([...flow.routeOf({ ...split, q: 'year', routes: { Junior: 'cs' } }, legacy())], ['cs'], 'a legacy year column also routes');
+    assert.deepEqual([...flow.routeOf(split, [{ section: 'app', ts: 1, team: 'Software', answers: {} }])], ['gen'], 'only the legacy built-in question keys use columns');
     // A person's path: the other ways are not theirs.
     const pf = flow.personFlow(f, sub({ team: ['Mechanical'] }), {});
     assert.equal(pf.stage, 'app');
     assert.deepEqual([pf.states.cs, pf.states.mech, pf.states.gen], ['offpath', 'ahead', 'offpath']);
     assert.deepEqual(pf.next, ['mech']);
-    const undecided = flow.personFlow(f, [{ section: 'app', ts: 1, answers: {} }], {});
+    const undecided = flow.personFlow(f, [], { stage: 'app', stageAt: 1 });
     assert.deepEqual([undecided.states.cs, undecided.states.mech], ['ahead', 'ahead'], 'before they answer, every way is still ahead');
     assert.deepEqual(undecided.next, [], 'and none of them is theirs yet');
     const moved = flow.personFlow(f, sub({ team: ['Mechanical'] }), { stage: 'cs', stageAt: 5 });
@@ -181,6 +198,19 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     assert.deepEqual([...flow.routeOf(yes.splits.get('app'), sub({ ok: false }))], ['mech'], 'a checkbox splits by Yes and No');
     const ins = flow.insightsFor(f, [{ email: 'a@x.co', submissions: sub({ team: ['Software'] }), track: {} }, { email: 'b@x.co', submissions: sub({ team: ['Mechanical'] }), track: {} }, { email: 'c@x.co', submissions: sub({ team: ['Software'] }), track: { status: 'declined' } }], { now: 1789600000000 });
     assert.deepEqual(ins.stages.map((x) => [x.key, x.upNext]), [['app', 0], ['cs', 1], ['mech', 1], ['gen', 0]], 'insights count who is up next; a declined person is nobody\'s');
+
+    const parallel = flow.flowOf({
+      app: { ...sections.app, split: bySubteam, next: ['common'] },
+      cs: { next: ['cs-review'] }, 'cs-review': { next: ['finish'] },
+      mech: { next: ['mech-review'] }, 'mech-review': { next: ['finish'] },
+      gen: { next: ['finish'] }, common: { next: ['finish'] }, finish: { next: [] },
+    });
+    const softwarePath = flow.personFlow(parallel, legacy(), {});
+    assert.deepEqual(['mech', 'mech-review', 'gen'].map((k) => softwarePath.states[k]), ['offpath', 'offpath', 'offpath'], 'unselected branches and their descendants are off the person\'s path');
+    assert.deepEqual(['cs', 'cs-review', 'common', 'finish'].map((k) => softwarePath.states[k]), ['ahead', 'ahead', 'ahead', 'ahead'], 'chosen branches, unconditional connections and rejoins remain on the path');
+    assert.deepEqual(softwarePath.next, ['common', 'cs']);
+    const multiplePaths = flow.personFlow(parallel, legacy({ subteam: ['Software', 'Mechanical'] }), {});
+    assert.deepEqual(['cs', 'cs-review', 'mech', 'mech-review', 'common', 'finish'].map((k) => multiplePaths.states[k]), Array(6).fill('ahead'), 'multi-answer splits retain every selected branch');
 
     // Saving a split: a choice or checkbox on a form people have sent by then.
     const teamQ = { key: 'team', type: 'single', label: 'Team', required: false, options: ['Software', 'Mechanical'] };
@@ -432,7 +462,7 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   sc = ok(await call('GET', `/recruit/cycles/${sid}`), 'reload split cycle');
   assert.deepEqual(sc.sections.application.next, ['cs-form', 'mech-form', 'interview']);
   const scyc = await kit.cycles.get(sid);
-  const apply = async (email, name, section, answers) => { tick(); return kit.apps.create(scyc, { name, email, cornell: true, section, answers, by: 'test', subteam: answers.subteam || '' }); };
+  const apply = async (email, name, section, answers, columns = {}) => { tick(); return kit.apps.create(scyc, { name, email, cornell: true, section, answers, by: 'test', subteam: answers.subteam || '', ...columns }); };
   await apply('sw@cornell.edu', 'Sid', 'application', { subteam: 'Software', year: 'Junior', why: 'Robots' });
   await apply('me@cornell.edu', 'Meg', 'application', { subteam: 'Mechanical', year: 'Senior', why: 'Gears' });
   await apply('cr@cornell.edu', 'Cara', 'application', { subteam: 'Creative', year: 'Grad', why: 'Renders' });
@@ -449,6 +479,34 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   assert.deepEqual(['cs-form', 'mech-form', 'interview'].map((k) => splitInsights.stages.find((x) => x.key === k).upNext), [1, 1, 1]);
   const megDetail = ok(await call('GET', `/recruit/cycles/${sid}/people/me%40cornell.edu`), 'detail').person;
   assert.deepEqual([megDetail.next, megDetail.states['cs-form']], [['mech-form'], 'offpath']);
+
+  // Legacy column-only answers must agree across lists, details, writes and
+  // insights; an explicit new answer still wins over those old columns.
+  await apply('legacy-sw@cornell.edu', 'Legacy Sid', 'application', {}, { subteam: 'Software', year: 'Junior' });
+  await apply('legacy-me@cornell.edu', 'Legacy Meg', 'application', { subteam: null }, { subteam: 'Mechanical' });
+  await apply('blank@cornell.edu', 'Blank Bea', 'application', { subteam: '' }, { subteam: 'Software' });
+  await apply('multi@cornell.edu', 'Multi Mo', 'application', { subteam: ['Software', 'Mechanical'] }, { subteam: 'Software' });
+  const legacyPeople = byEmail(ok(await call('GET', `/recruit/cycles/${sid}/people?limit=100`), 'legacy split people').rows);
+  const legacySid = legacyPeople['legacy-sw@cornell.edu'];
+  assert.deepEqual([legacySid.next, legacySid.states['cs-form'], legacySid.states['mech-form'], legacySid.states.interview], [['cs-form'], 'ahead', 'offpath', 'offpath']);
+  assert.deepEqual(legacyPeople['legacy-me@cornell.edu'].next, ['mech-form'], 'null answers use the legacy value in lists');
+  assert.deepEqual(legacyPeople['blank@cornell.edu'].next, ['interview'], 'blank answers use Anyone else instead of a legacy value');
+  assert.deepEqual(legacyPeople['multi@cornell.edu'].next, ['cs-form', 'mech-form']);
+  const legacyUrl = `/recruit/cycles/${sid}/people/legacy-sw%40cornell.edu`;
+  const routingView = (person) => ({ stage: person.stage, states: person.states, next: person.next });
+  assert.deepEqual(routingView(ok(await call('GET', legacyUrl), 'legacy detail').person), routingView(legacySid), 'detail routing matches list routing for column-only answers');
+  const scoredLegacy = ok(await call('PATCH', `${legacyUrl}/fields`, { stage: 'application', field: 'score', value: 4 }), 'score legacy applicant').person;
+  assert.deepEqual(routingView(scoredLegacy), routingView(legacySid), 'checklist responses retain the selected path');
+  const markedLegacy = ok(await call('POST', `${legacyUrl}/move`, { requestId: rq(), status: 'waitlisted' }), 'waitlist legacy applicant').person;
+  assert.deepEqual(routingView(markedLegacy), routingView(legacySid), 'status responses retain the selected path');
+  ok(await call('POST', `${legacyUrl}/move`, { requestId: rq(), status: 'active' }), 'reactivate legacy applicant');
+  assert.deepEqual(ok(await call('GET', `/recruit/cycles/${sid}/people?next=cs-form`), 'legacy up next').rows.map((p) => p.email).sort(), ['legacy-sw@cornell.edu', 'multi@cornell.edu', 'sw@cornell.edu']);
+  const legacyInsights = ok(await call('GET', `/recruit/cycles/${sid}/insights`), 'legacy split insights');
+  assert.deepEqual(['cs-form', 'mech-form', 'interview'].map((k) => legacyInsights.stages.find((x) => x.key === k).upNext), [3, 3, 2], 'insights count the same paths shown by lists and details');
+  await apply('legacy-sw@cornell.edu', 'Legacy Sid', 'cs-form', {});
+  const completedLegacy = ok(await call('GET', legacyUrl), 'legacy after selected form').person;
+  assert.deepEqual([completedLegacy.stage, completedLegacy.done['cs-form'], completedLegacy.states['mech-form'], completedLegacy.states.interview], ['cs-form', true, 'offpath', 'offpath'], 'finishing the selected form never makes sibling forms pending');
+  assert.deepEqual(routingView(byEmail(ok(await call('GET', `/recruit/cycles/${sid}/people?limit=100`), 'legacy list after selected form').rows)['legacy-sw@cornell.edu']), routingView(completedLegacy));
   // The website learns which open form comes next for the answers just sent.
   sc = ok(await call('GET', `/recruit/cycles/${sid}`), 'reload split cycle');
   sc = { ...sc, cycle: ok(await call('POST', `/recruit/cycles/${sid}/status`, { version: sc.cycle.version, status: 'open' }), 'open split cycle').cycle };
@@ -458,6 +516,13 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
   assert.deepEqual(sent.next, [{ key: 'cs-form', title: 'CS form' }], 'electrical goes on to the CS form');
   const sentMech = ok(await call('POST', '/recruit/site/application', { answers: { name: 'Mo', email: 'mo@cornell.edu', year: 'Junior', subteam: 'Mechanical', why: 'Gears' } }), 'submit another');
   assert.deepEqual(sentMech.next, [{ key: 'mech-form', title: 'Mech form' }]);
+  sc = { ...sc, ...ok(await put({ sections: {
+    'cs-followup': { title: 'CS follow-up', kind: 'form', form: { questions: S.defaultQuestions() }, open: true, next: [] },
+    'cs-form': { split: { stage: 'application', q: 'subteam', routes: { Software: 'cs-followup' } }, next: [] },
+  } }), 'split a later stage using the earlier application') };
+  await apply('legacy-next@cornell.edu', 'Legacy Next', 'application', {}, { subteam: 'Software' });
+  const sentLegacy = ok(await call('POST', '/recruit/site/cs-form', { answers: { name: 'Legacy Next', email: 'legacy-next@cornell.edu', year: 'Junior', subteam: 'Mechanical' } }), 'submit after a legacy application');
+  assert.deepEqual(sentLegacy.next, [{ key: 'cs-followup', title: 'CS follow-up' }], 'website next forms use the earlier source form\'s legacy answer, not the latest form\'s answer');
 
   // Everything is audited.
   const audit = ok(await call('GET', `/recruit/cycles/${id}/audit`), 'audit').rows.map((a) => a.kind);

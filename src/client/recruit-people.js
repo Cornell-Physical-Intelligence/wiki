@@ -429,7 +429,12 @@ RECRUIT.register({
   refresh: { load: () => { const p = recruitState().people; if (!p) return null; return p.view === 'board' ? recruitLoadBoard() : p.selected.size ? null : recruitLoadPeople({ quiet: true }); }, every: RECRUIT_SYNC_MS },
   personChanged: (email) => recruitPaintPeoplePerson(email),
   peopleMoved() { const p = recruitState().people; if (!p) return; p.selected = new Set(); if (UI.route?.params?.sub === 'people') { if (p.view === 'board') recruitLoadBoard(); else recruitLoadPeople({ quiet: true }); } else { p.loaded = false; if (recruitState().board) recruitState().board.loaded = false; } const sp = recruitState().stagePeople; if (sp) { sp.selected = new Set(); recruitLoadStagePeople(); } },
-  cycleChanged() { const p = recruitState().people; if (p) p.loaded = false; },
+  cycleChanged() {
+    const st = recruitState();
+    recruitPeopleSeq += 1;
+    if (st.people) Object.assign(st.people, { loaded: false, loading: false, rows: [], byEmail: {}, next: null });
+    if (st.board) { st.board.seq = (st.board.seq || 0) + 1; Object.assign(st.board, { loaded: false, loading: false, rows: [] }); }
+  },
   actions: {
     'recruit-people-more': () => recruitLoadPeople({ more: true }),
     'recruit-people-refresh': () => { const p = recruitState().people; if (p?.view === 'board') recruitLoadBoard(); else recruitLoadPeople(); },

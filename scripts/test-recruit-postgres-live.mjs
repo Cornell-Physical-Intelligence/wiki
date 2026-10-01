@@ -130,10 +130,20 @@ try {
   // Splits read only the answers they name, newest form last.
   await kit.apps.create(flowCycle,{name:'Cy',email:'cy@example.com',section:'application',answers:{subteam:'Software',why:'x'},by:'test',now:60});
   await kit.apps.create(flowCycle,{name:'Di',email:'di@example.com',section:'application',answers:{why:'y'},by:'test',now:61});
-  const picked = await kit.apps.routeAnswers(flowCycle.id,new Map([['application',new Set(['subteam'])],['interest',new Set(['subteam'])]]));
-  assert.deepEqual(picked.get('cy@example.com'),{application:{subteam:'Software'}});
-  assert.deepEqual(picked.get('di@example.com'),{application:{}},'a form without the answer reads as unanswered');
-  assert.deepEqual(picked.get('ben@example.com'),{interest:{}});
+  await kit.apps.create(flowCycle,{name:'Legacy',email:'legacy@example.com',section:'application',subteam:'Mechanical',year:'Junior',answers:{why:'Older submission'},by:'test',now:62});
+  await kit.apps.create(flowCycle,{name:'Null',email:'null@example.com',section:'application',subteam:'Software',year:'Senior',answers:{subteam:null,year:null},by:'test',now:63});
+  await kit.apps.create(flowCycle,{name:'Blank',email:'blank@example.com',section:'application',subteam:'Software',year:'Senior',answers:{subteam:'',year:[]},by:'test',now:64});
+  await kit.apps.create(flowCycle,{name:'False',email:'false@example.com',section:'application',subteam:'Software',year:'Senior',answers:{subteam:false,year:'Junior'},by:'test',now:65});
+  const picked = await kit.apps.routeAnswers(flowCycle.id,new Map([['application',new Set(['subteam','year'])],['interest',new Set(['subteam'])]]));
+  // A default null year is a stored column value, whereas custom answer keys
+  // remain absent unless the requested form actually contains them.
+  assert.deepEqual(picked.get('cy@example.com'),{application:{subteam:'Software',year:null}});
+  assert.deepEqual(picked.get('di@example.com'),{application:{subteam:'',year:null}},'a form without an answer keeps its empty built-in columns');
+  assert.deepEqual(picked.get('ben@example.com'),{interest:{subteam:''}});
+  assert.deepEqual(picked.get('legacy@example.com'),{application:{subteam:'Mechanical',year:'Junior'}},'legacy columns survive the Postgres split projection');
+  assert.deepEqual(picked.get('null@example.com'),{application:{subteam:'Software',year:'Senior'}},'null answers fall back to the columns');
+  assert.deepEqual(picked.get('blank@example.com'),{application:{subteam:'',year:[]}},'explicit blank answers do not revive old columns');
+  assert.deepEqual(picked.get('false@example.com'),{application:{subteam:false,year:'Junior'}},'false and newer answer values win over columns');
   console.log('PASS: real Postgres flow tracking — concurrent checklist writes across connections, per-reviewer scores, bulk moves, split answers');
   console.log('PASS: real Postgres — 8 concurrent admissions at capacity 1, replacement while full, receipt replay, removal rollback, list and people queries');
 } finally {

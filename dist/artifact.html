@@ -2277,12 +2277,11 @@ button.fc-flow:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px
 .fc-node.is-open { z-index: 3; border-color: var(--fg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 10%, transparent), 0 18px 40px rgba(0, 0, 0, 0.12); }
 .fc-node--outcome { flex-direction: column; justify-content: center; padding: 8px; }
 .fc-outcome { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-.fc-outcome a { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.fc-outcome li { min-width: 0; margin: 0; }
+.fc-outcome a { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 40px; padding: 0 10px; border-radius: 6px; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .fc-outcome a:hover { background: var(--hover); color: var(--fg); }
 .fc-outcome b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
-.fc-canvas--down .fc-outcome { flex-direction: row; }
-.fc-canvas--down .fc-outcome li { flex: 1; min-width: 0; }
-.fc-canvas--down .fc-outcome a { justify-content: center; }
+.fc-canvas--down .fc-outcome { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
 /* Add a stage: a + inside the chart. */
 .fc-add {
   position: absolute; top: 10px; right: 10px; z-index: 5; width: 32px; height: 32px; padding: 0;
@@ -2689,13 +2688,16 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
 .pn-id h2 { margin: 0 0 6px; font-size: clamp(24px, 3.2vw, 32px); font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
 .pn-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--muted); }
 .pn-meta span { overflow-wrap: anywhere; }
-.pn-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 18px; }
-.pn-ctl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.pn-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 100%; }
+.pn-decision, .pn-actions__secondary { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+.pn-decision > .rc-status { margin-right: 4px; }
+.pn-actions__secondary { gap: 8px 18px; }
+.pn-ctl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.pn-ctl > .btn { min-width: 0; }
+.pn-ctl > .btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pn-actions__label { font-size: 12px; color: var(--faint); }
-.pn-actions .btn { min-height: 36px; gap: 8px; }
+.pn-actions .btn { min-height: 40px; gap: 8px; }
 .pn-actions .btn svg { width: 15px; height: 15px; }
-.pn-status--accepted { color: var(--good); }
-.pn-status--declined { color: var(--bad); }
 .pn-at { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
 .pn-at svg { width: 15px; height: 15px; color: var(--muted); }
 /* Where they are, stage by stage, as a line of steps. */
@@ -2863,7 +2865,8 @@ textarea.fe-ans--edit { width: 100%; line-height: 1.5; }
   .ri-grid { grid-template-columns: minmax(0, 1fr); }
   .ri-bar { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) minmax(36px, auto); gap: 8px; }
   .pn-head { flex-direction: column; }
-  .pn-actions { justify-content: flex-start; width: 100%; }
+  .pn-actions { align-items: flex-start; width: 100%; }
+  .pn-decision, .pn-actions__secondary { justify-content: flex-start; }
   .pn-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .pn-each { grid-column: 1; }
   .ss-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -9673,8 +9676,11 @@ function recruitPutSite(settings) {
 function recruitAdoptCycle(row, sections) {
   const st = recruitState();
   if (row && st.cycle?.data?.id === row.id) {
+    const changed = sections && st.cycle.data.version !== row.version;
     st.cycle.data = row;
     if (sections) st.cycle.sections = sections;
+    // Person paths and list summaries are derived from these settings too.
+    if (changed) for (const m of RECRUIT.modules) { try { m.cycleChanged?.(); } catch (e) { console.error(e); } }
   }
   if (st.cycles?.list && row) st.cycles.list = st.cycles.list.map((c) => (c.id === row.id ? { ...c, name: row.name, status: row.status, version: row.version, closesAt: row.closesAt } : c));
 }
@@ -10622,9 +10628,9 @@ const FC = {
   W_MIN: 184, W_MAX: 300, PAD: 24,
   GAP: 56, GAP_MIN: 44, GAP_GROW: 40, GAP_LABEL: 200, ENTRY: 40, WHY: 112,
   STACK: 28, LANE: 14, LANE_GAP: 14,
-  OUT_W: 112, OUT_H: 150,
+  OUT_W: 140, OUT_H: 184,
   FORK: 20, BEND: 10, SCALE_MIN: 0.8,
-  NARROW: 700, V_W: 272, V_GAP: 64, V_STACK: 20, V_OUT_H: 52, V_ENTRY: 44,
+  NARROW: 700, V_W: 272, V_GAP: 64, V_STACK: 20, V_OUT_H: 100, V_ENTRY: 44,
 };
 const FC_OUTCOME = '__outcome';
 
@@ -10821,20 +10827,14 @@ function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } 
   const main = [FC.PAD + entry];
   for (let i = 0; i < gapCount; i += 1) main.push(main[i] + span + gaps[i]);
 
-  // The outcomes: across, a card as tall as its rows, centred on the
-  // connections that end there (they merge into it); down, a bar the
-  // chart's width.
+  // Outcomes are centred on the connections that end there. Down, keep
+  // the card as narrow as a stage so every label and count stays together.
   const ends = edges.filter((e) => e.outcome).map((e) => c.get(e.chain.at(-1)));
   let outLow = 0, outHigh = 0;
   if (withOutcome && ends.length) {
-    if (across) {
-      const m = (Math.min(...ends) + Math.max(...ends)) / 2;
-      outLow = m - FC.OUT_H / 2; outHigh = m + FC.OUT_H / 2;
-    } else {
-      outLow = Math.min(...[...items.values()].map((it) => c.get(it.id) - size(it) / 2));
-      outHigh = Math.max(...[...items.values()].map((it) => c.get(it.id) + size(it) / 2));
-      if (outHigh - outLow < 300) { const m = (outLow + outHigh) / 2; outLow = m - 150; outHigh = m + 150; }
-    }
+    const m = (Math.min(...ends) + Math.max(...ends)) / 2;
+    const extent = across ? FC.OUT_H : Wd;
+    outLow = m - extent / 2; outHigh = m + extent / 2;
   }
   let low = Infinity, high = -Infinity;
   for (const it of items.values()) { low = Math.min(low, c.get(it.id) - size(it) / 2); high = Math.max(high, c.get(it.id) + size(it) / 2); }
@@ -10891,7 +10891,7 @@ function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } 
       cross([main[it.col], mid(it.id)]);
       if (it.kind === 'lane') { here = [main[it.col] + span, mid(it.id)]; d += `L${P(...here)}`; }
     }
-    if (e.outcome) cross([main[n], across ? outLow + shift + FC.OUT_H / 2 : here[1]]);
+    if (e.outcome) cross([main[n], shift + (outLow + outHigh) / 2]);
     return { from: e.from, to: e.to, outcome: e.outcome, split: e.split, label: e.label, d, ...(e.outcome ? {} : place) };
   });
   // Into each first stage: a short arrow from the chart's edge.
@@ -12752,7 +12752,10 @@ RECRUIT.register({
     recruitStageClose();
     return true;
   },
-  cycleChanged() { const st = recruitState(); if (st.stagePeople) st.stagePeople.loaded = false; },
+  cycleChanged() {
+    const sp = recruitState().stagePeople;
+    if (sp) { sp.seq = (sp.seq || 0) + 1; Object.assign(sp, { loaded: false, loading: false, rows: [], next: null }); }
+  },
   reset() { const st = recruitState(); st.stagePeople = undefined; clearTimeout(recruitStageSearchTimer); },
 });
 
@@ -13189,7 +13192,12 @@ RECRUIT.register({
   refresh: { load: () => { const p = recruitState().people; if (!p) return null; return p.view === 'board' ? recruitLoadBoard() : p.selected.size ? null : recruitLoadPeople({ quiet: true }); }, every: RECRUIT_SYNC_MS },
   personChanged: (email) => recruitPaintPeoplePerson(email),
   peopleMoved() { const p = recruitState().people; if (!p) return; p.selected = new Set(); if (UI.route?.params?.sub === 'people') { if (p.view === 'board') recruitLoadBoard(); else recruitLoadPeople({ quiet: true }); } else { p.loaded = false; if (recruitState().board) recruitState().board.loaded = false; } const sp = recruitState().stagePeople; if (sp) { sp.selected = new Set(); recruitLoadStagePeople(); } },
-  cycleChanged() { const p = recruitState().people; if (p) p.loaded = false; },
+  cycleChanged() {
+    const st = recruitState();
+    recruitPeopleSeq += 1;
+    if (st.people) Object.assign(st.people, { loaded: false, loading: false, rows: [], byEmail: {}, next: null });
+    if (st.board) { st.board.seq = (st.board.seq || 0) + 1; Object.assign(st.board, { loaded: false, loading: false, rows: [] }); }
+  },
   actions: {
     'recruit-people-more': () => recruitLoadPeople({ more: true }),
     'recruit-people-refresh': () => { const p = recruitState().people; if (p?.view === 'board') recruitLoadBoard(); else recruitLoadPeople(); },
@@ -13282,6 +13290,15 @@ function recruitPersonChanged(email) {
   for (const m of RECRUIT.modules) { try { m.personChanged?.(email); } catch (e) { console.error(e); } }
 }
 
+// Track responses derive their path from the cycle settings at request time.
+function recruitTrackGuard(cycle) {
+  const st = recruitState();
+  const key = st.key;
+  const { id, version } = cycle;
+  const sameCycle = () => recruitState() === st && st.key === key && recruitCycleRow()?.id === id;
+  return { sameCycle, current: () => sameCycle() && recruitCycleRow().version === version };
+}
+
 /* ------------------------------- checklist values ------------------------ */
 
 const recruitStarsLabel = (n, max) => `${n} of ${max}`;
@@ -13372,6 +13389,7 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
   const cycle = recruitCycleRow();
   const f = recruitSections(cycle)[stageKey]?.fields?.find((x) => x.key === fieldKey);
   if (!cycle || !f || !recruitCanReview(cycle)) return;
+  const guard = recruitTrackGuard(cycle);
   const me = recruitMyEmail();
   const rows = recruitPersonRows(email);
   const before = rows.map((r) => r.fields?.[stageKey]?.[fieldKey]);
@@ -13391,11 +13409,16 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
   st.busy.add(busy);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/fields`, { method: 'PATCH', body: JSON.stringify({ stage: stageKey, field: fieldKey, value }) });
-    recruitAcceptTrack(email, out.person);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) recruitAcceptTrack(email, out.person);
+    else recruitLoadPerson(email, { quiet: true });
   } catch (e) {
-    rows.forEach((r, i) => { r.fields ||= {}; r.fields[stageKey] = { ...(r.fields[stageKey] || {}), [fieldKey]: before[i] }; });
-    if (d?.person?.track?.fields?.[stageKey]) d.person.track.fields[stageKey][fieldKey] = storedBefore;
-    recruitPersonChanged(email);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) {
+      rows.forEach((r, i) => { r.fields ||= {}; r.fields[stageKey] = { ...(r.fields[stageKey] || {}), [fieldKey]: before[i] }; });
+      if (d?.person?.track?.fields?.[stageKey]) d.person.track.fields[stageKey][fieldKey] = storedBefore;
+      recruitPersonChanged(email);
+    }
     toast(`Could not save ${f.label}: ${recruitError(e)}`);
   } finally { st.busy.delete(busy); }
 }
@@ -13407,6 +13430,7 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
 async function recruitMovePerson(email, { stage, status }) {
   const cycle = recruitCycleRow();
   if (!cycle || !recruitCanEdit(cycle)) return;
+  const guard = recruitTrackGuard(cycle);
   const rows = recruitPersonRows(email);
   const d = recruitPerson(email);
   const prior = [...rows, ...(d?.person ? [d.person] : [])].map((r) => ({ r, stage: r.stage, status: r.status, states: r.states }));
@@ -13414,13 +13438,18 @@ async function recruitMovePerson(email, { stage, status }) {
   recruitPersonChanged(email);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/move`, { method: 'POST', body: JSON.stringify({ requestId: recruitId('rq'), ...(stage ? { stage } : {}), ...(status ? { status } : {}) }) });
-    recruitAcceptTrack(email, out.person);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) recruitAcceptTrack(email, out.person);
+    else recruitLoadPerson(email, { quiet: true });
     const who = out.person ? (d?.person?.name || rows[0]?.name || email) : email;
-    toast(stage ? `${who} moved to ${recruitSectionTitle(stage)}` : `${who} marked ${recruitStatusLabel(status).toLowerCase()}`);
+    toast(stage ? `${who} moved to ${recruitSectionTitle(stage, cycle)}` : `${who} marked ${recruitStatusLabel(status).toLowerCase()}`);
     recruitLoadInsights({ quiet: true });
   } catch (e) {
-    for (const p of prior) Object.assign(p.r, { stage: p.stage, status: p.status, states: p.states });
-    recruitPersonChanged(email);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) {
+      for (const p of prior) Object.assign(p.r, { stage: p.stage, status: p.status, states: p.states });
+      recruitPersonChanged(email);
+    }
     toast(`Could not move: ${recruitError(e)}`);
   }
 }
@@ -13443,6 +13472,14 @@ function recruitMoveMenu(anchor, emails, current = null) {
 }
 function recruitStatusMenu(anchor, emails, current = null) {
   openMenu(RECRUIT_STATUSES.map((s) => recruitMenuItem(s.label, s.value === current, () => (emails.length === 1 ? recruitMovePerson(emails[0], { status: s.value }) : recruitBulkMove(emails, { status: s.value })))), anchor);
+}
+
+function recruitDecisionMenu(anchor, email, current = 'active') {
+  if (!recruitCanEdit()) return;
+  const actions = { active: 'Reactivate', accepted: 'Accept', waitlisted: 'Waitlist', declined: 'Decline', withdrew: 'Mark withdrawn' };
+  openMenu(RECRUIT_STATUSES.map((s) => recruitMenuItem(s.value === current ? s.label : actions[s.value], s.value === current, () => {
+    if (s.value !== current) recruitMovePerson(email, { status: s.value });
+  })), anchor);
 }
 
 /* ------------------------------- flag and review cell -------------------- */
@@ -13520,12 +13557,12 @@ function recruitLoadPerson(email, { quiet = false } = {}) {
   const key = st.key;
   RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}`)
     .then((out) => {
-      if (st.key !== key) return;
+      if (st.key !== key || st.persons !== persons) return;
       persons[email] = { person: out.person || null, submissions: Array.isArray(out.submissions) ? out.submissions : [], history: out.history || [] };
       if (out.person) { recruitAcceptTrack(email, out.person); recruitAcceptReview(email, { person: out.person }); }
       if (!recruitPaintPerson(email)) recruitPersonChanged(email);
     })
-    .catch((e) => { if (st.key !== key) return; persons[email] = { error: recruitError(e), status: e.status }; recruitPaintPerson(email, true); });
+    .catch((e) => { if (st.key !== key || st.persons !== persons) return; persons[email] = { error: recruitError(e), status: e.status }; recruitPaintPerson(email, true); });
 }
 
 // Previous and Next walk the list the page was opened from.
@@ -13581,15 +13618,13 @@ function recruitPersonHeadHtml(cycle, p) {
   const flag = recruitCanReview(cycle)
     ? `<button class="btn interest-flag ${p.flagged ? 'is-flagged' : ''}" data-action="recruit-person-flag" data-email="${MD.esc(p.email)}" aria-pressed="${Boolean(p.flagged)}" title="${p.flagged ? 'Remove the flag' : 'Flag for follow-up'}">${RC_ICONS.flag}<span>${p.flagged ? 'Flagged' : 'Flag'}</span></button>`
     : p.flagged ? `<span class="interest-flag-readonly">${RC_ICONS.flag}Flagged</span>` : '';
-  const status = lead
-    ? `<button class="btn pn-status pn-status--${MD.esc(p.status || 'active')}" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${MD.esc(recruitStatusLabel(p.status))}${I.chev || ''}</button>`
-    : recruitStatusPill(p.status);
+  const decision = `<div class="pn-decision" role="group" aria-label="Decision for ${MD.esc(p.name || p.email)}">${recruitStatusPill(p.status)}${lead ? `${p.status !== 'accepted' ? `<button type="button" class="btn btn--primary" data-action="recruit-person-accept" data-email="${MD.esc(p.email)}">${I.check}<span>Accept</span></button>` : ''}<button type="button" class="btn" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu" aria-expanded="false">${p.status === 'accepted' ? 'Change decision' : 'More decisions'}${I.chev || ''}</button>` : ''}</div>`;
   const move = lead
     ? `<button class="btn" data-action="recruit-person-move" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${recruitKindIcon(flow.sections[p.stage]?.kind)}<span>${MD.esc(stageLabel)}</span>${I.chev || ''}</button>`
     : `<span class="pn-at">${recruitKindIcon(flow.sections[p.stage]?.kind)}${MD.esc(stageLabel)}</span>`;
   return `<header class="pn-head" data-rc="pn-head">
     <div class="pn-id"><h2>${MD.esc(p.name || p.email)}</h2><div class="pn-meta">${meta}</div></div>
-    <div class="pn-actions"><span class="pn-ctl"><span class="pn-actions__label">Status</span>${status}</span><span class="pn-ctl"><span class="pn-actions__label">Stage</span>${move}</span>${flag}</div>
+    <div class="pn-actions">${decision}<div class="pn-actions__secondary"><span class="pn-ctl"><span class="pn-actions__label">Stage</span>${move}</span>${flag}</div></div>
   </header>`;
 }
 
@@ -13960,7 +13995,13 @@ RECRUIT.register({
     'recruit-person-step': (el, ev) => { ev?.preventDefault?.(); nav(recruitPersonHref(el.dataset.email)); },
     'recruit-person-retry': (el) => { recruitPersons()[el.dataset.email] = undefined; recruitLoadPerson(el.dataset.email); recruitPaintPerson(el.dataset.email, true); },
     'recruit-person-flag': (el) => recruitTogglePersonFlag(el.dataset.email),
-    'recruit-person-status': (el) => { const r = recruitPerson(el.dataset.email)?.person; recruitStatusMenu(el, [el.dataset.email], r?.status); },
+    'recruit-person-accept': (el) => {
+      const focused = document.activeElement === el;
+      const saving = recruitMovePerson(el.dataset.email, { status: 'accepted' });
+      if (focused) $('[data-rc="pn-head"] [data-action="recruit-person-status"]')?.focus({ preventScroll: true });
+      return saving;
+    },
+    'recruit-person-status': (el) => { const r = recruitPerson(el.dataset.email)?.person || recruitPersonRows(el.dataset.email)[0]; recruitDecisionMenu(el, el.dataset.email, r?.status); },
     'recruit-person-move': (el) => { const r = recruitPerson(el.dataset.email)?.person; recruitMoveMenu(el, [el.dataset.email], r?.stage); },
     'recruit-person-jump': (el, ev) => { ev?.preventDefault?.(); const card = document.getElementById?.('pn-stage-' + el.dataset.stage); card?.scrollIntoView?.({ behavior: recruitReducedMotion() ? 'auto' : 'smooth', block: 'start' }); card?.querySelector?.('a, input, button, textarea')?.focus?.({ preventScroll: true }); },
     'recruit-person-comments-stage': (el, ev) => { ev?.preventDefault?.(); $('#pn-comments')?.scrollIntoView?.({ block: 'start' }); },
@@ -14019,7 +14060,7 @@ RECRUIT.register({
     if (ev.target.matches('[data-m="recruit-person-comment"]')) { ev.preventDefault(); recruitPostPersonComment(ev.target.dataset.email); return true; }
     return false;
   },
-  cycleChanged() {},
+  cycleChanged() { recruitState().persons = {}; },
   reset() { const st = recruitState(); st.persons = {}; st.personNav = null; },
 });
 

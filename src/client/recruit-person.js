@@ -55,6 +55,15 @@ function recruitPersonChanged(email) {
   for (const m of RECRUIT.modules) { try { m.personChanged?.(email); } catch (e) { console.error(e); } }
 }
 
+// Track responses derive their path from the cycle settings at request time.
+function recruitTrackGuard(cycle) {
+  const st = recruitState();
+  const key = st.key;
+  const { id, version } = cycle;
+  const sameCycle = () => recruitState() === st && st.key === key && recruitCycleRow()?.id === id;
+  return { sameCycle, current: () => sameCycle() && recruitCycleRow().version === version };
+}
+
 /* ------------------------------- checklist values ------------------------ */
 
 const recruitStarsLabel = (n, max) => `${n} of ${max}`;
@@ -145,6 +154,7 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
   const cycle = recruitCycleRow();
   const f = recruitSections(cycle)[stageKey]?.fields?.find((x) => x.key === fieldKey);
   if (!cycle || !f || !recruitCanReview(cycle)) return;
+  const guard = recruitTrackGuard(cycle);
   const me = recruitMyEmail();
   const rows = recruitPersonRows(email);
   const before = rows.map((r) => r.fields?.[stageKey]?.[fieldKey]);
@@ -161,16 +171,22 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
     d.person.fields = { ...(d.person.fields || {}), [stageKey]: { ...(d.person.fields?.[stageKey] || {}), [fieldKey]: next } };
   }
   const busy = `field:${email}:${stageKey}:${fieldKey}`;
-  st.busy.add(busy);
+  const pending = st.busy;
+  pending.add(busy);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/fields`, { method: 'PATCH', body: JSON.stringify({ stage: stageKey, field: fieldKey, value }) });
-    recruitAcceptTrack(email, out.person);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) recruitAcceptTrack(email, out.person);
+    else recruitLoadPerson(email, { quiet: true });
   } catch (e) {
-    rows.forEach((r, i) => { r.fields ||= {}; r.fields[stageKey] = { ...(r.fields[stageKey] || {}), [fieldKey]: before[i] }; });
-    if (d?.person?.track?.fields?.[stageKey]) d.person.track.fields[stageKey][fieldKey] = storedBefore;
-    recruitPersonChanged(email);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) {
+      rows.forEach((r, i) => { r.fields ||= {}; r.fields[stageKey] = { ...(r.fields[stageKey] || {}), [fieldKey]: before[i] }; });
+      if (d?.person?.track?.fields?.[stageKey]) d.person.track.fields[stageKey][fieldKey] = storedBefore;
+      recruitPersonChanged(email);
+    } else recruitLoadPerson(email, { quiet: true });
     toast(`Could not save ${f.label}: ${recruitError(e)}`);
-  } finally { st.busy.delete(busy); }
+  } finally { pending.delete(busy); }
 }
 
 /* ------------------------------- moves ----------------------------------- */
@@ -180,6 +196,7 @@ async function recruitSetField(email, stageKey, fieldKey, value) {
 async function recruitMovePerson(email, { stage, status }) {
   const cycle = recruitCycleRow();
   if (!cycle || !recruitCanEdit(cycle)) return;
+  const guard = recruitTrackGuard(cycle);
   const rows = recruitPersonRows(email);
   const d = recruitPerson(email);
   const prior = [...rows, ...(d?.person ? [d.person] : [])].map((r) => ({ r, stage: r.stage, status: r.status, states: r.states }));
@@ -187,13 +204,18 @@ async function recruitMovePerson(email, { stage, status }) {
   recruitPersonChanged(email);
   try {
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}/move`, { method: 'POST', body: JSON.stringify({ requestId: recruitId('rq'), ...(stage ? { stage } : {}), ...(status ? { status } : {}) }) });
-    recruitAcceptTrack(email, out.person);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) recruitAcceptTrack(email, out.person);
+    else recruitLoadPerson(email, { quiet: true });
     const who = out.person ? (d?.person?.name || rows[0]?.name || email) : email;
-    toast(stage ? `${who} moved to ${recruitSectionTitle(stage)}` : `${who} marked ${recruitStatusLabel(status).toLowerCase()}`);
+    toast(stage ? `${who} moved to ${recruitSectionTitle(stage, cycle)}` : `${who} marked ${recruitStatusLabel(status).toLowerCase()}`);
     recruitLoadInsights({ quiet: true });
   } catch (e) {
-    for (const p of prior) Object.assign(p.r, { stage: p.stage, status: p.status, states: p.states });
-    recruitPersonChanged(email);
+    if (!guard.sameCycle()) return;
+    if (guard.current()) {
+      for (const p of prior) Object.assign(p.r, { stage: p.stage, status: p.status, states: p.states });
+      recruitPersonChanged(email);
+    } else recruitLoadPerson(email, { quiet: true });
     toast(`Could not move: ${recruitError(e)}`);
   }
 }
@@ -216,6 +238,14 @@ function recruitMoveMenu(anchor, emails, current = null) {
 }
 function recruitStatusMenu(anchor, emails, current = null) {
   openMenu(RECRUIT_STATUSES.map((s) => recruitMenuItem(s.label, s.value === current, () => (emails.length === 1 ? recruitMovePerson(emails[0], { status: s.value }) : recruitBulkMove(emails, { status: s.value })))), anchor);
+}
+
+function recruitDecisionMenu(anchor, email, current = 'active') {
+  if (!recruitCanEdit()) return;
+  const actions = { active: 'Reactivate', accepted: 'Accept', waitlisted: 'Waitlist', declined: 'Decline', withdrew: 'Mark withdrawn' };
+  openMenu(RECRUIT_STATUSES.map((s) => recruitMenuItem(s.value === current ? s.label : actions[s.value], s.value === current, () => {
+    if (s.value !== current) recruitMovePerson(email, { status: s.value });
+  })), anchor);
 }
 
 /* ------------------------------- flag and review cell -------------------- */
@@ -293,12 +323,12 @@ function recruitLoadPerson(email, { quiet = false } = {}) {
   const key = st.key;
   RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/people/${encodeURIComponent(email)}`)
     .then((out) => {
-      if (st.key !== key) return;
+      if (st.key !== key || st.persons !== persons) return;
       persons[email] = { person: out.person || null, submissions: Array.isArray(out.submissions) ? out.submissions : [], history: out.history || [] };
       if (out.person) { recruitAcceptTrack(email, out.person); recruitAcceptReview(email, { person: out.person }); }
       if (!recruitPaintPerson(email)) recruitPersonChanged(email);
     })
-    .catch((e) => { if (st.key !== key) return; persons[email] = { error: recruitError(e), status: e.status }; recruitPaintPerson(email, true); });
+    .catch((e) => { if (st.key !== key || st.persons !== persons) return; persons[email] = { error: recruitError(e), status: e.status }; recruitPaintPerson(email, true); });
 }
 
 // Previous and Next walk the list the page was opened from.
@@ -354,15 +384,13 @@ function recruitPersonHeadHtml(cycle, p) {
   const flag = recruitCanReview(cycle)
     ? `<button class="btn interest-flag ${p.flagged ? 'is-flagged' : ''}" data-action="recruit-person-flag" data-email="${MD.esc(p.email)}" aria-pressed="${Boolean(p.flagged)}" title="${p.flagged ? 'Remove the flag' : 'Flag for follow-up'}">${RC_ICONS.flag}<span>${p.flagged ? 'Flagged' : 'Flag'}</span></button>`
     : p.flagged ? `<span class="interest-flag-readonly">${RC_ICONS.flag}Flagged</span>` : '';
-  const status = lead
-    ? `<button class="btn pn-status pn-status--${MD.esc(p.status || 'active')}" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${MD.esc(recruitStatusLabel(p.status))}${I.chev || ''}</button>`
-    : recruitStatusPill(p.status);
+  const decision = `<div class="pn-decision" role="group" aria-label="Decision for ${MD.esc(p.name || p.email)}">${recruitStatusPill(p.status)}${lead ? `${p.status !== 'accepted' ? `<button type="button" class="btn btn--primary" data-action="recruit-person-accept" data-email="${MD.esc(p.email)}">${I.check}<span>Accept</span></button>` : ''}<button type="button" class="btn" data-action="recruit-person-status" data-email="${MD.esc(p.email)}" aria-haspopup="menu" aria-expanded="false">${p.status === 'accepted' ? 'Change decision' : 'More decisions'}${I.chev || ''}</button>` : ''}</div>`;
   const move = lead
     ? `<button class="btn" data-action="recruit-person-move" data-email="${MD.esc(p.email)}" aria-haspopup="menu">${recruitKindIcon(flow.sections[p.stage]?.kind)}<span>${MD.esc(stageLabel)}</span>${I.chev || ''}</button>`
     : `<span class="pn-at">${recruitKindIcon(flow.sections[p.stage]?.kind)}${MD.esc(stageLabel)}</span>`;
   return `<header class="pn-head" data-rc="pn-head">
     <div class="pn-id"><h2>${MD.esc(p.name || p.email)}</h2><div class="pn-meta">${meta}</div></div>
-    <div class="pn-actions"><span class="pn-ctl"><span class="pn-actions__label">Status</span>${status}</span><span class="pn-ctl"><span class="pn-actions__label">Stage</span>${move}</span>${flag}</div>
+    <div class="pn-actions">${decision}<div class="pn-actions__secondary"><span class="pn-ctl"><span class="pn-actions__label">Stage</span>${move}</span>${flag}</div></div>
   </header>`;
 }
 
@@ -733,7 +761,13 @@ RECRUIT.register({
     'recruit-person-step': (el, ev) => { ev?.preventDefault?.(); nav(recruitPersonHref(el.dataset.email)); },
     'recruit-person-retry': (el) => { recruitPersons()[el.dataset.email] = undefined; recruitLoadPerson(el.dataset.email); recruitPaintPerson(el.dataset.email, true); },
     'recruit-person-flag': (el) => recruitTogglePersonFlag(el.dataset.email),
-    'recruit-person-status': (el) => { const r = recruitPerson(el.dataset.email)?.person; recruitStatusMenu(el, [el.dataset.email], r?.status); },
+    'recruit-person-accept': (el) => {
+      const focused = document.activeElement === el;
+      const saving = recruitMovePerson(el.dataset.email, { status: 'accepted' });
+      if (focused) $('[data-rc="pn-head"] [data-action="recruit-person-status"]')?.focus({ preventScroll: true });
+      return saving;
+    },
+    'recruit-person-status': (el) => { const r = recruitPerson(el.dataset.email)?.person || recruitPersonRows(el.dataset.email)[0]; recruitDecisionMenu(el, el.dataset.email, r?.status); },
     'recruit-person-move': (el) => { const r = recruitPerson(el.dataset.email)?.person; recruitMoveMenu(el, [el.dataset.email], r?.stage); },
     'recruit-person-jump': (el, ev) => { ev?.preventDefault?.(); const card = document.getElementById?.('pn-stage-' + el.dataset.stage); card?.scrollIntoView?.({ behavior: recruitReducedMotion() ? 'auto' : 'smooth', block: 'start' }); card?.querySelector?.('a, input, button, textarea')?.focus?.({ preventScroll: true }); },
     'recruit-person-comments-stage': (el, ev) => { ev?.preventDefault?.(); $('#pn-comments')?.scrollIntoView?.({ block: 'start' }); },
@@ -792,7 +826,7 @@ RECRUIT.register({
     if (ev.target.matches('[data-m="recruit-person-comment"]')) { ev.preventDefault(); recruitPostPersonComment(ev.target.dataset.email); return true; }
     return false;
   },
-  cycleChanged() {},
+  cycleChanged() { recruitState().persons = {}; },
   reset() { const st = recruitState(); st.persons = {}; st.personNav = null; },
 });
 
