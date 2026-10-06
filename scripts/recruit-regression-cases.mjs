@@ -5,7 +5,7 @@ export async function recruitmentRegressions({lib,recruit,anon,R,ctxFor,admin,pl
   const basic=[{key:'name',type:'short',required:true},{key:'email',type:'email',required:true}];
   const values={name:'Test',email:'test@example.com'};
   for(const key of ['year','subteam']) {
-    assert.ok(validateAnswers({questions:[...basic,{key,type:'single',required:true,options:['2027']}]},{answers:values}).error);
+    assert.ok(validateAnswers({questions:[...basic,{key,type:'single',required:true,options:['2027']}]},{answers:{...values,[key]:''}}).error);
     assert.equal(validateAnswers({questions:[...basic,{key,type:'short'}]},{answers:{...values,[key]:'2027'}}).answers[key],'2027');
     assert.deepEqual(validateAnswers({questions:[...basic,{key,type:'multi',options:['One','Two']}]},{answers:{...values,[key]:['One','Two']}}).answers[key],['One','Two']);
   }

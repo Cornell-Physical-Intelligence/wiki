@@ -342,7 +342,7 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   assert.equal(grant.status, 200);
   const closedByLead = await recruit('POST', `/recruit/cycles/${fall.id}/status`, { version: opened.version, status: 'closed' }, lead);
   assert.equal(closedByLead.status, 200);
-  assert.equal((await recruit('GET', '/recruit/cycles')).data.intakeCycleId, null, 'closing the receiving cycle clears the pointer');
+  assert.equal((await recruit('GET', '/recruit/cycles')).data.intakeCycleId, null, 'a closed receiving cycle no longer receives the website');
   assert.equal(await bridge.target(), null);
   const orphan = await interest('POST', '/interest', { name: 'Orphan', email: 'orphan@example.com', year: 'Senior' });
   assert.equal(orphan.status, 409, 'once cycles hold the list, the old route is closed while no cycle receives the website');

@@ -10271,7 +10271,7 @@ function recruitSetStatus(status, confirm) {
     title: status === 'archived' ? `Archive ${cycle.name}?` : `Close ${cycle.name}?`,
     text: status === 'archived'
       ? `Archived cycles are read-only. ${intake ? "The website's forms stop landing here. " : ''}You can unarchive it later.`
-      : `Closed cycles stop taking responses.${intake ? " The website's forms stop landing here until another cycle receives them." : ''}`,
+      : `Closed cycles stop taking responses.${intake ? ' The website shows its closed page until you reopen this cycle.' : ''}`,
     confirm: status === 'archived' ? 'Archive cycle' : 'Close cycle',
     onGo: go,
   };

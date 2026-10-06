@@ -538,8 +538,12 @@ if (!process.env.RECRUIT_PG_TEST_ROOT) {
   assert.equal((await R.intakeBridge.target()).cycleId, created.id);
   const closedNow = await recruit('POST', `/recruit/cycles/${created.id}/status`, { version: opened.version, status: 'closed' });
   assert.equal(closedNow.status, 200);
-  assert.equal(db.settings.doc.intakeCycleId, undefined, 'closing the receiving cycle clears the pointer');
-  console.log('PASS: pointer CAS WHERE id = 1 AND version = $n; closing clears it');
+  assert.equal(db.settings.doc.intakeCycleId, created.id, 'closing the receiving cycle keeps the pointer');
+  assert.equal(await R.intakeBridge.target(), null, 'but a closed cycle is not served');
+  const reopenedNow = await recruit('POST', `/recruit/cycles/${created.id}/status`, { version: closedNow.data.cycle.version, status: 'open' });
+  assert.equal(reopenedNow.status, 200);
+  assert.equal((await R.intakeBridge.target())?.cycleId, created.id, 'reopening serves it again');
+  console.log('PASS: pointer CAS WHERE id = 1 AND version = $n; closing pauses it and reopening restores it');
 
   /* ---- move CTE: guarded UPDATE with RETURNING and the audit insert ---- */
   const moved = await kit.apps.move({ id: 'cy-interest', doc: {} }, { id: 'in-one', to: 'screening', by: 'admin@example.com', requestId: 'rq-move-000001' });

@@ -206,3 +206,66 @@ console.log('PASS: journal outage emails a second copy, database outage journals
   assert.ok(!/\\u0000|\\ud8[0-9a-f]{2}(?!\\\\udc)/i.test(JSON.stringify(v.answers) + JSON.stringify(v.files.map((f) => f.name))), 'nothing Postgres would refuse');
   console.log('PASS: NUL characters and half emoji never reach the database');
 }
+
+/* ---- queued submissions replay on their own; the spam trap leaves a trace ---- */
+{
+  const realErr = console.error; console.error = () => {};
+  const marks = new Set(), done = [], committed = [], suspects = [];
+  const entry = { id: 'jr-1790000000000-0123456789abcdef01234567', ts: 1790000000000, cycleId: cycle.id, section: 'round', email: 'q@example.test', name: 'Queued', answers: {}, version: 2, files: [] };
+  const journal = {
+    async append() { return true; },
+    async complete(id, outcome) { done.push([id, outcome]); },
+    async saveSite() { return true; }, async loadSite() { return null; },
+    async markRetry(id) { marks.add(id); return true; },
+    async listRetry() { return [...marks]; },
+    async clearRetry(id) { marks.delete(id); },
+    async getEntry(id) { return id === entry.id ? entry : null; },
+    async keepSuspect(trace) { suspects.push(trace); return true; },
+  };
+  let dbDown = true;
+  const kit = {
+    now: () => 1790000000000, store: { cache: new Map() },
+    cycles: { intakeTarget: async () => ({ cycleId: cycle.id }), get: async () => cycle },
+    intake: { journal: async () => journal, commit: async (e) => { committed.push(e.id); return { outcome: 'saved', inserted: true, row: { id: 'in-1', email: e.email, name: e.name, answers: {} } }; } },
+    email: { settings: async () => null, send: async () => ({ sent: true }) },
+    apps: { async commitIntake() { if (dbDown) throw new Error('Synthetic Neon outage'); return { outcome: 'saved' }; }, async count() { return 0; } },
+  };
+  const queued = await submit({ params: { section: 'round' }, body: async () => ({ ...body }) }, kit);
+  assert.equal(queued.status, 202);
+  assert.equal(marks.size, 1, 'a submission journaled during an outage is marked for replay');
+  marks.clear(); marks.add(entry.id);
+  dbDown = false;
+  await siteGet({}, kit);
+  assert.deepEqual(committed, [entry.id], 'the next feed load puts it into the database');
+  assert.deepEqual(done.at(-1), [entry.id, 'saved']);
+  assert.equal(marks.size, 0, 'and stops retrying it');
+  marks.add(entry.id);
+  await siteGet({}, kit);
+  assert.equal(committed.length, 1, 'at most once a minute per instance');
+
+  const trapped = await submit({ params: { section: 'round' }, body: async () => ({ ...body, answers: { ...body.answers }, hp_8c1f: 'https://autofill.example' }) }, kit);
+  assert.equal(trapped.status, 200);
+  assert.equal(trapped.body.receipt, undefined, 'the trap still never hands out a receipt');
+  assert.equal(suspects.length, 1, 'but keeps what it caught');
+  assert.equal(suspects[0].answers.email, 'test@example.test');
+  console.error = realErr;
+  console.log('PASS: queued submissions replay from the feed once the database answers; spam-trap catches are kept');
+}
+
+/* ---- real-world files and forms edited while applicants fill them ---- */
+{
+  const { validateAnswers } = await import('../lib/recruit/fixed-form.js');
+  const form = { questions: [{ key: 'name', type: 'short', required: true }, { key: 'email', type: 'email', required: true }, { key: 'added', type: 'long', required: true }, { key: 'pick', type: 'single', required: true, options: ['A'] }, { key: 'photo', type: 'file' }] };
+  const base = { name: 'N', email: 'n@cornell.edu', pick: 'A' };
+  assert.equal(validateAnswers(form, { answers: base }).error, undefined, 'a required question the page never showed does not refuse the applicant');
+  assert.equal(validateAnswers(form, { answers: { ...base, added: '' } }).error, 'added is required', 'one the page showed is still required');
+  const withFile = (bytes, type, name = 'f') => validateAnswers(form, { answers: { ...base, added: 'x' }, files: { photo: { name, type, data: Buffer.from(bytes).toString('base64') } } });
+  const phoneJpeg = Buffer.concat([Buffer.from([255, 216, 255, 225]), Buffer.alloc(64), Buffer.from([255, 217]), Buffer.from('MotionPhoto_Data trailer')]);
+  assert.equal(withFile(phoneJpeg, 'image/jpeg').files[0].type, 'image/jpeg', 'a phone photo with data after its end marker is accepted');
+  const paddedPdf = Buffer.concat([Buffer.from('%PDF-1.7\n1 0 obj<<>>endobj\n%%EOF\n'), Buffer.alloc(3000)]);
+  assert.equal(withFile(paddedPdf, 'application/pdf').files[0].type, 'application/pdf', 'a PDF padded after %%EOF is accepted');
+  const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.from([24, 0, 0, 0]), Buffer.from('WEBPVP8 '), Buffer.alloc(24)]);
+  assert.equal(withFile(webp, 'image/jpeg').files[0].type, 'image/webp', 'an image named for the wrong type is taken as what it is');
+  assert.match(withFile('<html><script>alert(1)</script>', 'image/png').error, /does not match/, 'a page posing as an image is still refused');
+  console.log('PASS: phone photos, padded PDFs and mislabelled images are accepted; questions added after the page loaded never refuse');
+}

@@ -1,0 +1,42 @@
+name: Apply form monitor
+
+# Every ten minutes, the club website's view of the wiki: the form feed loads
+# for the website's origin, and an open form accepts the browser's preflight
+# for a submission. A failed run is GitHub's alert; nothing is submitted.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The form feed and the submit route answer the website
+        run: |
+          set -uo pipefail
+          origin='https://cornellphysicalintelligence.com'
+          api='https://wiki.cornellphysicalintelligence.com/api/recruit'
+          ok=''
+          for attempt in 1 2 3; do
+            if curl -fsS --max-time 20 -H "Origin: $origin" -D headers.txt -o feed.json "$api/site"; then ok=1; break; fi
+            sleep 20
+          done
+          [ -n "$ok" ] || { echo "::error::GET $api/site failed three times"; exit 1; }
+          grep -qi "^access-control-allow-origin: $origin" headers.txt || { echo "::error::the feed does not allow $origin"; exit 1; }
+          node -e '
+            const d = JSON.parse(require("fs").readFileSync("feed.json", "utf8"));
+            if (!Array.isArray(d.sections)) { console.log("::error::the feed has no sections list"); process.exit(1); }
+            const open = d.sections.filter((s) => s.available).map((s) => s.key);
+            console.log("cycle:", d.cycle ? d.cycle.name : "none", "| open:", open.join(", ") || "none");
+            require("fs").writeFileSync("open.txt", open[0] || "");
+          ' || exit 1
+          key=$(cat open.txt)
+          if [ -n "$key" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X OPTIONS -H "Origin: $origin" -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type' "$api/site/$key")
+            [ "$code" = 204 ] || { echo "::error::the submit preflight for $key answered $code"; exit 1; }
+          fi

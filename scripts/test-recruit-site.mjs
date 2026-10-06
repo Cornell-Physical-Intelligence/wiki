@@ -150,7 +150,9 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
 
   /* ---- submissions from the site ---- */
   assert.equal((await anon('POST', '/recruit/site/coffee', { answers: { name: 'Bot', email: 'b@cornell.edu' }, website: 'http://spam' })).status, 200, 'honeypot answers 200 and stores nothing');
-  const missing = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu' } });
+  // The page showed the question and it was left blank (a question the page
+  // never showed cannot refuse anyone; see test-recruit-upload-failures).
+  const missing = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', availability: '' } });
   assert.equal(missing.status, 400); assert.match(missing.data.error, /When are you free/);
   const bad = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'not-an-email', availability: 'Tue' } });
   assert.equal(bad.status, 400);
@@ -278,7 +280,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(withPortfolio.status, 200, withPortfolio.text);
   const pub = (await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'application');
   assert.deepEqual(pub.form.questions.map((qq) => qq.type), ['short', 'email', 'longfile'], 'the website sees the combined type');
-  assert.equal((await anon('POST', '/recruit/site/application', { answers: { name: 'Neither', email: 'neither@cornell.edu' } })).status, 400, 'required means text or a file');
+  assert.equal((await anon('POST', '/recruit/site/application', { answers: { name: 'Neither', email: 'neither@cornell.edu', portfolio: '' } })).status, 400, 'required means text or a file');
   const textOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'Text Only', email: 'textonly@cornell.edu', portfolio: 'Built a rover' } });
   assert.equal(textOnly.status, 200, textOnly.text);
   const fileOnly = await anon('POST', '/recruit/site/application', { answers: { name: 'File Only', email: 'fileonly@cornell.edu' }, files: { portfolio: { name: 'rover.pdf', type: 'application/pdf', data: Buffer.from('%PDF-1.4\n%%EOF').toString('base64') } } });
