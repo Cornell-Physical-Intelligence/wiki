@@ -11104,15 +11104,6 @@ function recruitFlowFades(scroll) {
   wrap.classList.toggle('is-more-right', more - left > 2);
 }
 
-// The form /apply shows: the cycle's choice when that form is open, else the
-// first open form in stage order.
-function recruitLandingKey(cycle) {
-  const sections = recruitSections(cycle);
-  const chosen = cycle?.doc?.site?.landing;
-  if (sections[chosen]?.open) return chosen;
-  return Object.keys(sections).find((k) => sections[k]?.open) || null;
-}
-
 /* ------------------------------- editing --------------------------------- */
 
 // One change to the flow, saved at once. `change` receives the connections
@@ -11609,6 +11600,9 @@ const RECRUIT_STAGE_TABS = [
 
 // A custom dropdown (the app's own menu) with extra data attributes.
 const recruitDd = (m, options, value, attrs = '', opts = {}) => dd(m, options, value, opts).replace(`data-m="${m}"`, `data-m="${m}" ${attrs}`);
+// The forms marked for /apply (one key before several could be marked).
+const recruitApplyKeys = (cycle) => { const v = cycle?.doc?.site?.landing; return [...new Set((Array.isArray(v) ? v : v ? [v] : []).map(String))]; };
+const RECRUIT_APPLY_QUESTION = 'What are you applying for?';
 
 /* ------------------------------- the draft ------------------------------- */
 
@@ -11630,7 +11624,7 @@ function recruitStageModel(sec, key, cycle) {
   const flow = recruitFlow(cycle);
   return {
     title: sec?.title || key, kind: sec?.kind || 'form', description: sec?.description || '', thanks: sec?.thanks || '',
-    submitLabel: sec?.submitLabel || 'Send', successLabel: sec?.successLabel || 'Sent', open: sec?.open === true, atApply: cycle?.doc?.site?.landing === key,
+    submitLabel: sec?.submitLabel || 'Send', successLabel: sec?.successLabel || 'Sent', open: sec?.open === true, atApply: recruitApplyKeys(cycle).includes(key), choiceLabel: sec?.choiceLabel || '', question: cycle?.doc?.site?.question || '',
     notify: sec?.notify !== false, notifyTo: Array.isArray(sec?.notifyTo) ? sec.notifyTo.map(String) : [], capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0,
     form: questions ? { questions } : null, fields, done: sec?.done || null, next: [...(flow.edges.get(key) || [])],
   };
@@ -12054,15 +12048,26 @@ function recruitStageFormHtml(cycle, key) {
 }
 
 // How the website treats the form (opening and closing it is in the panel's
-// head): its address, whether it is the one at /apply, its button and
-// closing words, who hears about a response, a cap, and taking it away.
+// head): its address, whether /apply shows it (and, beside other forms there,
+// how applicants choose it), its button and closing words, who hears about a
+// response, a cap, and taking it away.
 function recruitStageWebHtml(d) {
   const m = d.model;
+  const sections = recruitSections();
+  const others = recruitApplyKeys(recruitCycleRow()).filter((k) => k !== d.key && sections[k]?.form).map((k) => `${sections[k].title}${sections[k].open ? '' : ' (closed)'}`);
+  const together = m.atApply && others.length;
+  const applyHelp = together
+    ? `Where the QR code and the Apply link land. Shown there with ${others.length > 1 ? `${others.slice(0, -1).join(', ')} and ${others.at(-1)}` : others[0]}; applicants choose one first.`
+    : 'Where the QR code and the Apply link land. Show more than one form there and applicants choose one first.';
   const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(d.key)}/`;
   const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
   const responses = Number(recruitFlowStats(d.key)?.responses ?? recruitState().cycle?.counts?.bySection?.[d.key] ?? 0);
   return `<div class="ss-link"><a href="${MD.esc(url)}" target="_blank" rel="noopener">${MD.esc(url.replace(RECRUIT_SITE_URL, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button></div>
-    ${sw('recruit-sf-landing', m.atApply, 'Shown at /apply', 'Where the QR code and the Apply link land. One form at a time.')}
+    ${sw('recruit-sf-landing', m.atApply, 'Shown at /apply', MD.esc(applyHelp))}
+    ${together ? `<div class="ss-pair">
+      <label class="fe__field"><span class="fe__field-label">Listed at /apply as</span><input class="text-input" data-m="recruit-sf-choice-label" value="${MD.esc(m.choiceLabel)}" placeholder="${MD.esc(m.title)}" maxlength="40"></label>
+      <label class="fe__field"><span class="fe__field-label">Question above the choices</span><input class="text-input" data-m="recruit-sf-question" value="${MD.esc(m.question)}" placeholder="${MD.esc(RECRUIT_APPLY_QUESTION)}" maxlength="120"></label>
+    </div>` : ''}
     <div class="ss-pair">
       <label class="fe__field"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-sf-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80"></label>
       <label class="fe__field"><span class="fe__field-label">Heading after sending</span><input class="text-input" data-m="recruit-sf-success-label" value="${MD.esc(m.successLabel)}" maxlength="80"></label>
@@ -12267,6 +12272,7 @@ function recruitStagePayload(d) {
   for (const k of ['kind', 'submitLabel', 'successLabel']) if (m[k] !== saved[k]) out[k] = m[k];
   if (m.description !== saved.description) out.description = String(m.description || '').trim();
   if (m.thanks !== saved.thanks) out.thanks = String(m.thanks || '').trim().slice(0, 300);
+  if (m.choiceLabel !== saved.choiceLabel) out.choiceLabel = String(m.choiceLabel || '').trim().slice(0, 40);
   if (m.open !== saved.open) out.open = m.open === true;
   if (m.capacity !== saved.capacity) {
     if (m.capacity && (!Number.isInteger(m.capacity) || m.capacity < 0 || m.capacity > 100000)) throw Object.assign(new Error('Stop accepting after a whole number of responses, up to 100,000.'), { focus: '[data-m="recruit-sf-capacity"]' });
@@ -12360,14 +12366,17 @@ async function recruitSaveStage(el) {
     const marked = d.model.fields.find((f) => f._markDone);
     if (marked) payload.done = marked.key;
   }
-  const current = cycle.doc?.site?.landing || null;
+  // /apply's list of forms and its question belong to the cycle: the switch
+  // adds or drops this form only, and the question is saved as it reads here.
+  const current = recruitApplyKeys(cycle);
   const saved = JSON.parse(d.saved);
-  const landing = d.model.atApply !== saved.atApply ? (d.model.atApply ? key : (current === key ? null : current)) : undefined;
-  if (!Object.keys(payload).length && landing === undefined) { d.model = JSON.parse(d.saved); recruitPaintStageTab(c); return; }
+  const landing = d.model.atApply !== saved.atApply ? (d.model.atApply ? [...current.filter((k) => k !== key), key] : current.filter((k) => k !== key)) : undefined;
+  const question = d.model.question !== saved.question ? String(d.model.question || '').trim().slice(0, 120) : undefined;
+  if (!Object.keys(payload).length && landing === undefined && question === undefined) { d.model = JSON.parse(d.saved); recruitPaintStageTab(c); return; }
   d.saving = true; d.error = '';
   recruitPaintStageSave(c);
   try {
-    await recruitPutSite({ sections: { [key]: payload }, ...(landing !== undefined ? { landing } : {}) });
+    await recruitPutSite({ sections: { [key]: payload }, ...(landing !== undefined ? { landing } : {}), ...(question !== undefined ? { question } : {}) });
     const fresh = recruitStageModel(recruitSections()[key], key, recruitCycleRow());
     d.model = fresh; d.saved = JSON.stringify(fresh); d.savedAt = Date.now();
     toast(`${fresh.title} saved${payload.open === true ? ' · live on the website' : ''}`);
@@ -12375,7 +12384,9 @@ async function recruitSaveStage(el) {
   d.saving = false;
   const host = $('[data-rc="stage"]');
   if (host?.dataset.stage === key) {
+    // Repaint from the cycle the save returned, not the one it started from.
     c.host = host;
+    c.cycle = recruitCycleRow() || c.cycle;
     recruitPaintStageTab(c);
     const head = $('[data-rc="stage-head"]');
     if (head) recruitRepaint(head, recruitStageHeadHtml(recruitCycleRow(), key));
@@ -12672,7 +12683,7 @@ RECRUIT.register({
     'recruit-sf-remove': recruitEdit((c) => { if (!c.q || c.q.fixed) return false; c.m.form.questions.splice(c.i, 1); }, 'questions'),
     'recruit-sf-required': recruitEdit((c, el) => { if (!c.q || ['name', 'email'].includes(c.q.key)) return false; c.q.required = Boolean(el.checked); }),
     'recruit-sf-open': recruitEdit((c, el) => { c.m.open = Boolean(el.checked); }),
-    'recruit-sf-landing': recruitEdit((c, el) => { c.m.atApply = Boolean(el.checked); }),
+    'recruit-sf-landing': recruitEdit((c, el) => { c.m.atApply = Boolean(el.checked); }, 'tab'),
     'recruit-sf-notify': recruitEdit((c, el) => { c.m.notify = Boolean(el.checked); }, 'tab'),
     'recruit-sf-recipient-add': recruitEdit((c) => { c.m.notifyTo = [...(c.m.notifyTo || []), '']; setTimeout(() => $$('[data-m="recruit-sf-recipient"]').at(-1)?.focus(), 0); }, 'tab'),
     'recruit-sf-recipient-remove': recruitEdit((c) => { c.m.notifyTo.splice(c.j, 1); }, 'tab'),
@@ -12711,6 +12722,8 @@ RECRUIT.register({
     'recruit-sf-thanks': recruitEdit((c, el) => { c.m.thanks = el.value; }),
     'recruit-sf-submit-label': recruitEdit((c, el) => { c.m.submitLabel = el.value; }),
     'recruit-sf-success-label': recruitEdit((c, el) => { c.m.successLabel = el.value; }),
+    'recruit-sf-choice-label': recruitEdit((c, el) => { c.m.choiceLabel = el.value; }),
+    'recruit-sf-question': recruitEdit((c, el) => { c.m.question = el.value; }),
     'recruit-sf-capacity': recruitEdit((c, el) => { const n = Number(String(el.value || '').replace(/[^\d]/g, '')); c.m.capacity = Number.isInteger(n) && n > 0 ? Math.min(n, 100000) : 0; }),
     'recruit-sf-label': recruitEdit((c, el) => { if (!c.q) return false; c.q.label = el.value; }),
     'recruit-sf-help': recruitEdit((c, el) => {

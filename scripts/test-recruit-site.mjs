@@ -128,10 +128,24 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1b, settings: { sections: {}, landing: 'nope' } })).status, 400, 'the /apply form must be one of the three');
   const chose = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1b, settings: { sections: {}, landing: 'coffee' } });
   assert.equal(chose.status, 200, chose.text);
-  assert.equal(chose.data.cycle.doc.site.landing, 'coffee');
+  assert.deepEqual(chose.data.cycle.doc.site.landing, ['coffee'], 'one key is saved as a list of one');
   assert.equal((await anon('GET', '/recruit/site')).data.landing, 'coffee', 'the chosen form is what /apply shows');
+  assert.deepEqual((await anon('GET', '/recruit/site')).data.apply, { question: 'What are you applying for?', choices: [{ key: 'coffee', label: 'Coffee chats' }] }, 'one marked form is the only choice, so /apply shows it alone');
   assert.deepEqual((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack'], 'choosing the /apply form leaves the sections alone');
   assert.deepEqual(coffee.form.questions.find((q) => q.key === 'subteam').options, ['Mechanical', 'Software'], 'saved subteam options belong to the form');
+  // Several forms at /apply: applicants choose one, by its label, under the cycle's question.
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: chose.data.cycle.version, settings: { landing: ['coffee', 'nope'] } })).status, 400, 'every form at /apply must be one of the cycle\'s');
+  const several = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: chose.data.cycle.version, settings: { sections: { interest: { choiceLabel: '  Join the list ' } }, landing: ['coffee', 'application', 'interest', 'coffee'], question: ' Which one? ' } });
+  assert.equal(several.status, 200, several.text);
+  assert.deepEqual(several.data.cycle.doc.site.landing, ['coffee', 'application', 'interest'], 'the list keeps each form once');
+  assert.equal(several.data.cycle.doc.site.question, 'Which one?');
+  const site3 = (await anon('GET', '/recruit/site')).data;
+  assert.deepEqual(site3.apply, { question: 'Which one?', choices: [{ key: 'interest', label: 'Join the list' }, { key: 'coffee', label: 'Coffee chats' }] }, 'open marked forms in stage order, by label or title; a closed one is left out');
+  assert.equal(site3.landing, 'interest', 'a site that shows one form shows the first open marked one');
+  const back = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: several.data.cycle.version, settings: { sections: { interest: { choiceLabel: '' } }, landing: 'coffee', question: '' } });
+  assert.equal(back.status, 200, back.text);
+  assert.equal(back.data.cycle.doc.site.question, undefined, 'an empty question falls back to the default');
+  assert.equal(back.data.cycle.doc.site.sections.interest.choiceLabel, undefined, 'an empty label falls back to the title');
   console.log('PASS: the live cycle publishes its sections; Settings opens a section and shapes its form; members are refused');
 
   /* ---- submissions from the site ---- */

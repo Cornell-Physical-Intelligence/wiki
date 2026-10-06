@@ -461,15 +461,6 @@ function recruitFlowFades(scroll) {
   wrap.classList.toggle('is-more-right', more - left > 2);
 }
 
-// The form /apply shows: the cycle's choice when that form is open, else the
-// first open form in stage order.
-function recruitLandingKey(cycle) {
-  const sections = recruitSections(cycle);
-  const chosen = cycle?.doc?.site?.landing;
-  if (sections[chosen]?.open) return chosen;
-  return Object.keys(sections).find((k) => sections[k]?.open) || null;
-}
-
 /* ------------------------------- editing --------------------------------- */
 
 // One change to the flow, saved at once. `change` receives the connections

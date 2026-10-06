@@ -134,6 +134,14 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     assert.throws(() => S.validateSite({ sections: { interest: { next: ['ghost'] } } }, withInterview), /does not have/);
     assert.throws(() => S.validateSite({ sections: { interview: { done: 'nope' } } }, withInterview), /its own checkboxes/);
     assert.throws(() => S.validateSite({ landing: 'interview' }, withInterview), /needs a form/);
+    assert.throws(() => S.validateSite({ landing: ['coffee', 'interview'] }, withInterview), /needs a form/);
+    // A form at /apply that is removed, or loses its form, drops out of the list.
+    const marked = { ...legacy, doc: { site: S.validateSite({ sections: { extra: { title: 'Extra' } }, landing: ['extra', 'coffee'] }, withInterview) } };
+    assert.deepEqual(marked.doc.site.landing, ['extra', 'coffee']);
+    assert.deepEqual(S.validateSite({ remove: ['extra'] }, marked).landing, ['coffee']);
+    assert.deepEqual(S.validateSite({ sections: { coffee: { form: null } } }, marked).landing, ['extra']);
+    assert.equal(S.validateSite({ remove: ['extra'], sections: { coffee: { form: null } } }, marked).landing, null);
+    assert.deepEqual(S.applyKeysOf({ doc: { site: { landing: 'coffee' } } }), ['coffee'], 'a cycle saved with one key reads as a list of one');
     assert.throws(() => S.validateSite({ sections: { interview: { kind: 'party' } } }, withInterview), /form, meeting, review or step/);
     // Dropping the done checkbox from the fields clears `done` instead of failing.
     const cleared = S.validateSite({ sections: { interview: { fields: [{ key: 'notes', type: 'note', label: 'Notes' }] } } }, withInterview);
