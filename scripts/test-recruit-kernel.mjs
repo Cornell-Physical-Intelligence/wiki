@@ -145,9 +145,12 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   assert.equal(pub.status, 200);
   assert.equal(pub.headers['cache-control'], 'public, max-age=60');
   assert.equal(pub.headers['set-cookie'], undefined, 'public responses carry no session cookie');
+  // One campus network loading the form at once is never refused; a flood is.
   let gated;
-  for (let i = 0; i < 32; i++) gated = await request('GET', '/api/recruit/public-probe', {}, null, { ip: 'hot-loop' });
-  assert.equal(gated.status, 429, 'instance pre-gate after 30 hits per minute');
+  for (let i = 0; i < 400; i++) gated = await request('GET', '/api/recruit/public-probe', {}, null, { ip: 'info-session' });
+  assert.equal(gated.status, 200, 'hundreds of loads a minute from one address still load');
+  for (let i = 0; i < 260; i++) gated = await request('GET', '/api/recruit/public-probe', {}, null, { ip: 'info-session' });
+  assert.equal(gated.status, 429, 'instance pre-gate past 600 loads per minute');
   console.log('PASS: 404/401/403 matrix with exact texts, param pinning, public cors and pre-gate, session cookie and cache headers');
 
   /* ---- cycles and the archived / disabled guards ---- */

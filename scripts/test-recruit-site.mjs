@@ -158,7 +158,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(ok.status, 200, ok.text); assert.equal(ok.data.ok, true); assert.match(ok.data.receipt, /^jr-\d{13}-[a-f0-9]{24}$/);
   assert.equal(journal.records.get(ok.data.receipt).section, 'coffee', 'the journal entry carries its section');
   assert.equal(journal.done.get(ok.data.receipt), 'saved');
-  assert.deepEqual(journal.appendOptions, { perDay: 2000, perIpHour: 5 }, 'thresholds come from the cycle');
+  assert.deepEqual(journal.appendOptions, { perDay: 10000, perIpHour: 120 }, 'a cycle saved with the old low thresholds gets at least the floor');
   const list = (await recruit('GET', '/recruit/cycles/cy-interest/applications?section=coffee')).data;
   assert.equal(list.rows.length, 1); assert.equal(list.rows[0].name, 'Cam Chat'); assert.equal(list.rows[0].email, 'cam@cornell.edu'); assert.equal(list.rows[0].section, 'coffee');
   assert.deepEqual(list.counts.bySection, { interest: 1, coffee: 1 });
