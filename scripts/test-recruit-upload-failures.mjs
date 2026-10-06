@@ -63,10 +63,12 @@ console.log('PASS: durable receipts, attachment-write outages, complete-marker o
 
 /* ---- no single failing store loses a submission ---- */
 const siteGet = site.routes.find(r => r.method === 'GET').handler;
+const { LIMIT } = await import('../lib/recruit/modules/site.js');
+const never = () => new Promise(() => {});
 const quietErrors = [];
 const realError = console.error;
 console.error = (...args) => { quietErrors.push(args.map(String).join(' ')); };
-async function harden({ journalFails = false, dbFails = false, emailFails = false, offline = false, saved = null, intake = undefined, appendLimits = [] } = {}) {
+async function harden({ journalFails = false, dbFails = false, emailFails = false, offline = false, saved = null, intake = undefined, appendLimits = [], dbHangs = false, readHangs = false, outcome = 'saved', existing = null, answers = {} } = {}) {
   const calls = [], mails = [], sites = [];
   const live = intake ? { ...cycle, version: 7, doc: { ...cycle.doc, intake } } : { ...cycle, version: 7 };
   const journal = {
@@ -79,7 +81,7 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
     now: () => 1790000000000,
     store: { cache: new Map() },
     cycles: {
-      intakeTarget: async () => { if (offline) throw new Error('Synthetic Neon outage'); return { cycleId: live.id }; },
+      intakeTarget: async () => { if (offline) throw new Error('Synthetic Neon outage'); if (readHangs) return never(); return { cycleId: live.id }; },
       get: async () => live,
     },
     intake: { journal: async () => journal },
@@ -88,11 +90,11 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
       send: async (msg) => { mails.push(msg); return emailFails ? { sent: false, reason: 'Synthetic Resend outage' } : { sent: true, id: 'em_1' }; },
     },
     apps: {
-      async commitIntake() { calls.push('commit'); if (dbFails) throw new Error('Synthetic Neon outage'); return { outcome: 'saved' }; },
+      async commitIntake() { calls.push('commit'); if (dbFails) throw new Error('Synthetic Neon outage'); if (dbHangs) return never(); return { outcome, existing }; },
       async count() { return 0; },
     },
   };
-  const rq = { params: { section: 'round' }, body: async () => ({ ...body }) };
+  const rq = { params: { section: 'round' }, body: async () => ({ ...body, answers: { ...body.answers, ...answers } }) };
   try { return { response: await submit(rq, kit), calls, mails, sites, kit }; }
   catch (error) { return { error, calls, mails, sites, kit }; }
 }
@@ -106,7 +108,10 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
   const noJournal = await harden({ journalFails: true });
   assert.equal(noJournal.response.status, 200, 'the database alone still saves it');
   assert.equal(noJournal.mails.length, 1, 'and the email is its second copy');
-  assert.equal(noJournal.mails[0].attachments[0].filename, 'test.png');
+  assert.equal(noJournal.mails[0].attachments[0].filename, 'photo-1.png', 'attachments are named by the form, never by the applicant');
+  assert.equal(noJournal.mails[0].attachments[0].content_type, 'image/png');
+  assert.match(noJournal.mails[0].html, /test\.png \(attached as photo-1\.png\)/);
+  assert.match(noJournal.mails[0].html, /second copy/);
   assert.equal(Buffer.from(noJournal.mails[0].attachments[0].content, 'base64').length, png.length, 'with the file bytes');
   assert.ok(noJournal.mails[0].to.includes('cuphysint@cornell.edu'));
   assert.match(noJournal.mails[0].html, /test@example\.test/);
@@ -115,7 +120,7 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
   assert.equal(noDb.response.status, 202, 'a journaled submission is accepted while the database fails');
   assert.equal(noDb.response.body.queued, true);
   assert.equal(noDb.mails.length, 1, 'and the team hears about it with a copy');
-  assert.match(noDb.mails[0].html, /Database<\/b>: not saved/);
+  assert.match(noDb.mails[0].html, /Database<\/b>: no answer/);
   assert.equal(noDb.mails[0].clientId, null, 'never refreshes a stored OAuth token while the database is down');
   assert.equal(noDb.mails[0].settings, null);
 
@@ -143,7 +148,7 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
 
   const limits = [];
   await harden({ intake: { perIpHour: 5, perDay: 2000 }, appendLimits: limits });
-  assert.deepEqual(limits[0], { perIpHour: 120, perDay: 10000 }, 'old low limits stored on a cycle are raised');
+  assert.deepEqual(limits[0], { perIpHour: 120 }, 'an old low limit stored on a cycle is raised');
 
   const once = await harden();
   await submit({ params: { section: 'round' }, body: async () => ({ ...body }) }, once.kit);
@@ -154,6 +159,50 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
   (await failing.kit.intake.journal()).saveSite = async () => { attempts += 1; throw new Error('Synthetic Blob outage'); };
   for (let i = 0; i < 3; i++) await submit({ params: { section: 'round' }, body: async () => ({ ...body }) }, failing.kit);
   assert.equal(attempts, 1, 'a failing save is not retried on every request');
+
+  // A database that hangs is treated like one that fails.
+  const saveLimits = { ...LIMIT };
+  Object.assign(LIMIT, { read: 30, write: 30 });
+  const hungRead = await harden({ readHangs: true, saved: savedCycle });
+  assert.equal(hungRead.response.status, 202, 'a hung read falls back to the saved cycle and journals');
+  assert.deepEqual(hungRead.calls, ['append']);
+  const hungWrite = await harden({ dbHangs: true });
+  assert.equal(hungWrite.response.status, 202, 'a hung write still answers, from the journal');
+  assert.equal(hungWrite.mails.length, 1);
+  Object.assign(LIMIT, saveLimits);
+
+  // Email holds the only copy: the log keeps a trace too.
+  quietErrors.length = 0;
+  await harden({ dbFails: true, journalFails: true });
+  assert.ok(quietErrors.some((line) => line.includes('EMAIL ONLY') && line.includes('test@example.test')));
+
+  // The database refusing a journal-less submission says so in the email.
+  const refused = await harden({ journalFails: true, outcome: 'review', existing: { ts: 1, answers: {}, files: [] } });
+  assert.equal(refused.response.status, 409);
+  assert.match(refused.mails[0].html, /NOT in the wiki/);
+
+  // A resend of exactly what is saved never waits in the queue as a duplicate.
+  const resend = await harden({ outcome: 'review', existing: { ts: 1, name: 'Test', answers: {}, files: [{ question: 'photo', size: png.length }] } });
+  assert.ok(resend.calls.includes('review'), 'the duplicate receipt is marked done');
+  const changed = await harden({ outcome: 'review', existing: { ts: 1, name: 'Test', answers: { note: 'old' }, files: [{ question: 'photo', size: png.length }] } });
+  assert.ok(!changed.calls.includes('review'), 'a real correction stays in the queue for the team');
 }
 console.error = realError;
 console.log('PASS: journal outage emails a second copy, database outage journals and emails, email-only fallback, last-resort log, outage feed and submissions from the saved cycle, raised spam limits');
+
+/* ---- answers the database can always store ---- */
+{
+  const { validateAnswers } = await import('../lib/recruit/fixed-form.js');
+  const form = { questions: [
+    { key: 'name', type: 'short', required: true, max: 100 }, { key: 'email', type: 'email', required: true },
+    { key: 'why', type: 'long', max: 5 }, { key: 'bio', type: 'short', max: 3 }, { key: 'photo', type: 'file' },
+  ] };
+  const v = validateAnswers(form, { answers: { name: 'Ann\u0000a', email: 'a@cornell.edu\u0000', why: 'abcd😀xyz', bio: 'ab\uD83D' }, files: { photo: { name: 'pic\u0000\uD83D.png', type: 'image/png', data: png.toString('base64') } } });
+  assert.equal(v.error, undefined, v.error);
+  assert.equal(v.columns.name, 'Anna', 'a NUL character is dropped, not refused');
+  assert.equal(v.columns.email, 'a@cornell.edu');
+  assert.equal(v.answers.why, 'abcd', 'an emoji cut at the length limit is dropped whole');
+  assert.equal(v.answers.bio, 'ab\uFFFD', 'a stray half emoji in the input becomes a replacement character');
+  assert.ok(!/\\u0000|\\ud8[0-9a-f]{2}(?!\\\\udc)/i.test(JSON.stringify(v.answers) + JSON.stringify(v.files.map((f) => f.name))), 'nothing Postgres would refuse');
+  console.log('PASS: NUL characters and half emoji never reach the database');
+}
