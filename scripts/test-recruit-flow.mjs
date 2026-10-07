@@ -176,6 +176,9 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     assert.deepEqual([...flow.routeOf(split, sub({ team: ['Software', 'Creative'] }))].sort(), ['cs', 'gen'], 'each unmapped selection also goes to Anyone else');
     assert.deepEqual([...flow.routeOf(split, sub({ team: ' software ' }))], ['cs'], 'an answer matches whatever its case or spacing');
     assert.deepEqual([...flow.routeOf(split, [{ section: 'app', ts: 1, answers: { team: ['Mechanical'] } }, { section: 'app', ts: 2, answers: { team: ['Software'] } }])], ['cs'], 'the newest answer counts');
+    const subteamForms = { coffee: { split: { stage: 'coffee', q: 'subteam', routes: { Electrical: 'ee', Software: 'cs', Mechanical: 'mech', Creative: 'mech' } } }, ee: {}, cs: {}, mech: {} };
+    assert.deepEqual([...flow.stageSubteams(subteamForms)].sort(), [['cs', 'Software'], ['ee', 'Electrical']], "a form one subteam answer leads to is that subteam's; a shared one is nobody's");
+    assert.deepEqual([...flow.stageSubteams(sections)], [], 'only a split by the subteam question names a subteam');
     for (const value of [undefined, null, '', []]) {
       assert.deepEqual([...flow.routeOf(split, sub({ team: value }))], ['gen'], 'a submitted empty optional answer takes Anyone else');
       assert.deepEqual([...flow.routeOf({ ...split, otherwise: null }, sub({ team: value }))], [], 'a submitted empty answer stops when Anyone else goes nowhere');

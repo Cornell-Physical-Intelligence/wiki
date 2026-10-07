@@ -149,7 +149,6 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   console.log('PASS: the live cycle publishes its sections; Settings opens a section and shapes its form; members are refused');
 
   /* ---- submissions from the site ---- */
-  assert.equal((await anon('POST', '/recruit/site/coffee', { answers: { name: 'Bot', email: 'b@cornell.edu' }, website: 'http://spam' })).status, 200, 'honeypot answers 200 and stores nothing');
   // The page showed the question and it was left blank (a question the page
   // never showed cannot refuse anyone; see test-recruit-upload-failures).
   const missing = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', availability: '' } });
@@ -160,7 +159,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(ok.status, 200, ok.text); assert.equal(ok.data.ok, true); assert.match(ok.data.receipt, /^jr-\d{13}-[a-f0-9]{24}$/);
   assert.equal(journal.records.get(ok.data.receipt).section, 'coffee', 'the journal entry carries its section');
   assert.equal(journal.done.get(ok.data.receipt), 'saved');
-  assert.deepEqual(journal.appendOptions, { perIpHour: 120 }, 'a cycle saved with the old low threshold gets at least the floor');
+  assert.deepEqual(journal.appendOptions, { perIpHour: 600 }, 'a cycle saved with the old low threshold gets at least the floor');
   const list = (await recruit('GET', '/recruit/cycles/cy-interest/applications?section=coffee')).data;
   assert.equal(list.rows.length, 1); assert.equal(list.rows[0].name, 'Cam Chat'); assert.equal(list.rows[0].email, 'cam@cornell.edu'); assert.equal(list.rows[0].section, 'coffee');
   assert.deepEqual(list.counts.bySection, { interest: 1, coffee: 1 });
@@ -172,14 +171,19 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(sent.length, 1, 'the team is emailed once per new submission'); assert.match(sent[0].body.subject, /^Coffee chats: Cam Chat$/);
   assert.deepEqual([].concat(sent[0].body.to), ['team@cornell.edu'], 'to the addresses the form names');
   assert.match(sent[0].body.html, /When are you free\?<\/b><br>Tue 3pm/); assert.doesNotMatch(sent[0].body.html, /extra/);
-  // Same email, same section: refused until confirmed; another section is separate.
-  const dup = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', availability: 'Wed' } });
-  assert.equal(dup.status, 409); assert.equal(dup.data.exists, true); assert.equal(dup.data.submitted, list.rows[0].ts);
-  const replaced = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', subteam: 'Software', availability: 'Wed' }, confirmUpdate: true });
-  assert.equal(replaced.status, 409); assert.equal(replaced.data.replaceable, false);
+  // Same email, same section: the newer answers replace the older, on the
+  // same row; another section is separate.
+  const dup = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Cam Chat', email: 'cam@cornell.edu', subteam: 'Software', availability: 'Wed', snack: 'Tea' } });
+  assert.equal(dup.status, 200, dup.text); assert.equal(dup.data.ok, true); assert.match(dup.data.receipt, /^jr-\d{13}-[a-f0-9]{24}$/);
+  assert.equal(journal.done.get(dup.data.receipt), 'saved', 'a repeat is saved, never held for review');
   const after = (await recruit('GET', '/recruit/cycles/cy-interest/applications?section=coffee')).data;
-  assert.equal(after.rows.length, 1); assert.equal(after.rows[0].id, list.rows[0].id, 'a confirmed update keeps the row');
-  assert.equal(sent.length, 1, 'updates do not re-notify');
+  assert.equal(after.rows.length, 1); assert.equal(after.rows[0].id, list.rows[0].id, 'an update keeps the row');
+  assert.equal(after.rows[0].ts, list.rows[0].ts, 'and when they first sent it');
+  assert.equal((await recruit('GET', `/recruit/cycles/cy-interest/applications/${list.rows[0].id}`)).data.application.answers.availability, 'Wed', 'the newer answers stand');
+  assert.equal(sent.length, 2, 'an update emails the team too'); assert.match(sent[1].body.subject, /^Coffee chats \(updated\): Cam Chat$/);
+  assert.match(sent[1].body.html, /replace their earlier ones/);
+  const updateAudit = (await recruit('GET', '/recruit/cycles/cy-interest/audit')).data.rows.find((a) => a.kind === 'app.update');
+  assert.equal(updateAudit?.detail.previous.answers.availability, 'Tue 3pm', 'the audit keeps the answers an update replaced');
   const fixed = await interest('POST', '/interest', { name: 'Cam Chat', email: 'cam@cornell.edu', year: 'Junior', project: 'Interest too' });
   assert.equal(fixed.status, 200, 'the same person can also join the interest list');
   assert.deepEqual((await recruit('GET', '/recruit/cycles/cy-interest/applications')).data.counts.bySection, { interest: 2, coffee: 1 });
@@ -244,7 +248,8 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const beforeFifth = sent.length;
   const fifth = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Fifth Person', email: 'fifth@cornell.edu', availability: 'Sun', snack: 'Tea' } });
   assert.equal(fifth.status, 200, fifth.text);
-  assert.equal(sent.length, beforeFifth, 'with no addresses of its own a form emails nobody');
+  assert.equal(sent.length, beforeFifth + 1);
+  assert.deepEqual([].concat(sent.at(-1).body.to), ['cuphysint@cornell.edu'], "with no addresses of its own a form emails the team's inbox");
   /* ---- a cycle adds forms of its own, orders them, and drops them when empty ---- */
   const vA = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: vA, settings: { sections: { 'coffee-2': { open: true } } } })).status, 400, 'a new form needs a title');
@@ -357,6 +362,21 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(String(peopleCsv.text).replace(/^\uFEFF/, '').split('\n')[0].trim(), '"Name","Email","Cornell","Subteam","Year","Interest form","Coffee chats, round 2","Coffee chats","Application","Flagged","Comments","Last activity"', 'the people CSV has a column per form, in the cycle\'s order');
   const auditKinds = (await recruit('GET', '/recruit/cycles/cy-interest/audit')).data.rows.map((a) => a.kind);
   for (const kind of ['person.flag', 'comment.post', 'comment.delete']) assert.ok(auditKinds.includes(kind), `people routes write ${kind} audit`);
+  /* ---- a filled spam trap is kept and flagged, never refused ---- */
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version, settings: { sections: { coffee: { capacity: 0, open: true }, 'coffee-2': { open: true } } } })).status, 200);
+  /* ---- search finds a person by any name they sent, without accents ---- */
+  assert.equal((await anon('POST', '/recruit/site/coffee', { answers: { name: 'Alex Chen', email: 'achen@cornell.edu', availability: 'Mon', snack: 'Tea' } })).status, 200);
+  const laterName = await anon('POST', '/recruit/site/coffee-2', { answers: { name: 'Alexander José Chen', email: 'achen@cornell.edu' } });
+  assert.equal(laterName.status, 200, laterName.text);
+  for (const q of ['alex chen', 'alexander chen', 'jose', 'ACHEN@']) assert.deepEqual((await recruit('GET', `/recruit/cycles/cy-interest/people?q=${encodeURIComponent(q)}`)).data.rows.map((p) => p.email), ['achen@cornell.edu'], `"${q}" finds them`);
+  for (const [email, trap] of [['autofill@cornell.edu', { hp_8c1f: 'https://example.com' }], ['oldtrap@cornell.edu', { website: 'https://example.com' }]]) {
+    const trapped = await anon('POST', '/recruit/site/coffee', { answers: { name: 'Autofilled Person', email, availability: 'Mon', snack: 'Tea' }, ...trap });
+    assert.equal(trapped.status, 200, trapped.text); assert.match(trapped.data.receipt, /^jr-\d{13}-[a-f0-9]{24}$/, 'a filled trap still gets a receipt');
+    const person = (await recruit('GET', `/recruit/cycles/cy-interest/people/${encodeURIComponent(email)}`)).data.person;
+    assert.equal(person.flagged, true, 'and flags the person');
+    assert.match(person.review.comments[0].text, /spam-trap field was filled/);
+    assert.match(sent.at(-1).body.html, /spam-trap field was filled/, "the team's email says so");
+  }
   console.log('PASS: per-section CSV with formula-safe cells, a closed interest form refuses the website, capacity applies per section, people group across forms, and the flag and the thread belong to the person');
   const { recruitmentRegressions } = await import('./recruit-regression-cases.mjs');
   await recruitmentRegressions({ lib, recruit, anon, R, ctxFor, admin, plain, journal, now: () => clock });

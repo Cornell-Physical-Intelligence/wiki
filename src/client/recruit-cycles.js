@@ -93,6 +93,7 @@ function recruitQueueHtml() {
 function recruitPendingReason(reason) {
   if (reason === 'duplicate') return 'A repeat from an email that had already sent this form, never confirmed';
   if (reason === 'capacity') return 'Arrived after the form was full';
+  if (reason === 'late') return 'Arrived after the deadline';
   if (reason === 'replay_failed') return 'Could not be written to its form yet';
   if (reason === 'unsynced') return 'Not yet written to its form';
   if (reason === 'legacy') return 'Sent to the old list';

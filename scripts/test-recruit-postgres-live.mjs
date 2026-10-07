@@ -97,6 +97,12 @@ try {
   assert.equal(await kit.apps.count(cycle.id,'round',true),1);
   const unverified = await kit.apps.commitIntake(cycle,receipt(600,{email:saved[0].email,confirmUpdate:true,name:'Impersonator'}),journal);
   assert.equal(unverified.outcome,'review');
+  const fromSite = await kit.apps.commitIntake(cycle,receipt(650,{email:saved[0].email,confirmUpdate:true,replaces:true,answers:{note:'Sent again'}}),journal);
+  assert.equal(fromSite.outcome,'saved','a website repeat (marked replaces) updates the row');
+  assert.equal(fromSite.inserted,false);
+  assert.deepEqual(fromSite.row.answers,{note:'Sent again'});
+  const olderFromSite = await kit.apps.commitIntake(cycle,receipt(640,{email:saved[0].email,confirmUpdate:true,replaces:true,answers:{note:'Older'}}),journal);
+  assert.equal(olderFromSite.outcome,'superseded','an older website repeat never overwrites a newer one');
   const historical = (await kit.apps.get(cycle.id, changed.row.id)).formSnapshot;
   await sql`UPDATE recruit_applications SET form_snapshot=NULL WHERE id=${changed.row.id}`;
   const site = structuredClone(cycle.doc.site); site.sections.round.form.questions[0].label = 'Changed label';
@@ -104,9 +110,9 @@ try {
   assert.equal(editedCycle.version,2);
   assert.deepEqual((await kit.apps.get(cycle.id,changed.row.id)).formSnapshot,historical,'legacy rows freeze their schema inside the settings transaction');
   await sql`UPDATE recruit_cycles SET closes_at=${1790000000900} WHERE id=${cycle.id}`;
-  const late=await kit.apps.commitIntake(cycle,receipt(901),journal);
+  const late=await kit.apps.commitIntake(cycle,receipt(901+15*60000),journal);
   assert.equal(late.outcome,'closed','commit checks the deadline from the locked current row, not a stale cycle');
-  console.log('PASS: real Postgres unverified replacement rejection, transactional schema snapshots and locked deadline check');
+  console.log('PASS: real Postgres unverified replacement rejection, website repeats update in order, transactional schema snapshots and locked deadline check');
   await sql`UPDATE recruit_applications SET erased_at=1 WHERE cycle_id=${cycle.id}`;
   assert.equal(await kit.apps.count(cycle.id,'round',true),0);
   assert.equal(await kit.apps.count(cycle.id,'round'),1,'erased rows still prevent destructive form removal');

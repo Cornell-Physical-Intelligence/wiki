@@ -1,8 +1,10 @@
 name: Apply form monitor
 
-# Every ten minutes, the club website's view of the wiki: the form feed loads
-# for the website's origin, and an open form accepts the browser's preflight
-# for a submission. A failed run is GitHub's alert; nothing is submitted.
+# Every ten minutes (GitHub runs scheduled jobs late or skips them when busy),
+# the club website's view of the wiki: the Apply page loads, the form feed
+# loads for the website's origin from the database rather than its saved
+# copy, and an open form accepts the browser's preflight for a submission.
+# A failed run is GitHub's alert; nothing is submitted.
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -27,10 +29,13 @@ jobs:
             sleep 20
           done
           [ -n "$ok" ] || { echo "::error::GET $api/site failed three times"; exit 1; }
+          page=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$origin/apply/")
+          [ "$page" = 200 ] || { echo "::error::$origin/apply/ answered $page"; exit 1; }
           grep -qi "^access-control-allow-origin: $origin" headers.txt || { echo "::error::the feed does not allow $origin"; exit 1; }
           node -e '
             const d = JSON.parse(require("fs").readFileSync("feed.json", "utf8"));
             if (!Array.isArray(d.sections)) { console.log("::error::the feed has no sections list"); process.exit(1); }
+            if (d.offline) { console.log("::error::the feed is served from its saved copy: the database is not answering, so submissions wait in the journal"); process.exit(1); }
             const open = d.sections.filter((s) => s.available).map((s) => s.key);
             console.log("cycle:", d.cycle ? d.cycle.name : "none", "| open:", open.join(", ") || "none");
             require("fs").writeFileSync("open.txt", open[0] || "");

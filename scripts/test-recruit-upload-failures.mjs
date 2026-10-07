@@ -57,9 +57,10 @@ assert.equal((await run({ outcome: 'unknown' })).error.status, 503);
 assert.equal((await run({ outcome: 'held' })).error.status, 409);
 assert.equal((await run({ outcome: 'review' })).response.status, 409);
 const honeypot = await run({ website: 'autofilled.example' });
-assert.equal(honeypot.response.body.receipt, undefined, 'honeypot suppression never supplies a saved receipt');
-assert.deepEqual(honeypot.calls, []);
-console.log('PASS: durable receipts, attachment-write outages, complete-marker outages, superseded submissions, unknown outcomes, and honeypot responses');
+assert.match(honeypot.response.body.receipt, /^jr-\d{13}-[a-f0-9]{24}$/, 'a filled spam trap is saved like any submission');
+assert.deepEqual(honeypot.calls.slice(0, 2), ['append', 'commit']);
+assert.equal(honeypot.records.get(honeypot.response.body.receipt).trap, 'autofilled.example', 'its journal entry says the trap was filled');
+console.log('PASS: durable receipts, attachment-write outages, complete-marker outages, superseded submissions, unknown outcomes, and filled spam traps');
 
 /* ---- no single failing store loses a submission ---- */
 const siteGet = site.routes.find(r => r.method === 'GET').handler;
@@ -140,15 +141,21 @@ async function harden({ journalFails = false, dbFails = false, emailFails = fals
   assert.equal(offline.mails.length, 1);
   const offlineFeed = await siteGet({}, offline.kit);
   assert.equal(offlineFeed.status, 200, 'and the form still loads');
+  assert.equal(offlineFeed.body.offline, true, 'saying it came from the saved copy, for the monitor');
   assert.equal(offlineFeed.body.sections[0].available, true);
   const closedOffline = await harden({ offline: true, saved: { cycle: null } });
   assert.equal(closedOffline.error.status, 409, 'a saved "nothing receives the website" stays closed');
   const blind = await harden({ offline: true, saved: null });
-  assert.match(blind.error.message, /Neon/, 'with no saved cycle the outage surfaces');
+  assert.equal(blind.response.status, 202, 'with no saved cycle either, the team still gets the submission by email');
+  assert.equal(blind.mails.length, 1);
+  assert.match(blind.mails[0].subject, /^Backup copy: round from /);
+  assert.equal(blind.mails[0].attachments[0].content_type, 'image/png', 'with the files whose bytes are an image or a PDF');
+  const lost = await harden({ offline: true, saved: null, emailFails: true });
+  assert.equal(lost.error.status, 503, 'and when the email fails too, the applicant is told to try again');
 
   const limits = [];
   await harden({ intake: { perIpHour: 5, perDay: 2000 }, appendLimits: limits });
-  assert.deepEqual(limits[0], { perIpHour: 120 }, 'an old low limit stored on a cycle is raised');
+  assert.deepEqual(limits[0], { perIpHour: 600 }, 'an old low limit stored on a cycle is raised');
 
   const once = await harden();
   await submit({ params: { section: 'round' }, body: async () => ({ ...body }) }, once.kit);
@@ -207,11 +214,11 @@ console.log('PASS: journal outage emails a second copy, database outage journals
   console.log('PASS: NUL characters and half emoji never reach the database');
 }
 
-/* ---- queued submissions replay on their own; the spam trap leaves a trace ---- */
+/* ---- queued submissions replay on their own; a filled spam trap is kept and flagged ---- */
 {
   const realErr = console.error; console.error = () => {};
-  const marks = new Set(), done = [], committed = [], suspects = [];
-  const entry = { id: 'jr-1790000000000-0123456789abcdef01234567', ts: 1790000000000, cycleId: cycle.id, section: 'round', email: 'q@example.test', name: 'Queued', answers: {}, version: 2, files: [] };
+  const marks = new Set(), done = [], committed = [], reviews = [];
+  const entry = { id: 'jr-1790000000000-0123456789abcdef01234567', ts: 1790000000000, cycleId: cycle.id, section: 'round', email: 'q@example.test', name: 'Queued', answers: {}, version: 2, files: [], trap: 'https://autofill.example' };
   const journal = {
     async append() { return true; },
     async complete(id, outcome) { done.push([id, outcome]); },
@@ -220,7 +227,6 @@ console.log('PASS: journal outage emails a second copy, database outage journals
     async listRetry() { return [...marks]; },
     async clearRetry(id) { marks.delete(id); },
     async getEntry(id) { return id === entry.id ? entry : null; },
-    async keepSuspect(trace) { suspects.push(trace); return true; },
   };
   let dbDown = true;
   const kit = {
@@ -228,7 +234,9 @@ console.log('PASS: journal outage emails a second copy, database outage journals
     cycles: { intakeTarget: async () => ({ cycleId: cycle.id }), get: async () => cycle },
     intake: { journal: async () => journal, commit: async (e) => { committed.push(e.id); return { outcome: 'saved', inserted: true, row: { id: 'in-1', email: e.email, name: e.name, answers: {} } }; } },
     email: { settings: async () => null, send: async () => ({ sent: true }) },
-    apps: { async commitIntake() { if (dbDown) throw new Error('Synthetic Neon outage'); return { outcome: 'saved' }; }, async count() { return 0; } },
+    apps: { async commitIntake(_c, e) { if (dbDown) throw new Error('Synthetic Neon outage'); return { outcome: 'saved', inserted: true, row: { id: 'in-2', email: e.email, name: e.name, answers: e.answers } }; }, async count() { return 0; } },
+    people: { async updateReview(_cycle, email, _name, change) { reviews.push([email, change]); return { row: {} }; } },
+    audit: async () => ({}), esc: (v) => String(v ?? ''),
   };
   const queued = await submit({ params: { section: 'round' }, body: async () => ({ ...body }) }, kit);
   assert.equal(queued.status, 202);
@@ -239,17 +247,48 @@ console.log('PASS: journal outage emails a second copy, database outage journals
   assert.deepEqual(committed, [entry.id], 'the next feed load puts it into the database');
   assert.deepEqual(done.at(-1), [entry.id, 'saved']);
   assert.equal(marks.size, 0, 'and stops retrying it');
+  assert.deepEqual(reviews.map(([email, change]) => [email, Boolean(change.flag?.flagged), /spam-trap/.test(change.comment?.text || '')]), [['q@example.test', true, false], ['q@example.test', false, true]], 'a replayed spam-trap submission flags the person too');
+  reviews.length = 0;
   marks.add(entry.id);
   await siteGet({}, kit);
   assert.equal(committed.length, 1, 'at most once a minute per instance');
+  marks.clear();
 
   const trapped = await submit({ params: { section: 'round' }, body: async () => ({ ...body, answers: { ...body.answers }, hp_8c1f: 'https://autofill.example' }) }, kit);
   assert.equal(trapped.status, 200);
-  assert.equal(trapped.body.receipt, undefined, 'the trap still never hands out a receipt');
-  assert.equal(suspects.length, 1, 'but keeps what it caught');
-  assert.equal(suspects[0].answers.email, 'test@example.test');
+  assert.match(trapped.body.receipt, /^jr-\d{13}-[a-f0-9]{24}$/, 'a filled trap gets a receipt like any submission');
+  assert.equal(reviews.length, 2, 'and flags the person with a comment');
+  assert.equal(reviews[0][0], 'test@example.test');
   console.error = realErr;
-  console.log('PASS: queued submissions replay from the feed once the database answers; spam-trap catches are kept');
+  console.log('PASS: queued submissions replay from the feed once the database answers; spam-trap submissions are kept and flagged');
+}
+
+/* ---- a replay that keeps failing waits, and the ones behind it still go in ---- */
+{
+  const realErr = console.error; console.error = () => {};
+  const stuck = 'jr-1790000000001-0123456789abcdef01234567', fine = 'jr-1790000000002-0123456789abcdef01234567';
+  const marks = new Set([stuck, fine]), tried = [];
+  const entryOf = (id) => ({ id, ts: 1790000000000, cycleId: cycle.id, section: 'round', email: `${id.slice(-4)}@example.test`, name: 'Queued', answers: {}, version: 2, files: [] });
+  const journal = {
+    async saveSite() { return true; }, async loadSite() { return null; },
+    async listRetry() { return [...marks]; }, async clearRetry(id) { marks.delete(id); },
+    async getEntry(id) { return entryOf(id); }, async complete() {},
+  };
+  const cache = new Map();
+  const kit = {
+    now: () => 1790000000000, store: { cache },
+    cycles: { intakeTarget: async () => ({ cycleId: cycle.id }), get: async () => cycle },
+    intake: { journal: async () => journal, commit: async (e) => { tried.push(e.id); if (e.id === stuck) throw new Error('Synthetic attachment not ready'); return { outcome: 'saved' }; } },
+    apps: { async count() { return 0; } },
+  };
+  await siteGet({}, kit);
+  assert.deepEqual(tried, [stuck, fine], 'a failing entry does not stop the one behind it');
+  assert.deepEqual([...marks], [stuck], 'only the failing one waits');
+  cache.delete('site.retry');
+  await siteGet({}, kit);
+  assert.deepEqual(tried, [stuck, fine], 'and it waits a while before the next try');
+  console.error = realErr;
+  console.log('PASS: a replay that keeps failing backs off without holding back the queue');
 }
 
 /* ---- real-world files and forms edited while applicants fill them ---- */
@@ -259,6 +298,18 @@ console.log('PASS: journal outage emails a second copy, database outage journals
   const base = { name: 'N', email: 'n@cornell.edu', pick: 'A' };
   assert.equal(validateAnswers(form, { answers: base }).error, undefined, 'a required question the page never showed does not refuse the applicant');
   assert.equal(validateAnswers(form, { answers: { ...base, added: '' } }).error, 'added is required', 'one the page showed is still required');
+  const fileForm = { questions: [...form.questions.slice(0, 2), { key: 'resume', type: 'file', required: true }] };
+  assert.equal(validateAnswers(fileForm, { answers: base, shown: ['name', 'email'] }).error, undefined, 'a required file question the page never showed does not refuse the applicant');
+  assert.equal(validateAnswers(fileForm, { answers: base, shown: ['name', 'email', 'resume'] }).error, 'Attach a file for resume', 'one the page showed is still required');
+  assert.equal(validateAnswers(fileForm, { answers: base }).error, 'Attach a file for resume', 'without the list of shown questions, a file question is checked');
+  const pickForm = { questions: [...form.questions.slice(0, 2), { key: 'year', type: 'single', required: true, options: ['First-year'] }, { key: 'site', type: 'link' }, { key: 'essay', type: 'long' }] };
+  const picked = validateAnswers(pickForm, { answers: { ...base, email: 'n\u200b@cornell.edu', year: 'Freshman', site: 'github.com/me', essay: 'e'.repeat(1500) }, shown: ['name', 'email', 'year', 'site', 'essay'] });
+  assert.equal(picked.error, undefined, 'an option renamed while the page was open is kept as the applicant picked it');
+  assert.deepEqual([picked.columns.email, picked.answers.year, picked.answers.site, picked.answers.essay.length], ['n@cornell.edu', 'Freshman', 'https://github.com/me', 1500], 'invisible characters leave the email, a bare domain gets https://, a long answer keeps 1,500 characters');
+  assert.equal(validateAnswers(pickForm, { answers: { ...base, year: 'Freshman' } }).error, 'Choose one of the options for year', 'a client that does not say what it showed is held to the current options');
+  assert.equal(validateAnswers(pickForm, { answers: { ...base, year: 'First-year', site: 'https://a.com https://b.com' }, shown: ['name', 'email', 'year', 'site'] }).error, 'Give one link for site');
+  const linkRequired = { questions: [...form.questions.slice(0, 2), { key: 'site', type: 'link', required: true }] };
+  for (const none of ['N/A', 'n/a', 'none', 'NA']) assert.equal(validateAnswers(linkRequired, { answers: { ...base, site: none } }).answers?.site, none, `"${none}" answers a required link question`);
   const withFile = (bytes, type, name = 'f') => validateAnswers(form, { answers: { ...base, added: 'x' }, files: { photo: { name, type, data: Buffer.from(bytes).toString('base64') } } });
   const phoneJpeg = Buffer.concat([Buffer.from([255, 216, 255, 225]), Buffer.alloc(64), Buffer.from([255, 217]), Buffer.from('MotionPhoto_Data trailer')]);
   assert.equal(withFile(phoneJpeg, 'image/jpeg').files[0].type, 'image/jpeg', 'a phone photo with data after its end marker is accepted');

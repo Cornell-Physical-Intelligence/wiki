@@ -64,7 +64,7 @@ if (!process.env.RECRUIT_KERNEL_TEST_ROOT) {
   const custom = { sections: [{ key: 'main', title: '', subteam: null }, { key: 'sw', title: 'Software', subteam: 'software' }], questions: [...FIXED_FORM_V1.questions, { key: 'github', type: 'link', label: 'GitHub', required: true, section: 'sw' }, { key: 'langs', type: 'multi', label: 'Languages', options: ['C', 'Rust'], section: 'main' }] };
   assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', subteam: 'Electrical', answers: { langs: ['C'] } }).answers.github, undefined, 'a required question in a hidden section is not required');
   assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', subteam: 'Software' }).error, 'GitHub is required');
-  assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', subteam: 'Software', answers: { github: 'ftp://x' } }).error, 'GitHub must start with http:// or https://');
+  assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', subteam: 'Software', answers: { github: 'ftp://x' } }).error, 'GitHub must start with http:// or https:// (or write N/A)');
   assert.equal(validateAnswers(custom, { name: 'A', email: 'a@b.co', answers: { langs: ['Go'] } }).error, 'Choose from the options for Languages');
   assert.deepEqual(fixedFormFor({ doc: { subteams: [{ key: 'a', name: 'Alpha' }] } }).questions.find((q) => q.key === 'subteam').options, ['Alpha']);
   console.log('PASS: fixed form vocabulary matches interest.js; validateAnswers coerces, clips, gates sections and files');

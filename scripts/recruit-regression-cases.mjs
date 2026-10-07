@@ -48,33 +48,33 @@ export async function recruitmentRegressions({lib,recruit,anon,R,ctxFor,admin,pl
     assert.deepEqual(download.text, png, 'reviewer receives the original image bytes');
     assert.equal((await anon('GET', `/recruit/files/${f.id}`)).status, 401, 'applicant images stay private');
   }
-  // A rejected duplicate keeps its files recoverable in the queue. Text-only
-  // updates preserve uploads; replacing one question preserves all the others.
+  // A repeat replaces the answers: its files replace the same questions'
+  // files and leave the others, a text-only repeat keeps every upload, and
+  // the journal keeps each copy.
   const imageDuplicate = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: imageFiles });
-  assert.equal(imageDuplicate.status, 409);
-  const queuedImage = await recruit('GET', `/recruit/queue/${imageDuplicate.data.receipt}/file?index=1`);
-  assert.equal(queuedImage.status, 200);
-  assert.deepEqual(queuedImage.text, png);
-  const imageReplaced = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: {}, confirmUpdate: true });
-  assert.equal(imageReplaced.status, 409);
+  assert.equal(imageDuplicate.status, 200, imageDuplicate.text);
+  assert.deepEqual(await journal.getFile(imageDuplicate.data.receipt, 1), png, 'the journal keeps the repeat and its files');
+  const resent = (await recruit('GET', '/recruit/cycles/cy-interest/people/image%40example.test')).data.submissions[0].application;
+  assert.deepEqual(resent.files.map((f) => [f.question, f.name, f.size]), imageRow.files.map((f) => [f.question, f.name, f.size]));
+  const imageReplaced = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: {} });
+  assert.equal(imageReplaced.status, 200, imageReplaced.text);
   const replacement = (await recruit('GET', '/recruit/cycles/cy-interest/people/image%40example.test')).data;
-  assert.deepEqual(replacement.submissions[0].application.files, imageRow.files);
-  const oneReplaced = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: { photo: { ...imageFiles.photo, name: 'new.png' } }, confirmUpdate: true });
-  assert.equal(oneReplaced.status, 409);
+  assert.deepEqual(replacement.submissions[0].application.files, resent.files, 'a text-only repeat keeps the uploads');
+  const oneReplaced = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: { photo: { ...imageFiles.photo, name: 'new.png' } } });
+  assert.equal(oneReplaced.status, 200, oneReplaced.text);
   const afterOne = (await recruit('GET', '/recruit/cycles/cy-interest/people/image%40example.test')).data.submissions[0].application;
   assert.equal(afterOne.files.length, 2);
-  assert.equal(afterOne.files.find((f) => f.question === 'project').id, imageRow.files.find((f) => f.question === 'project').id);
-  assert.deepEqual(afterOne.files, imageRow.files, 'unverified file replacement cannot alter the saved attachments');
+  assert.equal(afterOne.files.find((f) => f.question === 'photo').name, 'new.png', "a new file replaces that question's file");
+  assert.equal(afterOne.files.find((f) => f.question === 'project').id, resent.files.find((f) => f.question === 'project').id, 'and leaves the others');
   for (const badFiles of [{ photo: { name: 'empty.png', type: 'image/png', data: '' } }, { removed_question: imageFiles.photo }, { photo: { ...imageFiles.photo, data: 'a' } }, []]) {
     const rejected = await anon('POST', '/recruit/site/images', { answers: imageAnswers, files: badFiles, confirmUpdate: true });
     assert.equal(rejected.status, 400, 'unreadable or obsolete attachments cannot silently become a successful submission');
   }
-  console.log('PASS: PNG uploads — file and longfile fields, journal bytes, reviewer payload/download, private access, queued duplicate, replacement semantics');
+  console.log('PASS: PNG uploads — file and longfile fields, journal bytes, reviewer payload/download, private access, repeat replacement semantics');
   const duplicate = await anon('POST','/recruit/site/attachments',{answers:{name:'Files again',email:'files@example.com'},files:uploads});
-  assert.equal(duplicate.status,409);
-  const pending = (await recruit('GET','/recruit/queue')).data.pending.find((p) => p.id === duplicate.data.receipt);
-  assert.equal(pending.files.length,2);
-  for (const f of pending.files) assert.equal((await recruit('GET',f.url.replace('/api',''))).status,200);
+  assert.equal(duplicate.status,200,duplicate.text);
+  assert.equal((await recruit('GET','/recruit/queue')).data.pending.some((p) => p.id === duplicate.data.receipt),false,'a repeat never waits in the queue');
+  for (const i of [0,1]) assert.ok((await journal.getFile(duplicate.data.receipt,i))?.length,'the journal keeps its files');
   const multiForm={questions:[...basic,{key:'a',type:'file'},{key:'b',type:'file'}]};
   const huge={name:'x.pdf',type:'application/pdf',data:Buffer.from('%PDF-1.7\n' + ' '.repeat(1500000) + '\n%%EOF').toString('base64')};
   assert.equal(validateAnswers(multiForm,{answers:values,files:{a:huge,b:huge}}).status,413,'aggregate upload limit');
@@ -94,7 +94,11 @@ export async function recruitmentRegressions({lib,recruit,anon,R,ctxFor,admin,pl
   assert.match(badFile.data.error, /file type/);
   // Cutoff applies to feed, direct POST and replay, independent of the UI.
   const deadlineCycle = kit.mem.cycles.find((cycle) => cycle.id === 'cy-interest');
-  deadlineCycle.closesAt = now() - 1;
+  deadlineCycle.closesAt = now() - 60000;
+  assert.ok((await anon('GET', '/recruit/site')).data.sections.every((section) => !section.available), 'the feed shows the forms closed from the deadline on');
+  const justLate = await anon('POST', '/recruit/site/images', { answers: { name: 'Slow Upload', email: 'slow-upload@example.test' } });
+  assert.equal(justLate.status, 200, 'a send a minute after the deadline, from a page loaded before it, is taken');
+  deadlineCycle.closesAt = now() - 16 * 60000; // past the 15-minute grace
   assert.ok((await anon('GET', '/recruit/site')).data.sections.every((section) => !section.available));
   assert.equal((await anon('POST', '/recruit/site/images', { answers: { name: 'Late', email: 'late-deadline@example.test' } })).status, 409);
   const lateEntry = { id: `jr-${now()}-${'c'.repeat(24)}`, ts: now(), version: 2, section: 'images', email: 'late-replay@example.test', name: 'Late', answers: {} };
@@ -115,7 +119,7 @@ export async function recruitmentRegressions({lib,recruit,anon,R,ctxFor,admin,pl
   const cap=await Promise.all([anon('POST','/recruit/site/capped',{answers:{name:'First',email:'first@example.com'}}),anon('POST','/recruit/site/capped',{answers:{name:'Second',email:'second@example.com'}})]);
   assert.deepEqual(cap.map(r=>r.status).sort(),[200,409]);
   const admitted=(await recruit('GET','/recruit/cycles/cy-interest/applications?section=capped')).data.rows[0];
-  assert.equal((await anon('POST','/recruit/site/capped',{answers:{name:'Updated',email:admitted.email},confirmUpdate:true})).status,409);
+  assert.equal((await anon('POST','/recruit/site/capped',{answers:{name:'Updated',email:admitted.email}})).status,200,'the admitted person can still update their answers');
   assert.equal((await anon('GET','/recruit/site')).data.sections.find(s=>s.key==='capped').available,false);
   assert.equal((await anon('GET','/recruit/site')).data.sections.find(s=>s.key==='capped').full,true);
   const capRow = kit.mem.applications.find(a => a.id === admitted.id);
