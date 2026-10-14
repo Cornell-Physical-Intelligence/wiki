@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { flowOf, personFlow } from '../lib/recruit/flow.js';
 
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
-const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', flow: 'recruit-flow.js', stage: 'recruit-stage.js', people: 'recruit-people.js', person: 'recruit-person.js', insights: 'recruit-insights.js' };
+const files = { core: 'recruit-core.js', cycles: 'recruit-cycles.js', flow: 'recruit-flow.js', stage: 'recruit-stage.js', people: 'recruit-people.js', person: 'recruit-person.js', insights: 'recruit-insights.js', website: 'recruit-website.js' };
 const src = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([k, f]) => [k, await read(`../src/client/${f}`)])));
 const ui2 = await read('../src/client/ui2.js');
 const main = await read('../src/client/main.js');
@@ -253,21 +253,21 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
 /* ------------------------------- registry -------------------------------- */
 {
   const f = fixture();
-  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'flow', 'stage', 'people', 'person', 'insights'], 'modules register in order');
+  same(f.run('RECRUIT.modules.map((m) => m.name)'), ['cycles', 'flow', 'stage', 'people', 'person', 'insights', 'website'], 'modules register in order');
   assert.throws(() => f.run("RECRUIT.register({ name: 'flow', order: 9 })"), /already registered/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, actions: { 'nope': () => {} } })"), /must start with recruit-/);
   assert.throws(() => f.run("RECRUIT.register({ name: 'bad', order: 9, changes: { 'nope': () => {} } })"), /must start with recruit-/, 'change handlers are checked like the rest');
   assert.throws(() => f.run("RECRUIT.register({ name: 'noorder' })"), /needs an order/);
   f.ctx.cycle = cycleRow();
-  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => [p.id, p.tab])"), [['flow', true], ['people', true], ['insights', true], ['stage', false], ['person', false]], 'three tabs; a stage and a person are pages of their own');
+  same(f.run("RECRUIT.panels(cycle, 'admin').map((p) => [p.id, p.tab])"), [['flow', true], ['website', true], ['people', true], ['insights', true], ['stage', false], ['person', false]], 'four tabs; a stage and a person are pages of their own');
   f.ctx.zetaCalls = [];
   f.run(`RECRUIT.register({ name: 'zeta', order: 9, panel: { id: 'zeta', label: 'Zeta', order: 4, when: (cycle, role) => role === 'admin' }, view: () => '<p data-zeta>zeta</p>',
     actions: { 'recruit-zeta': (el) => zetaCalls.push(el.dataset.id) }, inputs: { 'recruit-zeta-in': (el) => zetaCalls.push('input:' + el.value) }, changes: { 'recruit-zeta-ch': (el) => zetaCalls.push('change:' + el.value) },
     modals: { 'recruit-zeta': () => '<div class="modal" data-zeta></div>' } })`);
-  same(f.run("RECRUIT.panels(cycle, 'admin').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'people', 'insights', 'zeta'], 'a module adds a tab');
-  same(f.run("RECRUIT.panels(cycle, 'reviewer').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'people', 'insights'], 'tabs are gated by role');
+  same(f.run("RECRUIT.panels(cycle, 'admin').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'website', 'people', 'insights', 'zeta'], 'a module adds a tab');
+  same(f.run("RECRUIT.panels(cycle, 'reviewer').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'website', 'people', 'insights'], 'tabs are gated by role');
   f.ctx.cycle = cycleRow({ doc: { modules: { zeta: false } } });
-  same(f.run("RECRUIT.panels(cycle, 'admin').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'people', 'insights'], 'a module switched off for the cycle loses its tab');
+  same(f.run("RECRUIT.panels(cycle, 'admin').filter((p) => p.tab).map((p) => p.id)"), ['flow', 'website', 'people', 'insights'], 'a module switched off for the cycle loses its tab');
   assert.match(f.run("RECRUIT.modal({ kind: 'recruit-zeta' })"), /data-zeta/, 'modal kinds resolve through the registry');
   assert.equal(f.run("RECRUIT.modal({ kind: 'recruit-nope' })"), '', 'unknown kinds draw nothing');
   const el = f.run("document.createElement('button')"); el.setAttribute('data-action', 'recruit-zeta'); el.setAttribute('data-id', 'x');
@@ -295,13 +295,16 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const st = loadCycle(f, { cycle: { closesAt: Date.UTC(2026, 9, 6, 16) } });
   f.mount();
   const tabs = f.app.querySelectorAll('.rc-tabs [role="tab"]');
-  same(tabs.map((t) => t.textContent), ['Flow', 'People', 'Insights']);
+  same(tabs.map((t) => t.textContent), ['Flow', 'Website', 'People', 'Insights']);
   assert.equal(tabs[0].getAttribute('aria-current'), 'page');
   assert.match(f.app.innerHTML, /href="#\/applications\?all=1">Applications<\/a><span class="crumbs__sep">\/<\/span><span class="crumbs__here">Fall 2026</);
   assert.match(f.app.innerHTML, /class="rc-cycle-title" data-action="dd" data-m="recruit-cycle-switch"/, 'the title is the cycle switch');
   assert.ok(f.app.querySelector('.rc-cycle-gear[data-action="recruit-settings-open"]'), 'the gear sits beside the name');
   const meta = f.app.querySelector('.rc-cycle-meta').textContent;
-  assert.match(meta, /Open/); assert.match(meta, /Receives the website's forms/); assert.match(meta, /Deadline Oct 6/);
+  assert.match(meta, /Open/); assert.match(meta, /Deadline Oct 6/);
+  const web = f.app.querySelector('.rc-cycle-meta .rc-cycle-web');
+  assert.equal(web.textContent, 'Feeds /apply, not live', 'the cycle the website reads says when its deadline has stopped it');
+  assert.equal(web.getAttribute('href'), '#/applications/cy-a/website', 'and opens the Website tab');
   tabs[0].focus();
   assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowRight', target: tabs[0], preventDefault() {} }), true);
   assert.ok(f.document.activeElement === tabs[1], 'arrow keys rove the tablist');
@@ -315,9 +318,9 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.ok(f.app.querySelector('.rc-wrap--full'), 'a stage uses the whole width');
   // Every view sits in the same frame, so switching tabs never moves the page.
   const frame = () => { const content = f.app.querySelector('.rc-content'); const wrap = content?.children[0]; return content && [content, wrap, wrap?.children[0]].map((el) => el?.getAttribute('class')).join(' | '); };
-  const frames = ['flow', 'people', 'insights', 'stage', 'person'].map((sub) => { f.ctx.UI.route.params = { id: 'cy-a', sub, key: 'coffee', email: 'ada@cornell.edu' }; f.mount(); return frame(); });
+  const frames = ['flow', 'website', 'people', 'insights', 'stage', 'person'].map((sub) => { f.ctx.UI.route.params = { id: 'cy-a', sub, key: 'coffee', email: 'ada@cornell.edu' }; f.mount(); return frame(); });
   assert.ok(frames[0], 'the frame is found');
-  same(frames, frames.map(() => frames[0]), 'Flow, People, Insights, a stage and a person share one frame');
+  same(frames, frames.map(() => frames[0]), 'Flow, Website, People, Insights, a stage and a person share one frame');
   assert.equal(f.app.querySelector('.rc-cycle-head'), null, 'a person page omits the repeated cycle heading');
   assert.equal(f.app.querySelector('.rc-tabs'), null, 'a person page omits the cycle tabs');
   assert.match(f.app.querySelector('.crumbs').textContent, /Fall 2026/, 'the breadcrumb keeps the cycle context');
@@ -437,12 +440,31 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   f.run('recruitOpenSettings()');
   assert.equal(f.ctx.UI.modal.kind, 'recruit-settings');
   const settings = f.mountModal();
-  assert.equal(settings.querySelector('[data-action="recruit-settings-about"] [name="name"]').value, 'Fall 2026', 'About holds the name');
+  same(settings.querySelectorAll('.rc-set').map((x) => x.id), ['rc-set-status', 'rc-set-details', 'rc-set-review'], 'status, then the details, then who can review');
   const seg = settings.querySelectorAll('.rc-seg--status [data-action="recruit-status-set"]');
   same(seg.map((b) => [b.dataset.status, b.getAttribute('aria-current') === 'page', b.disabled]), [['draft', false, true], ['open', true, false], ['closed', false, false]], 'status is a segmented control: the current one pressed, only real moves enabled');
-  assert.equal(settings.querySelector('[data-action="recruit-website-toggle"]').checked, true, 'the receiving checkbox reflects the index');
-  assert.equal(settings.querySelectorAll('[data-rc="subteam-rows"] .rc-row').length, 2);
+  assert.ok(!settings.querySelector('[data-action="recruit-website-toggle"]'), 'what the website shows lives on the Website tab');
+  const details = settings.querySelector('form[data-action="recruit-settings-details"]');
+  assert.equal(details.querySelector('[name="name"]').value, 'Fall 2026', 'the details hold the name');
+  assert.equal(details.querySelectorAll('[data-rc="subteam-rows"] .rc-row').length, 2, 'and the subteams');
+  assert.equal(details.querySelectorAll('button[type="submit"]').length, 1, 'with one Save for all of it');
   assert.match(settings.querySelector('#rc-set-review').innerHTML, /Admins only so far/);
+  // One Save sends what changed: the name and deadline, then the subteams.
+  details.querySelector('[name="name"]').value = 'Fall 2026 recruiting';
+  details.querySelector('[name="closesAt"]').value = '2026-11-01';
+  details.querySelectorAll('.rc-row [name="subteam"]')[1].value = 'Software & AI';
+  const savingDetails = f.run('RECRUIT.submit.bind(RECRUIT)')(details, { preventDefault() {} });
+  const patch = await f.pending('/recruit/cycles/cy-a', 'PATCH');
+  same([patch.body.name, patch.body.version, typeof patch.body.closesAt], ['Fall 2026 recruiting', 3, 'number']);
+  patch.resolve({ cycle: cycleRow({ version: 4, name: 'Fall 2026 recruiting', closesAt: patch.body.closesAt }) });
+  const teams = await f.pending('/recruit/cycles/cy-a/settings/subteams', 'PUT');
+  same(teams.body, { version: 4, settings: [{ key: 'electrical', name: 'Electrical' }, { key: 'software', name: 'Software & AI' }] }, 'the subteams follow with the version the first save returned');
+  teams.resolve({ cycle: cycleRow({ version: 5, name: 'Fall 2026 recruiting' }) }); await savingDetails;
+  assert.equal(f.toasts.at(-1), 'Saved');
+  const unchanged = f.mountModal().querySelector('form[data-action="recruit-settings-details"]');
+  const before = f.requests.length;
+  await f.run('RECRUIT.submit.bind(RECRUIT)')(unchanged, { preventDefault() {} });
+  assert.equal(f.requests.length, before, 'saving nothing sends nothing'); assert.equal(f.toasts.at(-1), 'Nothing changed');
   assert.ok(!settings.querySelector('[data-action="recruit-cycle-delete"]'), 'an open cycle cannot be deleted; nothing offers it');
   // Who can review: roster members get a role through the app's own dropdowns.
   st.mod.roles = { key: st.key + ':cy-a', loading: false, error: null, roles: [{ member: 'old@cornell.edu', name: 'Old', roles: ['reviewer'] }], members: [{ email: 'rae@cornell.edu', name: 'Rae' }, { email: 'boss@cornell.edu', name: 'Boss', admin: true }, { email: 'old@cornell.edu', name: 'Old' }] };
@@ -465,7 +487,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   (await f.pending('/recruit/cycles/cy-a/roles/boss%40cornell.edu', 'DELETE')).resolve({ ok: true }); await removing2;
   same(st.cycle.team.map((m) => m.email), ['boss@cornell.edu'], 'an admin stays on the team without a grant');
   assert.doesNotMatch(settings.innerHTML + roles.innerHTML, /<select|<datalist/);
-  console.log('PASS: settings hold about, status, subteams and reviewers; roles save through the app\'s dropdowns and keep the team in step');
+  console.log('PASS: settings hold status, one form of details with one Save, and reviewers; roles save through the app\'s dropdowns and keep the team in step');
 }
 
 /* ------------------------------- the flow chart -------------------------- */
@@ -531,7 +553,9 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.match(coffee.querySelector('.fc-node__here').textContent, /1\s*here now/, 'a card says who is here now');
   assert.match(coffee.querySelector('.fc-node__done').textContent, /1 of 2 chat completed/, 'a stage with a done checkbox shows how many are done');
   assert.equal(coffee.querySelector('.rc-kind-tag').textContent, 'Meeting', 'the kind is a quiet tag');
-  assert.equal(f.app.querySelector('.fc-node[data-key="interest"] .fc-web').textContent, 'Open', 'an open form says so');
+  const webOf = (key) => { const el = f.app.querySelector(`.fc-node[data-key="${key}"] .fc-web`); return [el.textContent, el.className.split(' ').find((c) => c.startsWith('fc-web--')), el.getAttribute('title')]; };
+  same(webOf('interest'), ['On /apply', 'fc-web--live', 'On /apply, live'], 'a form says where it is on the website, tinted when it can take a response');
+  same(webOf('coffee'), ['Off', 'fc-web--off', 'Off'], 'an off form says so');
   assert.equal(f.app.querySelectorAll('.fc-edge').length, 5, 'two connections, one into the chart, one to the outcomes, and the draft line');
   same(f.app.querySelectorAll('.fc-flow').map((el) => [el.dataset.from, el.dataset.to, el.textContent]), [['interest', 'coffee', '2'], ['coffee', 'application', '1'], ['', 'interest', '3']], 'each arrow carries how many passed along it; the first counts who entered');
   assert.match(f.app.querySelector('.fc-outcome').textContent, /Accepted\s*1/);
@@ -625,13 +649,11 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   same(dialog.querySelectorAll('.sp-route__answer').map((el) => el.textContent), ['Electrical', 'Software', 'Anyone else']);
   same(f.run("recruitSplitDestinations(recruitFlow(), 'application')"), ['elec', 'sw', 'interview'], 'a split sends people only to stages that do not lead back');
   assert.doesNotMatch(dialog.innerHTML, /<select|<datalist/, 'every choice is the app\'s own menu');
-  // Unsaved settings on the stage wait while the split saves.
+  // Where a stage leads is drawn and changed on the chart, never in its Settings.
   f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'stage', key: 'application', tab: 'settings' } };
   f.mount();
-  const tickInterview = f.app.querySelector('[data-action="recruit-ss-next"][data-to="interview"]');
-  tickInterview.checked = true;
-  await f.click(tickInterview);
-  same(f.run("recruitStageDraft(recruitCycleRow(), 'application').model.next"), ['elec', 'sw', 'interview']);
+  assert.ok(!f.app.querySelector('.ss-next, [data-action="recruit-ss-next"], .ss-split'), 'Settings has no connections');
+  assert.equal(f.run("'next' in recruitStageDraft(recruitCycleRow(), 'application').model"), false, 'and the draft holds none');
   // Software gets a form of its own; the split saves the way people go, in one PUT.
   f.pick(dialog.querySelector('[data-m="recruit-split-to"][data-answer="Software"]'), 'A new stage');
   const saving = f.run('recruitSaveSplit()');
@@ -649,19 +671,6 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.equal(f.toasts.at(-1), 'Split saved');
   assert.equal(f.ctx.UI.modal, null, 'the dialog closes');
   assert.ok(f.requests.some((r) => r.url === '/recruit/cycles/cy-a/insights' && !r.done), 'the counts reload for the new flow');
-  // The stage's settings: the split's stages are set in the split; the unsaved tick survived.
-  f.mount();
-  same(f.app.querySelectorAll('.ss-next input[data-to]').map((i) => [i.dataset.to, i.checked, i.disabled]),
-    [['interest', false, true], ['coffee', false, true], ['software-form', true, true], ['elec', true, true], ['sw', true, false], ['interview', true, false]]);
-  same(f.app.querySelectorAll('.ss-next .is-routed small').map((el) => el.textContent), ['Software', 'Electrical'], 'each shows the answers that lead there');
-  assert.match(f.app.querySelector('.ss-split').textContent, /Split by Subteam on Interest form\s*Edit split…/);
-  same(f.run("recruitStageDraft(recruitCycleRow(), 'application').model.next"), ['sw', 'elec', 'software-form', 'interview'], 'the tick lands on top of the new connections');
-  const savingDraft = f.run('recruitSaveStage()');
-  const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
-  same(put2.body.settings.sections.application, { next: ['sw', 'elec', 'software-form', 'interview'] }, 'the stage saves its ticks and keeps the split\'s stages');
-  const after = inOrder(flowWith({ 'software-form': savedSections['software-form'] }));
-  after.application.next = put2.body.settings.sections.application.next; after.application.split = savedSections.application.split;
-  put2.resolve({ cycle: cycleRow({ version: 5 }), sections: after }); await savingDraft;
   // The chart: each way out of the split says which answers take it.
   f.ctx.UI.route = { name: 'recruit', params: { id: 'cy-a', sub: 'flow' } };
   f.mount();
@@ -671,7 +680,7 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   // Cutting a way drops its answers; removing the split keeps the connections.
   const unlinking = f.run("recruitFlowUnlink('application', 'elec')");
   const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
-  same(put3.body.settings.sections.application, { next: ['sw', 'software-form', 'interview'], split: { stage: 'interest', q: 'subteam', routes: { Software: 'software-form' }, otherwise: null } });
+  same(put3.body.settings.sections.application, { next: ['sw', 'software-form'], split: { stage: 'interest', q: 'subteam', routes: { Software: 'software-form' }, otherwise: null } });
   put3.reject(Object.assign(new Error('No'), { status: 400 })); await unlinking;
   assert.ok(f.run("recruitFlow().splits.get('application').routes.Electrical"), 'a failed save puts the answer back');
   f.run("recruitOpenSplit('application')");
@@ -679,8 +688,8 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   assert.ok(dialog.querySelector('[data-action="recruit-split-remove"]'), 'a saved split can be removed');
   const removing = f.run('recruitRemoveSplit()');
   const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
-  same(put4.body.settings.sections.application, { next: ['sw', 'elec', 'software-form', 'interview'], split: null });
-  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...after, application: { ...after.application, split: undefined } } }); await removing;
+  same(put4.body.settings.sections.application, { next: ['sw', 'elec', 'software-form'], split: null });
+  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...savedSections, application: { ...savedSections.application, split: undefined } } }); await removing;
   assert.match(f.toasts.at(-1), /Split removed/);
   // Without a choice question before it, the dialog says what to add.
   f.run("recruitOpenSplit('interest')");
@@ -968,10 +977,16 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   await f.click(f.app.querySelector('[data-action="recruit-sf-option-add"][data-i="2"]'));
   f.type(f.app.querySelector('[data-m="recruit-sf-option"][data-i="2"][data-j="1"]'), 'Friday');
   const req = f.app.querySelector('[data-action="recruit-sf-required"][data-i="2"]'); req.checked = true; await f.click(req);
-  // What happens on the website is in Settings, in the same draft, and rides with the save.
+  // Everything applicants read is on the form: its address, its button and what follows sending.
+  assert.equal(f.app.querySelector('.sd-toolbar .ss-link a').textContent, '/apply/coffee', 'the form\'s own address, to copy');
+  f.type(f.app.querySelector('[data-m="recruit-sf-submit-label"]'), 'Book a chat');
+  f.type(f.app.querySelector('[data-m="recruit-sf-success-label"]'), 'Booked');
+  f.type(f.app.querySelector('[data-m="recruit-sf-thanks"]'), 'See you soon.');
+  // Settings: who hears about a response and a cap, in the same draft.
   f.ctx.UI.route.params.tab = 'settings';
   f.mount();
-  assert.equal(f.app.querySelector('.ss-link a').textContent, '/apply/coffee', 'the form\'s own address, to copy');
+  assert.ok(!f.app.querySelector('[data-m="recruit-ss-title"]'), 'a stage with a form is named on its form');
+  assert.ok(!f.app.querySelector('[data-m="recruit-sf-choice-label"], [data-m="recruit-sf-question"], [data-action="recruit-sf-landing"]'), '/apply is set on the Website tab');
   f.type(f.app.querySelector('[data-m="recruit-sf-capacity"]'), '40');
   await f.click(f.app.querySelector('[data-action="recruit-sf-recipient-add"]'));
   f.type(f.app.querySelector('[data-m="recruit-sf-recipient"][data-j="0"]'), 'nope');
@@ -984,45 +999,52 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   await f.settle();
   const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
   assert.equal(put2.body.version, 4, 'the version the last save brought back');
+  same(Object.keys(put2.body.settings), ['sections'], 'a stage\'s save never touches /apply');
   const b2 = put2.body.settings.sections.coffee;
-  assert.equal(b2.open, undefined, 'opening the form is the header\'s own save'); assert.equal(b2.capacity, 40); same(b2.notifyTo, ['lead@cornell.edu'], 'recipients are trimmed and lowercased');
+  assert.equal(b2.open, undefined, 'where the form is on the website is never in the draft'); assert.equal(b2.capacity, 40); same(b2.notifyTo, ['lead@cornell.edu'], 'recipients are trimmed and lowercased');
+  same([b2.submitLabel, b2.successLabel, b2.thanks], ['Book a chat', 'Booked', 'See you soon.'], 'the button and closing words ride with the save');
   same(b2.form.questions[2], { key: 'which_day_works_for_you', type: 'single', label: 'Which day works for you?', help: '', required: true, options: ['Monday', 'Friday'] });
-  const s2 = { ...savedSections, coffee: { ...savedSections.coffee, capacity: 40, notifyTo: ['lead@cornell.edu'], form: { questions: b2.form.questions } } };
+  const s2 = { ...savedSections, coffee: { ...savedSections.coffee, capacity: 40, notifyTo: ['lead@cornell.edu'], submitLabel: 'Book a chat', successLabel: 'Booked', thanks: 'See you soon.', form: { questions: b2.form.questions } } };
   put2.resolve({ cycle: cycleRow({ version: 5 }), sections: s2 }); await saving2;
   assert.equal(f.toasts.at(-1), 'Coffee chats saved');
-  // Settings: a name, a kind, and where it leads; no loops on offer.
-  f.ctx.UI.route.params.tab = 'settings';
+  // Settings: the kind and the subteam from the app's own menus; the name on the form.
   f.mount();
-  const leads = f.app.querySelectorAll('[data-action="recruit-ss-next"]');
-  same(leads.map((b) => [b.dataset.to, b.checked, b.disabled]), [['interest', false, true], ['application', true, false]], 'what comes before this stage cannot follow it');
-  f.type(f.app.querySelector('[data-m="recruit-ss-title"]'), 'Coffee chat');
-  const kind = f.app.querySelector('[data-action="recruit-ss-kind"][data-kind="step"]');
-  await f.click(kind);
-  assert.equal(kind.getAttribute('aria-checked'), 'true');
+  same(JSON.parse(f.app.querySelector('[data-m="recruit-ss-subteam"]').dataset.opts).map((o) => o.label), ['None', 'Electrical', 'Software'], 'a form can name one of the cycle\'s subteams');
+  f.pick(f.app.querySelector('[data-m="recruit-ss-kind"]'), 'Step');
+  f.pick(f.app.querySelector('[data-m="recruit-ss-subteam"]'), 'Software');
+  f.ctx.UI.route.params.tab = 'form';
+  f.mount();
+  f.type(f.app.querySelector('[data-m="recruit-sf-title"]'), 'Coffee chat');
   const saving3 = f.click(f.app.querySelector('[data-action="recruit-stage-save"]'));
   await f.settle();
   const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
-  same(put3.body.settings.sections.coffee, { title: 'Coffee chat', kind: 'step' });
+  same(put3.body.settings.sections.coffee, { title: 'Coffee chat', kind: 'step', subteam: 'Software' });
   put3.reject(Object.assign(new Error('Something broke'), { status: 500 })); await saving3;
   assert.match(f.app.querySelector('[data-rc="stage-save"]').textContent, /Something broke/, 'a failed save keeps the draft and says why');
   assert.ok(f.run('RECRUIT.dirty()'), 'unsaved work is reported, so the sync loop leaves the cycle alone');
   await f.click(f.app.querySelector('[data-action="recruit-stage-discard"]'));
   assert.ok(!f.run('RECRUIT.dirty()')); assert.equal(f.toasts.at(-1), 'Changes discarded');
-  // Opening the form from the header is one save.
-  const toggle = f.app.querySelector('[data-action="recruit-stage-open"]');
-  assert.equal(toggle.checked, false);
-  toggle.checked = true;
-  const toggling = f.click(toggle);
+  // Where the form is on the website: one menu in the head, saved at once.
+  f.ctx.UI.route.params.tab = 'settings';
+  f.mount();
+  const mode = f.app.querySelector('.sd-head [data-m="recruit-web-mode"]');
+  assert.equal(mode.dataset.value, 'off');
+  same(JSON.parse(mode.dataset.opts).map((o) => o.label), ['On /apply', 'Link only', 'Off']);
+  assert.ok(!f.app.querySelector('.sd-head [data-action="recruit-stage-open"]'), 'one menu replaces the switch');
+  f.pick(mode, 'On /apply');
   const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
-  same(put4.body.settings, { sections: { coffee: { open: true } } });
-  put4.resolve({ cycle: cycleRow({ version: 6 }), sections: { ...s2, coffee: { ...s2.coffee, open: true } } }); await toggling;
-  assert.equal(f.toasts.at(-1), 'Coffee chats is open on the website');
-  assert.ok(!f.run('RECRUIT.dirty()'), 'the draft learns the saved state without turning dirty');
+  same(put4.body.settings, { sections: { coffee: { open: true } }, landing: ['interest', 'coffee'] }, 'on /apply opens it and lists it after the others');
+  put4.resolve({ cycle: cycleRow({ version: 6, doc: { ...cycleRow().doc, site: { landing: ['interest', 'coffee'] } } }), sections: { ...s2, coffee: { ...s2.coffee, open: true } } }); await f.settle();
+  assert.equal(f.toasts.at(-1), 'Coffee chats is on /apply');
+  assert.ok(!f.run('RECRUIT.dirty()'), 'the draft stays clean');
+  assert.equal(f.app.querySelector('.sd-head [data-m="recruit-web-mode"]').dataset.value, 'apply', 'the head follows');
+  assert.equal(f.app.querySelector('.sd-head .rc-web-word').textContent, 'Live', 'and says it is live');
+  assert.equal(f.app.querySelector('.sd-head .rc-web-word').getAttribute('href'), '#/applications/cy-a/website', 'which opens the Website tab');
   assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
   // Escape leaves a text box first, then closes the panel back to the chart.
   const keydown = f.run('RECRUIT.keydown.bind(RECRUIT)');
   f.ctx.UI.menu = null;   // the last menu this test opened has closed
-  const name = f.app.querySelector('[data-m="recruit-ss-title"]');
+  const name = f.app.querySelector('[data-m="recruit-sf-capacity"]');
   let blurred = false; name.blur = () => { blurred = true; };
   assert.equal(keydown({ key: 'Escape', target: name, preventDefault() {} }), true); assert.ok(blurred, 'the first Escape leaves the box');
   assert.equal(keydown({ key: 'Escape', target: f.document.body, preventDefault() {} }), true);
@@ -1037,7 +1059,139 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   loadCycle(r, { role: 'reviewer', roles: ['reviewer'], sub: 'stage', params: { key: 'coffee', tab: 'checklist' } });
   r.mount();
   assert.ok(r.app.querySelector('.ck--read') && !r.app.querySelector('[data-action="recruit-ck-add"]'), 'reviewers read the checklist');
-  console.log('PASS: a stage opens in a panel over the chart, edits one draft across Form, Checklist and Settings, validates before sending, saves only what changed with derived keys, and keeps the draft when a save fails');
+  console.log('PASS: a stage opens in a panel over the chart, edits one draft across Form, Checklist and Settings (applicant wording on the form, no connections in Settings), validates before sending, saves only what changed with derived keys, keeps the draft when a save fails, and sets its place on the website from one menu');
+}
+
+/* ------------------------------- the website --------------------------- */
+{
+  const f = fixture();
+  const st = loadCycle(f, { sub: 'website' });
+  f.mount();
+  const status = () => f.app.querySelector('[data-rc="web-status"]');
+  const rows = (sel = '[data-sortable="apply"]') => f.app.querySelectorAll(`${sel} .ws-row`).map((r) => r.dataset.key);
+  const others = () => f.app.querySelectorAll('.ws-list:not([data-sortable]) .ws-row').map((r) => r.dataset.key);
+  const words = () => f.app.querySelectorAll('.ws-row').map((r) => [r.dataset.key, r.querySelector('.rc-web-word').textContent]);
+  assert.ok(f.app.querySelector('.rc-tabs [aria-current="page"]').textContent === 'Website', 'the Website tab is a view of the cycle');
+  assert.ok(status().classList.contains('is-live') && /Live/.test(status().textContent), 'the cycle the website reads, open and before any deadline, is live');
+  assert.equal(status().querySelector('[data-action="recruit-website-toggle"]').checked, true, 'an admin sees that this cycle feeds /apply');
+  same(rows(), ['interest'], '/apply lists the marked open forms');
+  // The switch is matched against the settings version the list gave, and keeps the one it gets back.
+  st.cycles.settingsVersion = 7;
+  const feed = status().querySelector('[data-action="recruit-website-toggle"]');
+  feed.checked = false;
+  const toggling = f.click(feed);
+  const intake = await f.pending('/recruit/cycles/cy-a/intake', 'POST');
+  same(intake.body, { on: false, version: 7 });
+  intake.resolve({ intakeCycleId: null, version: 8 }); await toggling;
+  same([st.cycles.intakeCycleId, st.cycles.settingsVersion], [null, 8]);
+  assert.equal(f.toasts.at(-1), 'No cycle feeds /apply now');
+  st.cycles.intakeCycleId = 'cy-a';
+  f.mount();
+  same(others(), ['coffee', 'application'], 'the rest follow in flow order');
+  same(words(), [['interest', 'Live'], ['coffee', ''], ['application', '']], 'a form off the website says nothing more');
+  same(f.app.querySelectorAll('.ws-row [data-m="recruit-web-mode"]').map((d) => d.dataset.value), ['apply', 'off', 'off']);
+  assert.ok(!f.app.querySelector('[data-m="recruit-ws-question"], [data-m="recruit-ws-label"], .ws-row__grip'), 'with one form there is no choice to word or order');
+  assert.equal(f.app.querySelector('.wp-page .fe-preview h2').textContent, 'Interest form', 'the preview is the one form, titled, as /apply shows it');
+  // A second form on /apply: a question, a button each, and a choice in the preview.
+  f.pick(f.app.querySelector('.ws-row[data-key="coffee"] [data-m="recruit-web-mode"]'), 'On /apply');
+  const put = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put.body.settings, { sections: { coffee: { open: true } }, landing: ['interest', 'coffee'] });
+  const opened = { ...sections(), coffee: { ...sections().coffee, open: true } };
+  put.resolve({ cycle: cycleRow({ version: 4, doc: { ...cycleRow().doc, site: { landing: ['interest', 'coffee'] } } }), sections: opened }); await f.settle();
+  assert.equal(f.toasts.at(-1), 'Coffee chats is on /apply');
+  same(rows(), ['interest', 'coffee']);
+  assert.ok(f.app.querySelector('[data-m="recruit-ws-question"]'), 'two forms ask a question');
+  same(f.app.querySelectorAll('.wp-choice').map((b) => b.textContent), ['Interest form', 'Coffee chats'], 'the preview offers both, in order, by title until named');
+  assert.equal(f.app.querySelector('.wp-question').textContent, 'What are you applying for?');
+  assert.equal(f.app.querySelectorAll('.ws-row__grip').length, 2, 'a lead can reorder them');
+  // A button's label: the preview follows as it is typed; leaving the field saves it.
+  const label = f.app.querySelector('.ws-row[data-key="coffee"] [data-m="recruit-ws-label"]');
+  f.type(label, 'Chat first');
+  same(f.app.querySelectorAll('.wp-choice').map((b) => b.textContent), ['Interest form', 'Chat first']);
+  assert.ok(f.run('RECRUIT.dirty()'), 'typed and unsaved holds the sync loop');
+  f.change(f.app.querySelector('.ws-row[data-key="coffee"] [data-m="recruit-ws-label"]'), 'Chat first');
+  const put2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put2.body.settings, { sections: { coffee: { choiceLabel: 'Chat first' } } });
+  put2.resolve({ cycle: cycleRow({ version: 5, doc: { ...cycleRow().doc, site: { landing: ['interest', 'coffee'] } } }), sections: { ...opened, coffee: { ...opened.coffee, choiceLabel: 'Chat first' } } }); await f.settle();
+  assert.equal(f.toasts.at(-1), "Coffee chats's button saved"); assert.ok(!f.run('RECRUIT.dirty()'));
+  f.type(f.app.querySelector('[data-m="recruit-ws-question"]'), 'Which one?');
+  assert.equal(f.app.querySelector('.wp-question').textContent, 'Which one?');
+  f.change(f.app.querySelector('[data-m="recruit-ws-question"]'), 'Which one?');
+  const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put3.body.settings, { sections: {}, question: 'Which one?' });
+  put3.resolve({ cycle: cycleRow({ version: 6, doc: { ...cycleRow().doc, site: { landing: ['interest', 'coffee'], question: 'Which one?' } } }), sections: { ...opened, coffee: { ...opened.coffee, choiceLabel: 'Chat first' } } }); await f.settle();
+  // Picking a choice in the preview shows its form below, untitled, as on the site.
+  await f.click(f.app.querySelector('.wp-choice[data-key="coffee"]'));
+  assert.equal(f.app.querySelector('.wp-choice[data-key="coffee"]').getAttribute('aria-pressed'), 'true');
+  assert.ok(f.app.querySelector('.wp-page .fe-preview') && !f.app.querySelector('.wp-page .fe-preview h2'), 'its form follows the choice');
+  // Arrow keys on a grip reorder /apply at once; a failed save puts it back.
+  const grip = f.app.querySelector('.ws-row[data-key="coffee"] .ws-row__grip');
+  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowUp', target: grip, preventDefault() {} }), true);
+  same(rows(), ['coffee', 'interest'], 'the list moves before the save lands');
+  same(f.app.querySelectorAll('.wp-choice').map((b) => b.dataset.key), ['coffee', 'interest'], 'and so does the preview');
+  const put4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put4.body.settings, { sections: {}, landing: ['coffee', 'interest'] });
+  put4.reject(Object.assign(new Error('No'), { status: 400 })); await f.settle();
+  same(rows(), ['interest', 'coffee'], 'a failed save puts the order back');
+  // Link only takes a form off /apply; off keeps its place for when it returns.
+  f.pick(f.app.querySelector('.ws-row[data-key="interest"] [data-m="recruit-web-mode"]'), 'Off');
+  const put5 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put5.body.settings, { sections: { interest: { open: false } } }, 'off keeps the /apply list as it is');
+  put5.reject(Object.assign(new Error('Busy'), { status: 500 })); await f.settle();
+  f.pick(f.app.querySelector('.ws-row[data-key="interest"] [data-m="recruit-web-mode"]'), 'Link only');
+  const put6 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(put6.body.settings, { sections: { interest: { open: true } }, landing: ['coffee'] }, 'link only drops it from the list');
+  put6.reject(Object.assign(new Error('Busy'), { status: 500 })); await f.settle();
+  // A capped form that is full says so and drops out of the preview, as on the site.
+  st.cycle.sections.interest.capacity = 3;
+  f.mount();
+  same(words().slice(0, 2), [['interest', 'Full'], ['coffee', 'Live']]);
+  same(f.app.querySelectorAll('.wp-choice').map((b) => b.dataset.key), [], 'one form left: no choice');
+  assert.equal(f.app.querySelector('.wp-page .fe-preview h2').textContent, 'Coffee chats');
+  st.cycle.sections.interest.capacity = 0;
+  // Not live: the reason, and the one control that changes it.
+  st.cycles.intakeCycleId = 'cy-b';
+  f.mount();
+  assert.match(status().textContent, /Not live\s*\/apply reads Spring 2027\./);
+  assert.equal(status().querySelector('[data-action="recruit-website-toggle"]').checked, false, 'an admin can take the website over from here');
+  same(words().slice(0, 2), [['interest', 'Not live'], ['coffee', 'Not live']]);
+  assert.equal(f.app.querySelector('.wp-when').textContent, 'Once live', 'the preview is what /apply will show');
+  st.cycles.intakeCycleId = null;
+  f.mount();
+  assert.match(status().textContent, /No cycle feeds \/apply\./);
+  st.cycles.intakeCycleId = 'cy-a';
+  st.cycle.data = { ...st.cycle.data, closesAt: Date.UTC(2026, 0, 1) };
+  f.mount();
+  assert.match(status().textContent, /The deadline passed on/);
+  assert.ok(status().querySelector('[data-action="recruit-settings-open"]'), 'a lead can change the deadline from here');
+  st.cycle.data = { ...st.cycle.data, closesAt: null, status: 'closed' };
+  f.mount();
+  assert.match(status().textContent, /This cycle is closed\./);
+  assert.ok(status().querySelector('[data-action="recruit-status"][data-status="open"]'), 'and reopen the cycle');
+  assert.ok(!status().querySelector('[data-action="recruit-website-toggle"]'), 'only an open cycle can feed /apply');
+  st.cycle.data = { ...st.cycle.data, status: 'open' };
+  // Nothing on /apply: the closed page, in the preview too.
+  st.cycle.data = { ...st.cycle.data, doc: { ...st.cycle.data.doc, site: { landing: null } } };
+  f.mount();
+  assert.match(f.app.querySelector('.ws-empty').textContent, /closed page/);
+  assert.match(f.app.querySelector('.wp-closed').textContent, /applications are closed/);
+  assert.doesNotMatch(f.app.innerHTML, /<select|<datalist/);
+  // Reviewers read it; nothing here is theirs to change.
+  const r = fixture({ admin: false });
+  const rs = loadCycle(r, { role: 'reviewer', roles: ['reviewer'], sub: 'website' });
+  rs.cycle.data = { ...rs.cycle.data, doc: { ...rs.cycle.data.doc, site: { landing: ['interest', 'coffee'] } } };
+  rs.cycle.sections.coffee.open = true;
+  r.mount();
+  assert.ok(!r.app.querySelector('[data-m="recruit-web-mode"], .ws-row__grip, [data-action="recruit-website-toggle"]'), 'no controls for a reviewer');
+  assert.ok(r.app.querySelectorAll('[data-m="recruit-ws-label"]').every((i) => i.disabled), 'labels read only');
+  same(r.app.querySelectorAll('.ws-row__mode').map((x) => x.textContent), ['On /apply', 'On /apply', 'Off']);
+  // A cycle without forms points to the flow.
+  const e = fixture();
+  const es = loadCycle(e, { sub: 'website' });
+  for (const k of Object.keys(es.cycle.sections)) es.cycle.sections[k].form = null;
+  e.mount();
+  assert.match(e.app.querySelector('.ws-none').textContent, /No forms yet/);
+  console.log('PASS: the Website tab shows /apply as applicants see it, sets where each form is from one menu, words and orders the choice (saved at once, put back on failure), and says why a form is not live');
 }
 
 /* ------------------------------- a stage's people ------------------------ */

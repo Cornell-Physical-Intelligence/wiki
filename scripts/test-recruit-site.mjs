@@ -122,7 +122,8 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   const coffee = site2.sections.find((s) => s.key === 'coffee');
   assert.equal(coffee.open, true);
   assert.deepEqual(coffee.form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack']);
-  assert.equal(site2.landing, 'interest', 'with no choice, /apply shows the first open form');
+  assert.equal(site2.landing, null, 'with no form marked for /apply, it shows none: an open form lives only at its own address');
+  assert.deepEqual(site2.apply.choices, [], 'and offers no choice');
   assert.equal((await anon('POST', '/recruit/site/bogus', { answers: { name: 'X', email: 'x@cornell.edu' } })).status, 404, 'a form the cycle does not have is not a route');
   const v1b = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
   assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: v1b, settings: { sections: {}, landing: 'nope' } })).status, 400, 'the /apply form must be one of the three');
@@ -140,9 +141,12 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.deepEqual(several.data.cycle.doc.site.landing, ['coffee', 'application', 'interest'], 'the list keeps each form once');
   assert.equal(several.data.cycle.doc.site.question, 'Which one?');
   const site3 = (await anon('GET', '/recruit/site')).data;
-  assert.deepEqual(site3.apply, { question: 'Which one?', choices: [{ key: 'interest', label: 'Join the list' }, { key: 'coffee', label: 'Coffee chats' }] }, 'open marked forms in stage order, by label or title; a closed one is left out');
-  assert.equal(site3.landing, 'interest', 'a site that shows one form shows the first open marked one');
-  const back = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: several.data.cycle.version, settings: { sections: { interest: { choiceLabel: '' } }, landing: 'coffee', question: '' } });
+  assert.deepEqual(site3.apply, { question: 'Which one?', choices: [{ key: 'coffee', label: 'Coffee chats' }, { key: 'interest', label: 'Join the list' }] }, 'open marked forms in the order the team listed them, by label or title; a closed one is left out');
+  assert.equal(site3.landing, 'coffee', 'a site that shows one form shows the first open one in the list');
+  const relisted = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: several.data.cycle.version, settings: { sections: {}, landing: ['interest', 'application', 'coffee'] } });
+  assert.equal(relisted.status, 200, relisted.text);
+  assert.deepEqual((await anon('GET', '/recruit/site')).data.apply.choices.map((c) => c.key), ['interest', 'coffee'], 'reordering the list reorders the choices');
+  const back = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: relisted.data.cycle.version, settings: { sections: { interest: { choiceLabel: '' } }, landing: 'coffee', question: '' } });
   assert.equal(back.status, 200, back.text);
   assert.equal(back.data.cycle.doc.site.question, undefined, 'an empty question falls back to the default');
   assert.equal(back.data.cycle.doc.site.sections.interest.choiceLabel, undefined, 'an empty label falls back to the title');

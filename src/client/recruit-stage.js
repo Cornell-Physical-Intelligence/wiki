@@ -1,11 +1,13 @@
 /* ============================================================================
    Applications — stage module (client). A stage's page, opened from its card
    on the flow chart: People (everyone who reached it, with its checklist
-   ticked right in the list), Form (the questions applicants answer on the
-   website, drawn as they will see them, and how the website treats them),
-   Checklist (what the team records for each person here) and Settings (its
-   name, kind and where it leads). Form, Checklist and Settings edit one
-   draft of the stage; nothing changes until Save.
+   ticked right in the list), Form (everything applicants read: the title,
+   the questions, the button and what they see after sending), Checklist (what
+   the team records for each person here) and Settings (its kind, its subteam,
+   who hears about a response, a cap, and removing it). Form, Checklist and
+   Settings edit one draft of the stage; nothing changes until Save. Where the
+   form is on the website (the head's menu, or the Website tab) saves at once;
+   where the stage leads is drawn and changed on the chart.
    ========================================================================== */
 
 'use strict';
@@ -37,7 +39,6 @@ const recruitIsChoice = (type) => type === 'single' || type === 'multi';
 const recruitIsText = (type) => type === 'short' || type === 'long' || type === 'longfile' || type === 'email' || type === 'link';
 const recruitTakesFile = (type) => type === 'file' || type === 'longfile';
 
-const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
 const RECRUIT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RECRUIT_NOTIFY_MAX = 10;
 const RECRUIT_STAGE_TABS = [
@@ -49,9 +50,6 @@ const RECRUIT_STAGE_TABS = [
 
 // A custom dropdown (the app's own menu) with extra data attributes.
 const recruitDd = (m, options, value, attrs = '', opts = {}) => dd(m, options, value, opts).replace(`data-m="${m}"`, `data-m="${m}" ${attrs}`);
-// The forms marked for /apply (one key before several could be marked).
-const recruitApplyKeys = (cycle) => { const v = cycle?.doc?.site?.landing; return [...new Set((Array.isArray(v) ? v : v ? [v] : []).map(String))]; };
-const RECRUIT_APPLY_QUESTION = 'What are you applying for?';
 
 /* ------------------------------- the draft ------------------------------- */
 
@@ -70,45 +68,28 @@ function recruitStageModel(sec, key, cycle) {
     return out;
   }) : null;
   const fields = (sec?.fields || []).map((f) => ({ _id: recruitItemId(), key: f.key, type: f.type, label: f.label || '', help: f.help || '', ...(Array.isArray(f.options) ? { options: [...f.options] } : {}), ...(f.type === 'rating' ? { max: Number(f.max) || 5 } : {}), each: f.each === true, saved: true }));
-  const flow = recruitFlow(cycle);
   return {
     title: sec?.title || key, kind: sec?.kind || 'form', description: sec?.description || '', thanks: sec?.thanks || '',
-    submitLabel: sec?.submitLabel || 'Send', successLabel: sec?.successLabel || 'Sent', open: sec?.open === true, atApply: recruitApplyKeys(cycle).includes(key), choiceLabel: sec?.choiceLabel || '', question: cycle?.doc?.site?.question || '',
+    submitLabel: sec?.submitLabel || 'Send', successLabel: sec?.successLabel || 'Sent', subteam: sec?.subteam || '',
     notify: sec?.notify !== false, notifyTo: Array.isArray(sec?.notifyTo) ? sec.notifyTo.map(String) : [], capacity: Number(sec?.capacity) > 0 ? Number(sec.capacity) : 0,
-    form: questions ? { questions } : null, fields, done: sec?.done || null, next: [...(flow.edges.get(key) || [])],
+    form: questions ? { questions } : null, fields, done: sec?.done || null,
   };
 }
 
 // One draft per cycle and stage. A clean draft follows the cycle (a save
-// elsewhere, a connection made on the chart); an edited one waits for Save.
+// elsewhere); an edited one waits for Save.
 function recruitStageDraft(cycle, key) {
   const st = recruitState();
   st.stageDrafts ||= {};
   const id = `${cycle.id}:${key}`;
   const have = st.stageDrafts[id];
-  if (have && (recruitStageDirty(have) || have.saving)) {
-    if (!have.saving) recruitRebaseNext(have, cycle, key);
-    return have;
-  }
+  if (have && (recruitStageDirty(have) || have.saving)) return have;
   const sec = recruitSections(cycle)[key];
   const model = recruitStageModel(sec, key, cycle);
   const fresh = JSON.stringify(model);
   if (have && JSON.stringify(recruitStageComparable(JSON.parse(have.saved))) === JSON.stringify(recruitStageComparable(model))) return have;
   st.stageDrafts[id] = { id, key, cycleId: cycle.id, model, saved: fresh, saving: false, error: '', savedAt: have?.savedAt || 0, preview: have?.preview || false };
   return st.stageDrafts[id];
-}
-// Connections changed elsewhere (the chart, a split) land under the draft's
-// own ticks and unticks; the split's stages stay connected.
-function recruitRebaseNext(d, cycle, key) {
-  const saved = JSON.parse(d.saved);
-  const flow = recruitFlow(cycle);
-  const now = [...(flow.edges.get(key) || [])];
-  if (JSON.stringify(saved.next) === JSON.stringify(now)) return;
-  const routed = recruitSplitTargets(flow.splits.get(key) || null);
-  const added = d.model.next.filter((k) => !saved.next.includes(k) && flow.sections[k]);
-  const dropped = new Set(saved.next.filter((k) => !d.model.next.includes(k) && !routed.has(k)));
-  d.model.next = [...now.filter((k) => !dropped.has(k)), ...added.filter((k) => !now.includes(k))];
-  d.saved = JSON.stringify({ ...saved, next: now });
 }
 // Card identities differ between two drafts of the same stage; the rest is the stage.
 const recruitStageComparable = (m) => JSON.parse(JSON.stringify(m, (k, v) => (k === '_id' ? undefined : v)));
@@ -172,23 +153,23 @@ function recruitStageTabsHtml(cycle, key) {
   return RECRUIT_STAGE_TABS.filter((t) => !t.lead || recruitCanEdit(cycle)).map((t) => `<a role="tab" href="${recruitStageHref(key, t.id === 'people' ? '' : t.id)}" aria-selected="${t.id === active}" ${t.id === active ? 'aria-current="page"' : ''} tabindex="${t.id === active ? 0 : -1}">${t.label}${count(t.id)}</a>`).join('');
 }
 
-// The panel's head: the stage's kind, whether its form is on the website,
-// its name and numbers, and the stages before and after it.
+// The panel's head: the stage's kind, where its form is on the website and
+// whether it is live, its name and numbers, and the stages before and after it.
 function recruitStageHeadHtml(cycle, key) {
   const flow = recruitFlow(cycle);
   const s = flow.sections[key];
   const stats = recruitFlowStats(key);
   const lead = recruitCanEdit(cycle);
-  const busy = recruitState().busy.has('open:' + key);
   const tab = recruitStageTab();
   const at = flow.keys.indexOf(key);
   const keep = tab === 'people' || (tab === 'settings' && !lead) ? '' : tab;
   const step = (k, label, icon) => (k
     ? `<a class="icon-btn" href="${recruitStageHref(k, keep)}" aria-label="${label}: ${MD.esc(flow.sections[k].title)}" title="${label}: ${MD.esc(flow.sections[k].title)}">${icon}</a>`
     : `<span class="icon-btn is-off" aria-hidden="true">${icon}</span>`);
-  const web = !s.form ? ''
-    : lead ? `<label class="fe-switch sd-web"><input type="checkbox" data-action="recruit-stage-open" data-stage="${MD.esc(key)}" ${s.open ? 'checked' : ''} ${busy ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">On the website</span></label>`
-    : `<span class="sd-web ${s.open ? 'is-open' : ''}">${s.open ? 'Open on the website' : 'Closed on the website'}</span>`;
+  const w = recruitWebState(cycle, key);
+  const word = recruitWebWord(w);
+  const web = !w ? ''
+    : `<span class="sd-web">${lead ? recruitDd('recruit-web-mode', RECRUIT_WEB_MODES, w.mode, `data-stage="${MD.esc(key)}" aria-label="Where ${MD.esc(s.title)} is on the website"`, { small: true }) : `<span class="sd-web__mode">${MD.esc(recruitWebModeLabel(w.mode))}</span>`}${w.mode === 'off' ? '' : `<a class="rc-web-word rc-web-word--${word.tone}" href="${recruitPanelHref(cycle.id, 'website')}" ${word.why ? `title="${MD.esc(word.why)}"` : ''}>${word.text}</a>`}</span>`;
   const doneLabel = (s.fields.find((f) => f.key === s.done)?.label || 'done').toLowerCase();
   const nums = stats ? [
     [stats.here, 'here now'], [stats.reached, 'reached'],
@@ -477,7 +458,7 @@ function recruitStageFormHtml(cycle, key) {
   if (!lead) {
     const s = recruitSections(cycle)[key];
     if (!s.form) return `<div class="sd-empty"><b>No form</b><p>People reach this stage when the team moves them here.</p></div>`;
-    return recruitFormPreviewHtml(recruitStageModel(s, key, cycle), true);
+    return `<div class="sd-toolbar">${recruitFormLinkHtml(key)}<span></span></div>${recruitFormPreviewHtml(recruitStageModel(s, key, cycle), true)}`;
   }
   const d = recruitStageDraft(cycle, key);
   const m = d.model;
@@ -486,45 +467,28 @@ function recruitStageFormHtml(cycle, key) {
   }
   if (d.preview) return `<div class="sd-toolbar"><span class="sd-toolbar__note">Preview</span><button class="btn btn--sm" type="button" data-action="recruit-sf-preview">${I.edit} Edit</button></div>${recruitFormPreviewHtml(m)}`;
   return `<div class="sd-form">
-    <div class="sd-toolbar"><span></span><button class="btn btn--sm" type="button" data-action="recruit-sf-preview">${RC_ICONS.eye} Preview</button></div>
+    <div class="sd-toolbar">${recruitFormLinkHtml(key)}<button class="btn btn--sm" type="button" data-action="recruit-sf-preview">${RC_ICONS.eye} Preview</button></div>
     <div class="sf-paper">
       <input class="sf-paper__title" data-m="recruit-sf-title" value="${MD.esc(m.title)}" placeholder="Form title" maxlength="80" aria-label="Form title" autocomplete="off" spellcheck="false">
       <textarea class="sf-paper__desc" data-m="recruit-sf-desc" rows="2" placeholder="A line or two shown above the questions" maxlength="600" aria-label="Description">${MD.esc(m.description)}</textarea>
     </div>
     <ol class="fe__list" data-sortable="questions">${recruitQuestionCardsHtml(d)}</ol>
     <div class="fe__add"><button type="button" class="btn" data-action="recruit-sf-add">${I.plus} Add question</button></div>
+    <div class="sf-end">
+      <label class="sf-end__button"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-sf-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80" autocomplete="off"></label>
+      <div class="sf-paper sf-paper--after">
+        <span class="sf-paper__eyebrow">After sending</span>
+        <input class="sf-paper__title" data-m="recruit-sf-success-label" value="${MD.esc(m.successLabel)}" placeholder="Sent" maxlength="80" aria-label="Heading after sending" autocomplete="off">
+        <textarea class="sf-paper__desc" data-m="recruit-sf-thanks" rows="2" maxlength="300" placeholder="Thanks. We read every one of these." aria-label="Message after sending">${MD.esc(m.thanks || '')}</textarea>
+      </div>
+    </div>
   </div>`;
 }
 
-// How the website treats the form (opening and closing it is in the panel's
-// head): its address, whether /apply shows it (and, beside other forms there,
-// how applicants choose it), its button and closing words, who hears about a
-// response, a cap, and taking it away.
-function recruitStageWebHtml(d) {
-  const m = d.model;
-  const sections = recruitSections();
-  const others = recruitApplyKeys(recruitCycleRow()).filter((k) => k !== d.key && sections[k]?.form).map((k) => `${sections[k].title}${sections[k].open ? '' : ' (closed)'}`);
-  const together = m.atApply && others.length;
-  const applyHelp = together
-    ? `Where the QR code and the Apply link land. Shown there with ${others.length > 1 ? `${others.slice(0, -1).join(', ')} and ${others.at(-1)}` : others[0]}; applicants choose one first.`
-    : 'Where the QR code and the Apply link land. Show more than one form there and applicants choose one first.';
-  const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(d.key)}/`;
-  const sw = (action, on, text, help = '') => `<label class="fe-switch fe-switch--row"><input type="checkbox" data-action="${action}" ${on ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">${text}${help ? `<small>${help}</small>` : ''}</span></label>`;
-  const responses = Number(recruitFlowStats(d.key)?.responses ?? recruitState().cycle?.counts?.bySection?.[d.key] ?? 0);
-  return `<div class="ss-link"><a href="${MD.esc(url)}" target="_blank" rel="noopener">${MD.esc(url.replace(RECRUIT_SITE_URL, '').replace(/\/$/, ''))}</a><button type="button" class="icon-btn" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button></div>
-    ${sw('recruit-sf-landing', m.atApply, 'Shown at /apply', MD.esc(applyHelp))}
-    ${together ? `<div class="ss-pair">
-      <label class="fe__field"><span class="fe__field-label">Listed at /apply as</span><input class="text-input" data-m="recruit-sf-choice-label" value="${MD.esc(m.choiceLabel)}" placeholder="${MD.esc(m.title)}" maxlength="40"></label>
-      <label class="fe__field"><span class="fe__field-label">Question above the choices</span><input class="text-input" data-m="recruit-sf-question" value="${MD.esc(m.question)}" placeholder="${MD.esc(RECRUIT_APPLY_QUESTION)}" maxlength="120"></label>
-    </div>` : ''}
-    <div class="ss-pair">
-      <label class="fe__field"><span class="fe__field-label">Submit button</span><input class="text-input" data-m="recruit-sf-submit-label" value="${MD.esc(m.submitLabel)}" maxlength="80"></label>
-      <label class="fe__field"><span class="fe__field-label">Heading after sending</span><input class="text-input" data-m="recruit-sf-success-label" value="${MD.esc(m.successLabel)}" maxlength="80"></label>
-    </div>
-    <label class="fe__field"><span class="fe__field-label">Message after sending</span><textarea class="text-input" data-m="recruit-sf-thanks" rows="2" maxlength="300" placeholder="Thanks. We read every one of these.">${MD.esc(m.thanks || '')}</textarea></label>
-    ${recruitFormNotifyHtml(d)}
-    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-sf-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>
-    <div class="fe-options__remove"><span class="fe-switch__text">Take the form off this stage${responses ? `<small>${MD.esc(recruitPlural(responses, 'response'))} so far. Close it instead; a form with responses stays.</small>` : ''}</span><button type="button" class="btn btn--sm ${responses ? '' : 'btn--danger'}" data-action="recruit-sf-remove-form" ${responses ? 'disabled' : ''}>Remove form</button></div>`;
+// The form's own address on the website, to open or copy.
+function recruitFormLinkHtml(key) {
+  const url = `${RECRUIT_SITE_URL}/apply/${encodeURIComponent(key)}/`;
+  return `<span class="ss-link"><a href="${MD.esc(url)}" target="_blank" rel="noopener">/apply/${MD.esc(key)}</a><button type="button" class="icon-btn" data-action="recruit-copy-link" data-link="${MD.esc(url)}" aria-label="Copy the link to this form" title="Copy link">${I.copy}</button></span>`;
 }
 
 // Who hears about a response: the addresses the form lists, or with none
@@ -543,6 +507,8 @@ const recruitQuestionCardsHtml = (d) => (d.model.form?.questions || []).map((q, 
 
 function recruitQuestionCardHtml(q, i) {
   const n = i + 1;
+  // Name and email are on every form and always required.
+  const locked = ['name', 'email'].includes(q.key);
   const name = q.label || `question ${n}`;
   const typeControl = q.fixed
     ? `<span class="fe-q__type fe-q__type--fixed">${MD.esc(recruitTypeLabel(q.type))}</span>`
@@ -556,9 +522,9 @@ function recruitQuestionCardHtml(q, i) {
     ${recruitIsText(q.type) ? '' : `<input class="fe-q__help" data-m="recruit-sf-help" data-i="${i}" value="${MD.esc(q.help)}" placeholder="${MD.esc(RECRUIT_HELP_HINT[q.type] || '')}" maxlength="300" aria-label="Note for question ${n}" autocomplete="off">`}
     <div class="fe-q__answer" data-rc="fe-answer">${recruitAnswerPreviewHtml(q, i)}</div>
     <div class="fe-q__foot">
-      <label class="fe-switch"><input type="checkbox" data-action="recruit-sf-required" data-i="${i}" ${q.required ? 'checked' : ''} ${['name', 'email'].includes(q.key) ? 'disabled' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>
+      ${locked ? '<span class="fe-q__fixed">Required on every form</span>' : `<label class="fe-switch"><input type="checkbox" data-action="recruit-sf-required" data-i="${i}" ${q.required ? 'checked' : ''}><span class="fe-switch__track"></span><span class="fe-switch__text">Required</span></label>`}
       <span class="fe-q__tools">
-        ${q.fixed ? '<span class="fe-q__fixed" title="Every form keeps a name and an email">Always asked</span>' : `<button type="button" class="icon-btn" data-action="recruit-sf-duplicate" data-i="${i}" aria-label="Duplicate ${MD.esc(name)}" title="Duplicate">${I.copy}</button><button type="button" class="icon-btn" data-action="recruit-sf-remove" data-i="${i}" aria-label="Remove ${MD.esc(name)}" title="Remove">${I.trash}</button>`}
+        ${q.fixed ? (locked ? '' : '<span class="fe-q__fixed">Always asked</span>') : `<button type="button" class="icon-btn" data-action="recruit-sf-duplicate" data-i="${i}" aria-label="Duplicate ${MD.esc(name)}" title="Duplicate">${I.copy}</button><button type="button" class="icon-btn" data-action="recruit-sf-remove" data-i="${i}" aria-label="Remove ${MD.esc(name)}" title="Remove">${I.trash}</button>`}
       </span>
     </div>
   </li>`;
@@ -590,7 +556,7 @@ function recruitOptionsHtml(q, i, m) {
 }
 
 // The form exactly as applicants meet it, read only.
-function recruitFormPreviewHtml(m, published = false) {
+function recruitFormPreviewHtml(m, published = false, { title = true } = {}) {
   const questions = (m.form?.questions || []).map((q) => {
     const label = `${MD.esc(q.label)}${q.required ? ' <span class="fe-preview__req" aria-label="required">*</span>' : ''}`;
     let field;
@@ -600,7 +566,7 @@ function recruitFormPreviewHtml(m, published = false) {
     else field = `<${['long', 'longfile'].includes(q.type) ? 'textarea rows="3"' : 'input'} class="text-input" disabled aria-label="${MD.esc(q.label)}" placeholder="${MD.esc(q.help || '')}">${['long', 'longfile'].includes(q.type) ? '</textarea>' : ''}${q.type === 'longfile' ? `<div class="fe-preview__file">${I.paperclip} Or attach an image or PDF</div>` : ''}`;
     return `<div class="fe-preview__question"><h3>${label}</h3>${q.help && !['checkbox'].includes(q.type) && !recruitIsText(q.type) ? `<p class="fe-preview__help">${MD.esc(q.help)}</p>` : ''}${field}</div>`;
   }).join('');
-  return `<div class="fe-preview ${published ? 'fe-preview--published' : ''}"><h2>${MD.esc(m.title)}</h2>${m.description ? `<p>${MD.esc(m.description)}</p>` : ''}${questions}<button class="btn btn--primary" disabled>${MD.esc(m.submitLabel)}</button></div>`;
+  return `<div class="fe-preview ${published ? 'fe-preview--published' : ''}">${title ? `<h2>${MD.esc(m.title)}</h2>` : ''}${m.description ? `<p>${MD.esc(m.description)}</p>` : ''}${questions}<button class="btn btn--primary" disabled>${MD.esc(m.submitLabel)}</button></div>`;
 }
 
 /* ------------------------------- the checklist --------------------------- */
@@ -681,30 +647,24 @@ const RECRUIT_FIELD_PRESETS = {
 function recruitStageSettingsHtml(cycle, key) {
   const d = recruitStageDraft(cycle, key);
   const m = d.model;
-  const flow = recruitFlow(cycle);
-  const others = flow.keys.filter((k) => k !== key);
-  const split = flow.splits.get(key) || null;
-  const routed = recruitSplitTargets(split);
-  // A stage can lead anywhere that does not already lead back to it. Where
-  // the split sends people changes in the split.
-  const leads = others.map((k) => {
-    const when = routed.has(k) ? recruitSplitLabel(split, k) : '';
-    const on = m.next.includes(k) || Boolean(when);
-    const loops = !on && recruitReaches({ ...flow, edges: new Map([...flow.edges, [key, m.next]]) }, key, k);
-    return `<li><label class="rc-check ${loops ? 'is-disabled' : when ? 'is-routed' : ''}"><input type="checkbox" data-action="recruit-ss-next" data-to="${MD.esc(k)}" ${on ? 'checked' : ''} ${loops || when ? 'disabled' : ''}>${recruitKindIcon(flow.sections[k].kind)}<span>${MD.esc(flow.sections[k].title)}</span>${loops ? '<small>comes before this stage</small>' : when ? `<small>${MD.esc(when)}</small>` : ''}</label></li>`;
-  }).join('');
-  const asked = split ? recruitSplitQuestion(split, flow.sections) : null;
-  const splitRow = others.length ? `<div class="ss-split">${split ? `<span>Split by ${MD.esc(asked?.label || split.q)}${split.stage !== key ? ` on ${MD.esc(recruitSectionTitle(split.stage, cycle))}` : ''}</span>` : ''}<button type="button" class="btn btn--sm" data-action="recruit-flow-split" data-key="${MD.esc(key)}">${RC_ICONS.split}${split ? 'Edit split…' : 'Split by an answer…'}</button></div>` : '';
-  const from = (flow.into.get(key) || []).map((k) => MD.esc(flow.sections[k].title));
+  const teams = recruitSubteams(cycle).map((t) => t.name).filter(Boolean);
   const group = (title, body, cls = '') => `<section class="ss__group ${cls}"><h3 class="ss__title">${title}</h3>${body}</section>`;
+  const row = (label, control, note = '') => `<div class="ss-row"><span class="ss-row__text">${label}${note ? `<small>${note}</small>` : ''}</span>${control}</div>`;
+  const kinds = RECRUIT_STAGE_KINDS.map((k) => ({ value: k.value, label: k.label }));
+  // A form's title is the stage's name, edited on the form itself.
+  const name = m.form ? '' : row('Name', `<input class="text-input ss__name" data-m="recruit-ss-title" value="${MD.esc(m.title)}" maxlength="80" aria-label="Stage name" autocomplete="off" spellcheck="false">`);
+  const kind = row('Kind', recruitDd('recruit-ss-kind', kinds, m.kind, 'aria-label="Kind"', { small: true }));
+  const subteam = m.form && (teams.length || m.subteam)
+    ? row('Subteam', recruitDd('recruit-ss-subteam', [{ value: '', label: 'None' }, ...[...new Set([...teams, ...(m.subteam ? [m.subteam] : [])])].map((t) => ({ value: t, label: t }))], m.subteam, 'aria-label="Subteam"', { small: true }), 'People who send this form join it, unless the form asks.')
+    : '';
+  const responses = m.form ? group('Responses', `${recruitFormNotifyHtml(d)}
+    <label class="fe-options__cap"><span class="fe-switch__text">Stop accepting after</span><input class="text-input fe-options__n" data-m="recruit-sf-capacity" value="${m.capacity ? MD.esc(String(m.capacity)) : ''}" inputmode="numeric" maxlength="6" placeholder="no limit" aria-label="Stop accepting after this many responses"><span class="fe-switch__text">responses</span></label>`) : '';
+  const answered = Number(recruitFlowStats(key)?.responses ?? recruitState().cycle?.counts?.bySection?.[key] ?? 0);
+  const removeForm = m.form ? `<div class="fe-options__remove"><span class="fe-switch__text">Remove the form${answered ? `<small>${MD.esc(recruitPlural(answered, 'response'))} so far. Turn it off instead; a form with responses stays.</small>` : ''}</span><button type="button" class="btn btn--sm ${answered ? '' : 'btn--danger'}" data-action="recruit-sf-remove-form" ${answered ? 'disabled' : ''}>Remove form</button></div>` : '';
   return `<div class="ss">
-    ${group('Name', `<input class="text-input ss__name" data-m="recruit-ss-title" value="${MD.esc(m.title)}" maxlength="80" aria-label="Stage name" autocomplete="off" spellcheck="false">`)}
-    ${group('Kind', `<div class="ss-kinds ss-kinds--compact" role="radiogroup" aria-label="Kind">${RECRUIT_STAGE_KINDS.map((k) => `<button type="button" role="radio" class="ss-kind" data-action="recruit-ss-kind" data-kind="${k.value}" aria-checked="${m.kind === k.value}" title="${MD.esc(k.note)}"><span class="ss-kind__icon">${recruitKindIcon(k.value)}</span><b>${k.label}</b></button>`).join('')}</div>`)}
-    ${group('On the website', m.form ? recruitStageWebHtml(d) : `<div class="ss-row"><span class="ss-row__text">No form. People reach this stage when the team moves them here.</span><button type="button" class="btn btn--sm" data-action="recruit-sf-add-form">${I.plus} Add a form</button></div>`)}
-    ${group('Leads to', `${others.length ? `<ul class="ss-next">${leads}</ul>` : '<p class="faint">Add another stage to connect this one.</p>'}
-      ${splitRow}
-      <p class="rc-set__note">${from.length ? `Comes after ${from.join(' and ')}.` : 'Nothing leads here; people start at this stage.'} Where nothing is checked, this stage ends the flow.</p>`)}
-    ${group('Remove', `<div class="fe-options__remove"><span class="fe-switch__text">Remove ${MD.esc(recruitSectionTitle(key, cycle))}<small>A stage with form responses, people placed there or checklist entries stays until they move.</small></span><button type="button" class="btn btn--sm btn--danger" data-action="recruit-stage-remove">Remove stage…</button></div>`, 'ss__danger')}
+    ${group('Stage', name + kind + subteam)}
+    ${responses}
+    ${group('Remove', `${removeForm}<div class="fe-options__remove"><span class="fe-switch__text">Remove ${MD.esc(recruitSectionTitle(key, cycle))}<small>A stage with form responses, people placed there or checklist entries stays until they move.</small></span><button type="button" class="btn btn--sm btn--danger" data-action="recruit-stage-remove">Remove stage…</button></div>`, 'ss__danger')}
   </div>`;
 }
 
@@ -719,11 +679,9 @@ function recruitStagePayload(d) {
   const title = String(m.title || '').trim();
   if (!title) throw Object.assign(new Error('The stage needs a name.'), { focus: '[data-m="recruit-ss-title"], [data-m="recruit-sf-title"]' });
   if (title !== saved.title) out.title = title;
-  for (const k of ['kind', 'submitLabel', 'successLabel']) if (m[k] !== saved[k]) out[k] = m[k];
+  for (const k of ['kind', 'submitLabel', 'successLabel', 'subteam']) if (m[k] !== saved[k]) out[k] = m[k];
   if (m.description !== saved.description) out.description = String(m.description || '').trim();
   if (m.thanks !== saved.thanks) out.thanks = String(m.thanks || '').trim().slice(0, 300);
-  if (m.choiceLabel !== saved.choiceLabel) out.choiceLabel = String(m.choiceLabel || '').trim().slice(0, 40);
-  if (m.open !== saved.open) out.open = m.open === true;
   if (m.capacity !== saved.capacity) {
     if (m.capacity && (!Number.isInteger(m.capacity) || m.capacity < 0 || m.capacity > 100000)) throw Object.assign(new Error('Stop accepting after a whole number of responses, up to 100,000.'), { focus: '[data-m="recruit-sf-capacity"]' });
     out.capacity = m.capacity || 0;
@@ -743,8 +701,6 @@ function recruitStagePayload(d) {
   if (!same(m.form, saved.form)) out.form = m.form ? { questions: recruitQuestionsPayload(m.form.questions) } : null;
   if (!same(m.fields, saved.fields)) out.fields = recruitFieldsPayload(m.fields);
   if (m.done !== saved.done || out.fields) out.done = out.fields && !out.fields.some((f) => f.key === m.done && f.type === 'check' && !f.each) ? null : m.done || null;
-  // The split's stages stay connected whatever the ticks say; the split changes them.
-  if (!same(m.next, saved.next)) out.next = [...new Set([...m.next, ...recruitSplitTargets(recruitFlow().splits.get(d.key) || null)])];
   return out;
 }
 
@@ -816,20 +772,14 @@ async function recruitSaveStage(el) {
     const marked = d.model.fields.find((f) => f._markDone);
     if (marked) payload.done = marked.key;
   }
-  // /apply's list of forms and its question belong to the cycle: the switch
-  // adds or drops this form only, and the question is saved as it reads here.
-  const current = recruitApplyKeys(cycle);
-  const saved = JSON.parse(d.saved);
-  const landing = d.model.atApply !== saved.atApply ? (d.model.atApply ? [...current.filter((k) => k !== key), key] : current.filter((k) => k !== key)) : undefined;
-  const question = d.model.question !== saved.question ? String(d.model.question || '').trim().slice(0, 120) : undefined;
-  if (!Object.keys(payload).length && landing === undefined && question === undefined) { d.model = JSON.parse(d.saved); recruitPaintStageTab(c); return; }
+  if (!Object.keys(payload).length) { d.model = JSON.parse(d.saved); recruitPaintStageTab(c); return; }
   d.saving = true; d.error = '';
   recruitPaintStageSave(c);
   try {
-    await recruitPutSite({ sections: { [key]: payload }, ...(landing !== undefined ? { landing } : {}), ...(question !== undefined ? { question } : {}) });
+    await recruitPutSite({ sections: { [key]: payload } });
     const fresh = recruitStageModel(recruitSections()[key], key, recruitCycleRow());
     d.model = fresh; d.saved = JSON.stringify(fresh); d.savedAt = Date.now();
-    toast(`${fresh.title} saved${payload.open === true ? ' · live on the website' : ''}`);
+    toast(`${fresh.title} saved`);
   } catch (e) { d.error = recruitError(e); }
   d.saving = false;
   const host = $('[data-rc="stage"]');
@@ -846,29 +796,6 @@ async function recruitSaveStage(el) {
       if (tabs) recruitRepaint(tabs, recruitStageTabsHtml(recruitCycleRow(), key));
       recruitPaintFlow();
     }
-  }
-}
-
-// Open or close the form from the stage's header: one save, and the draft
-// learns the saved state without turning dirty.
-async function recruitToggleStageOpen(el) {
-  const st = recruitState();
-  const cycle = recruitCycleRow();
-  const key = el.dataset.stage;
-  const want = Boolean(el.checked);
-  if (!cycle || !recruitCanEdit(cycle) || st.busy.has('open:' + key)) return;
-  st.busy.add('open:' + key);
-  try {
-    await recruitPutSite({ sections: { [key]: { open: want } } });
-    const d = st.stageDrafts?.[`${cycle.id}:${key}`];
-    if (d) { d.model.open = want; const saved = JSON.parse(d.saved); saved.open = want; d.saved = JSON.stringify(saved); }
-    toast(want ? `${recruitSectionTitle(key)} is open on the website` : `${recruitSectionTitle(key)} is closed on the website`);
-  } catch (e) { el.checked = !want; toast(`Could not change it: ${recruitError(e)}`); }
-  finally {
-    st.busy.delete('open:' + key);
-    const head = $('[data-rc="stage-head"]');
-    if (head) recruitRepaint(head, recruitStageHeadHtml(recruitCycleRow(), key));
-    recruitPaintFlow();
   }
 }
 
@@ -969,11 +896,18 @@ function recruitFlip(listEl, before) {
   setTimeout(() => { for (const el of moved) el.style.transition = ''; }, 260);
 }
 
+// Lists outside a stage's draft that a grip reorders, by their data-sortable
+// name: each gives its items and what a move does (the Website tab's order).
+const RECRUIT_SORTERS = {};
+
 // The list a grip belongs to, as the draft's array and its name.
 function recruitSortTarget(grip) {
   const listEl = grip.closest('[data-sortable]');
+  if (!listEl) return null;
+  const own = RECRUIT_SORTERS[listEl.dataset.sortable];
+  if (own) { const t = own(listEl); return t ? { ...t, list: listEl.dataset.sortable, listEl } : null; }
   const c = recruitStageCtx(grip);
-  if (!listEl || !c) return null;
+  if (!c) return null;
   const list = listEl.dataset.sortable;
   const items = list === 'questions' ? c.m.form?.questions : c.m.fields;
   return items ? { c, list, listEl, items } : null;
@@ -1016,7 +950,13 @@ function recruitDragStart(ev, grip) {
     document.removeEventListener('pointerup', end);
     document.removeEventListener('pointercancel', end);
     card.classList.remove('is-dragging');
-    if (to !== from) {
+    if (to !== from && t.moved) {
+      // Where each card shows now, so the new order glides from there.
+      const before = recruitCardTops(t.listEl);
+      for (const el of cards) { el.style.transition = 'none'; el.style.transform = ''; }
+      t.listEl.classList.remove('is-sorting');
+      t.moved(from, to, before);
+    } else if (to !== from) {
       const [item] = t.items.splice(from, 1);
       t.items.splice(to, 0, item);
       recruitPaintStageTab(t.c, { list: t.list });
@@ -1045,6 +985,7 @@ function recruitMoveCard(grip, delta) {
   if (!t) return;
   const i = Number(grip.dataset.i), j = i + delta;
   if (j < 0 || j >= t.items.length) return;
+  if (t.moved) { t.moved(i, j); return; }
   [t.items[i], t.items[j]] = [t.items[j], t.items[i]];
   recruitPaintStageTab(t.c, { list: t.list });
   $(`[data-sortable="${t.list}"] [data-i="${j}"] .rc-grip`)?.focus({ preventScroll: true });
@@ -1112,7 +1053,6 @@ RECRUIT.register({
     'recruit-stage-remove': () => { const key = recruitStageKey(); if (key) recruitConfirmRemoveStage(key); },
     'recruit-stage-save': (el) => recruitSaveStage(el),
     'recruit-stage-discard': (el) => { const c = recruitStageCtx(el); if (!c) return; c.d.model = JSON.parse(c.d.saved); c.d.error = ''; recruitPaintStageTab(c); toast('Changes discarded'); },
-    'recruit-stage-open': (el) => recruitToggleStageOpen(el),
     'recruit-copy-link': (el) => recruitCopy(el.dataset.link || '', 'Link copied'),
     // People here
     'recruit-stage-people-more': () => recruitLoadStagePeople(true),
@@ -1124,7 +1064,7 @@ RECRUIT.register({
     // The form
     'recruit-sf-preview': recruitEdit((c) => { c.d.preview = !c.d.preview; }, 'tab'),
     'recruit-sf-add-form': recruitEdit((c) => { c.m.form = { questions: [{ _id: recruitItemId(), key: 'name', type: 'short', label: 'Name', help: '', required: true, fixed: true, max: 100 }, { _id: recruitItemId(), key: 'email', type: 'email', label: 'Email', help: '', required: true, fixed: true, max: 200 }] }; }, 'tab'),
-    'recruit-sf-remove-form': recruitEdit((c) => { c.m.form = null; c.m.open = false; c.m.atApply = false; }, 'tab'),
+    'recruit-sf-remove-form': recruitEdit((c) => { c.m.form = null; c.m.subteam = ''; }, 'tab'),
     'recruit-sf-add': recruitEdit((c) => {
       c.m.form.questions.push({ _id: recruitItemId(), key: '', type: 'short', label: '', help: '', required: false, fixed: false });
       setTimeout(() => $$('[data-m="recruit-sf-label"]').at(-1)?.focus({ preventScroll: false }), 0);
@@ -1132,8 +1072,6 @@ RECRUIT.register({
     'recruit-sf-duplicate': recruitEdit((c) => { if (!c.q || c.q.fixed) return false; c.m.form.questions.splice(c.i + 1, 0, { ...JSON.parse(JSON.stringify(c.q)), _id: recruitItemId(), key: '', label: c.q.label ? `${c.q.label} (copy)` : '' }); }, 'questions'),
     'recruit-sf-remove': recruitEdit((c) => { if (!c.q || c.q.fixed) return false; c.m.form.questions.splice(c.i, 1); }, 'questions'),
     'recruit-sf-required': recruitEdit((c, el) => { if (!c.q || ['name', 'email'].includes(c.q.key)) return false; c.q.required = Boolean(el.checked); }),
-    'recruit-sf-open': recruitEdit((c, el) => { c.m.open = Boolean(el.checked); }),
-    'recruit-sf-landing': recruitEdit((c, el) => { c.m.atApply = Boolean(el.checked); }, 'tab'),
     'recruit-sf-notify': recruitEdit((c, el) => { c.m.notify = Boolean(el.checked); }, 'tab'),
     'recruit-sf-recipient-add': recruitEdit((c) => { c.m.notifyTo = [...(c.m.notifyTo || []), '']; setTimeout(() => $$('[data-m="recruit-sf-recipient"]').at(-1)?.focus(), 0); }, 'tab'),
     'recruit-sf-recipient-remove': recruitEdit((c) => { c.m.notifyTo.splice(c.j, 1); }, 'tab'),
@@ -1161,9 +1099,6 @@ RECRUIT.register({
     }, 'fields'),
     'recruit-ck-option-add': recruitEdit((c) => { if (!c.f) return false; c.f.options = [...(c.f.options || []), '']; setTimeout(() => $$(`[data-m="recruit-ck-option"][data-i="${c.i}"]`).at(-1)?.focus(), 0); }, 'fields'),
     'recruit-ck-option-remove': recruitEdit((c) => { if (!c.f?.options) return false; c.f.options.splice(c.j, 1); }, 'fields'),
-    // Settings
-    'recruit-ss-kind': recruitEdit((c, el) => { c.m.kind = el.dataset.kind; for (const b of $$('[data-action="recruit-ss-kind"]')) b.setAttribute('aria-checked', String(b.dataset.kind === c.m.kind)); }),
-    'recruit-ss-next': recruitEdit((c, el) => { const to = el.dataset.to; c.m.next = el.checked ? [...new Set([...c.m.next, to])] : c.m.next.filter((k) => k !== to); }, 'tab'),
   },
   inputs: {
     'recruit-sf-title': recruitEdit((c, el) => { c.m.title = el.value; }),
@@ -1172,8 +1107,6 @@ RECRUIT.register({
     'recruit-sf-thanks': recruitEdit((c, el) => { c.m.thanks = el.value; }),
     'recruit-sf-submit-label': recruitEdit((c, el) => { c.m.submitLabel = el.value; }),
     'recruit-sf-success-label': recruitEdit((c, el) => { c.m.successLabel = el.value; }),
-    'recruit-sf-choice-label': recruitEdit((c, el) => { c.m.choiceLabel = el.value; }),
-    'recruit-sf-question': recruitEdit((c, el) => { c.m.question = el.value; }),
     'recruit-sf-capacity': recruitEdit((c, el) => { const n = Number(String(el.value || '').replace(/[^\d]/g, '')); c.m.capacity = Number.isInteger(n) && n > 0 ? Math.min(n, 100000) : 0; }),
     'recruit-sf-label': recruitEdit((c, el) => { if (!c.q) return false; c.q.label = el.value; }),
     'recruit-sf-help': recruitEdit((c, el) => {
@@ -1227,6 +1160,8 @@ RECRUIT.register({
         if (value !== 'check' && c.m.done === c.f.key) c.m.done = null;
       }, 'fields')(host);
     },
+    'recruit-ss-kind': (host, value) => { if (value === undefined) return undefined; recruitEdit((c) => { if (c.m.kind === value) return false; c.m.kind = value; })(host); },
+    'recruit-ss-subteam': (host, value) => { if (value === undefined) return undefined; recruitEdit((c) => { if (c.m.subteam === value) return false; c.m.subteam = value; })(host); },
     'recruit-ck-max': (host, value) => { if (value === undefined) return undefined; recruitEdit((c) => { if (!c.f) return false; c.f.max = Number(value); }, 'fields')(host); },
     'recruit-stage-new-after': (host, value) => { if (value !== undefined && UI.modal?.kind === 'recruit-stage-new') UI.modal.after = value; },
     'recruit-stage-filter': (host, value) => {

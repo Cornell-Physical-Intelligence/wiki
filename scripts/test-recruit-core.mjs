@@ -318,7 +318,9 @@ if (!process.env.RECRUIT_CORE_TEST_ROOT) {
   const opened = (await recruit('POST', `/recruit/cycles/${fall.id}/status`, { version: fall.version, status: 'open' })).data.cycle;
   const stalePointer = await recruit('POST', `/recruit/cycles/${fall.id}/intake`, { on: true, version: (await settingsVersion()) - 1 });
   assert.equal(stalePointer.status, 409, 'the pointer is version-matched');
-  const pointed = await recruit('POST', `/recruit/cycles/${fall.id}/intake`, { on: true, version: await settingsVersion() });
+  const listedVersion = (await recruit('GET', '/recruit/cycles')).data.settingsVersion;
+  assert.equal(listedVersion, await settingsVersion(), 'the cycle list gives an admin the version the website switch is matched against');
+  const pointed = await recruit('POST', `/recruit/cycles/${fall.id}/intake`, { on: true, version: listedVersion });
   assert.deepEqual([pointed.status, pointed.data.intakeCycleId], [200, fall.id]);
   assert.equal((await bridge.target()).cycleId, fall.id, 'the cache is invalidated on writes');
   assert.equal((await recruit('GET', '/recruit/cycles')).data.cycles.find((c) => c.id === 'cy-interest').intake, false);

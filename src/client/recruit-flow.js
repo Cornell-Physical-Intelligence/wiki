@@ -305,14 +305,14 @@ function recruitFlowLayout(flow, { width = recruitFlowAvail(), outcome = true } 
 /* ------------------------------- drawing --------------------------------- */
 
 // The kind of a stage as a quiet tag: its icon and its name.
-const recruitKindTagHtml = (kind) => `<span class="rc-kind-tag">${recruitKindIcon(kind)}${MD.esc(recruitKindLabel(kind))}</span>`;
+const recruitKindTagHtml = (kind) => `<span class="rc-kind-tag" title="${MD.esc(recruitKindLabel(kind))}">${recruitKindIcon(kind)}<span class="rc-kind-tag__label">${MD.esc(recruitKindLabel(kind))}</span></span>`;
 
 // The stage whose panel is open over the chart, if any.
 const recruitOpenStage = () => (UI.route?.params?.sub === 'stage' ? recruitStageKey() : null);
 
-// A card: the stage's kind, whether its form is on the website, its name,
-// who is here now and, where a checkbox marks it done, how far along they
-// are. How many came in is on the arrows.
+// A card: the stage's kind, where its form is on the website (tinted when an
+// applicant can send it now), its name, who is here now and, where a checkbox
+// marks it done, how far along they are. How many came in is on the arrows.
 function recruitFlowNodeHtml(cycle, flow, n) {
   const key = n.key;
   const s = flow.sections[key];
@@ -320,7 +320,10 @@ function recruitFlowNodeHtml(cycle, flow, n) {
   const lead = recruitCanEdit(cycle);
   const loading = !recruitState().insights?.data;
   const num = (v) => (loading ? '–' : recruitNum(Number(v) || 0));
-  const site = s.form ? `<span class="fc-web ${s.open ? 'is-open' : ''}" title="${s.open ? 'Open on the website' : 'Closed on the website'}">${s.open ? 'Open' : 'Closed'}</span>` : '';
+  const w = recruitWebState(cycle, key);
+  const word = recruitWebWord(w);
+  const title = w ? `${recruitWebModeLabel(w.mode)}${w.mode === 'off' ? '' : w.live ? ', live' : `, not live. ${word.why}`}` : '';
+  const site = w ? `<span class="fc-web fc-web--${word.tone}" title="${MD.esc(title)}">${MD.esc(w.full ? 'Full' : recruitWebModeLabel(w.mode))}</span>` : '';
   const doneField = (s.fields || []).find((f) => f.key === s.done);
   const reached = Number(stats?.reached || 0), done = Number(stats?.done || 0), here = Number(stats?.here || 0);
   const meter = doneField ? `<span class="fc-node__done"><span class="fc-node__line"><b>${num(done)}</b> of ${num(reached)} ${MD.esc(doneField.label.toLowerCase())}</span><span class="fc-meter" aria-hidden="true"><span style="width:${reached ? Math.round((done / reached) * 100) : 0}%"></span></span></span>` : '';

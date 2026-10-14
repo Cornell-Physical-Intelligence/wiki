@@ -1,6 +1,6 @@
 /* ============================================================================
    Applications (code name: recruit) — client core. The module registry, the
-   cycle shell (Flow · People · Insights, plus a stage's page and a person's
+   cycle shell (Flow · Website · People · Insights, plus a stage's page and a person's
    page), the per-cycle state, the sync loop, the flow model the client draws
    from, and the helpers every recruit-*.js file shares. Each module file calls
    RECRUIT.register once; scripts/assemble.mjs concatenates them after this
@@ -418,6 +418,52 @@ function recruitFlowOf(sections) {
 }
 const recruitFlow = (cycle = recruitCycleRow()) => recruitFlowOf(recruitSections(cycle));
 
+/* ------------------------------- the website ----------------------------- */
+
+const RECRUIT_SITE_URL = 'https://cornellphysicalintelligence.com';
+const RECRUIT_APPLY_QUESTION = 'What are you applying for?';
+// The forms marked for /apply, in the order it lists them (saved as one key
+// before several could be marked).
+const recruitApplyKeys = (cycle) => { const v = cycle?.doc?.site?.landing; return [...new Set((Array.isArray(v) ? v : v ? [v] : []).map(String))]; };
+// Where a form is: listed at /apply, open at its own link only, or off.
+const RECRUIT_WEB_MODES = [{ value: 'apply', label: 'On /apply' }, { value: 'link', label: 'Link only' }, { value: 'off', label: 'Off' }];
+const recruitWebModeLabel = (mode) => (RECRUIT_WEB_MODES.find((x) => x.value === mode) || RECRUIT_WEB_MODES[2]).label;
+
+// Why no form of this cycle can take a response now, in a sentence, or ''.
+// The website reads the one open cycle that feeds it, until its deadline.
+function recruitSiteBlock(cycle) {
+  if (!cycle) return '';
+  if (cycle.status === 'archived') return 'This cycle is archived.';
+  if (cycle.status !== 'open') return `This cycle is ${cycle.status === 'draft' ? 'a draft' : 'closed'}.`;
+  const cycles = recruitState().cycles;
+  if (cycles && 'intakeCycleId' in cycles && cycles.intakeCycleId !== cycle.id) {
+    const other = cycles.intakeCycleId && (cycles.list || []).find((c) => c.id === cycles.intakeCycleId);
+    return other ? `/apply reads ${other.name}.` : 'No cycle feeds /apply.';
+  }
+  if (cycle.closesAt && Date.now() > Number(cycle.closesAt)) return `The deadline passed on ${recruitDay(Number(cycle.closesAt))}.`;
+  return '';
+}
+
+// Where one form stands: its mode, whether it is full, what stops the
+// whole cycle, and whether an applicant can send it right now.
+function recruitWebState(cycle, key) {
+  const s = recruitSections(cycle)[key];
+  if (!s?.form) return null;
+  const mode = !s.open ? 'off' : recruitApplyKeys(cycle).includes(key) ? 'apply' : 'link';
+  const stats = typeof recruitFlowStats === 'function' ? recruitFlowStats(key) : null;
+  const n = Number(stats?.responses ?? recruitState().cycle?.counts?.bySection?.[key] ?? 0);
+  const full = mode !== 'off' && Number(s.capacity) > 0 && n >= Number(s.capacity);
+  const block = mode === 'off' ? '' : recruitSiteBlock(cycle);
+  return { mode, full, block, live: mode !== 'off' && !full && !block };
+}
+// What the form's status word says and its tint: live, held back, or off.
+function recruitWebWord(w) {
+  if (!w || w.mode === 'off') return { text: 'Off', tone: 'off', why: '' };
+  if (w.full) return { text: 'Full', tone: 'warn', why: 'It reached its response cap.' };
+  if (w.block) return { text: 'Not live', tone: 'off', why: w.block };
+  return { text: 'Live', tone: 'live', why: '' };
+}
+
 /* ------------------------------- splits ---------------------------------- */
 
 // A stage can send people on by their answer to one question of a form they
@@ -755,9 +801,9 @@ async function recruitSyncTick() {
   RECRUIT.sync();
 }
 
-function recruitStatusText(cycle, intakeCycleId) {
+function recruitStatusText(cycle) {
   if (!cycle) return '';
-  if (cycle.status === 'open') return intakeCycleId && cycle.id === intakeCycleId ? "Open · receives the website's forms" : 'Open';
+  if (cycle.status === 'open') return 'Open';
   if (cycle.status === 'draft') return 'Draft';
   if (cycle.status === 'closed') return 'Closed';
   if (cycle.status === 'archived') return 'Archived';
@@ -830,13 +876,15 @@ const recruitCycleChoiceLabel = (x) => {
   return x.status && x.status !== 'open' ? `${name} · ${x.status}` : name;
 };
 
-// Status, deadline and whether the website sends its forms here, in a line.
+// Status, deadline and, for the cycle the website reads, whether /apply is
+// live, in a line; the last opens the Website tab.
 function recruitCycleMetaHtml(cycle) {
   const st = recruitState();
   const receiving = st.cycles?.intakeCycleId === cycle.id && cycle.status === 'open';
+  const live = receiving && !recruitSiteBlock(cycle);
   const parts = [
     `<span class="rc-cycle-state rc-cycle-state--${MD.esc(cycle.status)}">${MD.esc(cycle.status.charAt(0).toUpperCase() + cycle.status.slice(1))}</span>`,
-    receiving ? `<span>${RC_ICONS.globe}Receives the website's forms</span>` : '',
+    receiving ? `<a class="rc-cycle-web ${live ? 'is-live' : ''}" href="${recruitPanelHref(cycle.id, 'website')}">${RC_ICONS.globe}${live ? 'Live on /apply' : 'Feeds /apply, not live'}</a>` : '',
     cycle.closesAt ? `<span>Deadline ${MD.esc(recruitDay(cycle.closesAt))}</span>` : '',
   ].filter(Boolean);
   return `<div class="rc-cycle-meta">${parts.join('')}</div>`;

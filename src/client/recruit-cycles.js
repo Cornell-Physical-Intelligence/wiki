@@ -1,7 +1,8 @@
 /* ============================================================================
    Applications — cycles module (client). The cycle index, the New cycle
    dialog, the migration and adopt actions, held website responses, the cycle
-   tools menu, and the Settings dialog: about, status, subteams, who can review.
+   tools menu, and the Settings dialog: status, details (name, deadline,
+   subteams), who can review. What the website shows is the Website tab's.
    ========================================================================== */
 
 'use strict';
@@ -24,7 +25,7 @@ function recruitCycleRowHtml(c, intakeCycleId) {
   ].filter(Boolean).join(' · ');
   return `<a class="rc-cycle-card" href="${recruitPanelHref(c.id, '')}" data-id="${MD.esc(c.id)}">
     <span class="rc-cycle-card__head"><span class="rc-cycle-card__name">${MD.esc(c.name)}</span>
-      <span class="rc-cycle-state rc-cycle-state--${MD.esc(c.status)}">${MD.esc(recruitStatusText(c, intakeCycleId).replace(" · receives the website's forms", ''))}</span>
+      <span class="rc-cycle-state rc-cycle-state--${MD.esc(c.status)}">${MD.esc(recruitStatusText(c))}</span>
       ${receiving ? `<span class="rc-cycle-card__live">${RC_ICONS.globe}Website</span>` : ''}</span>
     ${meta ? `<span class="rc-cycle-card__meta">${MD.esc(meta)}</span>` : ''}
     <span class="rc-cycle-card__stages">${stages.map((s) => `<span class="rc-cycle-card__stage"><span class="rc-cycle-card__bar"><span style="width:${Math.round((s.n / max) * 100)}%"></span></span><span class="rc-cycle-card__label">${MD.esc(s.title)}</span><span class="rc-cycle-card__n">${recruitNum(s.n)}</span></span>`).join('')}</span>
@@ -370,7 +371,8 @@ function recruitConfirmDeleteCycle() {
 /* ------------------------------- settings dialog ------------------------- */
 
 // Settings open from the gear beside the cycle's name, in one glass dialog:
-// about, status, subteams, who can review; archive and delete in the foot.
+// status (saved at once), details (one Save), who can review; archive and
+// delete in the foot.
 function recruitSettingsBodyHtml(cycle, role) {
   const sections = RECRUIT.settingsSections(cycle, role);
   if (!sections.length) return `<div class="empty">${I.info}<b>No settings for your role</b></div>`;
@@ -552,10 +554,25 @@ function recruitFormField(label, inner, note) {
 
 const RECRUIT_SETTINGS = [
   {
-    id: 'about', label: 'About', heading: false, when: () => recruitCan('lead'),
-    view: (cycle) => `<form class="rc-form" data-action="recruit-settings-about">
+    id: 'status', label: 'Status', when: () => recruitCan('lead'),
+    view: (cycle) => {
+      const choices = recruitStatusChoices(cycle, recruitMyRoles());
+      const seg = [['draft', 'Draft'], ['open', 'Open'], ['closed', 'Closed']].map(([status, label]) => {
+        const current = cycle.status === status;
+        const move = choices.find((x) => x.status === status);
+        return `<button type="button" data-action="recruit-status-set" data-status="${status}" data-confirm="${move?.confirm ? '1' : ''}" aria-current="${current ? 'page' : 'false'}" ${current || move ? '' : 'disabled'}>${label}</button>`;
+      }).join('');
+      return `<nav class="rc-seg rc-seg--status" aria-label="Status"><span class="rc-seg__thumb" aria-hidden="true"></span>${seg}</nav>
+        ${cycle.status === 'archived' ? `<p class="rc-set__note">Archived and read only${cycle.closedAt ? `, closed ${MD.esc(recruitDate(Number(cycle.closedAt)))}` : ''}. Unarchive it below to change anything.</p>` : ''}`;
+    },
+  },
+  {
+    id: 'details', label: 'Details', when: () => recruitCan('lead'),
+    view: (cycle) => `<form class="rc-form" data-action="recruit-settings-details">
       ${recruitFormField('Name', `<input class="text-input" name="name" value="${MD.esc(cycle.name || '')}" maxlength="80" required autocomplete="off" spellcheck="false">`)}
       ${recruitFormField('Deadline (11:59 PM Eastern)', `<input class="text-input" name="closesAt" value="${MD.esc(recruitDateInput(cycle.closesAt))}" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false">`)}
+      <div class="rc-label">Subteams<div class="rc-rows" data-rc="subteam-rows">${recruitSubteams(cycle).map((t) => recruitSubteamRowHtml(t)).join('')}</div>
+        <button type="button" class="btn btn--sm rc-rows__add" data-action="recruit-subteam-add">${I.plus} Add subteam</button></div>
       <div class="rc-form__foot"><button type="submit" class="btn btn--primary">Save</button></div>
     </form>`,
     submit: async (form, cycle) => {
@@ -563,62 +580,24 @@ const RECRUIT_SETTINGS = [
       if (Number.isNaN(closesAt)) throw new Error('The deadline is a date, YYYY-MM-DD.');
       const name = String(form.elements.name.value || '').trim();
       if (!name) throw new Error('A cycle needs a name.');
-      const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}`, { method: 'PATCH', body: JSON.stringify({ version: cycle.version, name, closesAt }) });
-      recruitAdoptCycle(out.cycle);
-      form.dataset.adminDirty = 'false';
-      toast('Saved');
-      recruitAfterSettings();
-    },
-  },
-  {
-    id: 'status', label: 'Status', when: () => recruitCan('lead'),
-    view: (cycle) => {
-      const st = recruitState();
-      const roles = recruitMyRoles();
-      const choices = recruitStatusChoices(cycle, roles);
-      const seg = [['draft', 'Draft'], ['open', 'Open'], ['closed', 'Closed']].map(([status, label]) => {
-        const current = cycle.status === status;
-        const move = choices.find((x) => x.status === status);
-        return `<button type="button" data-action="recruit-status-set" data-status="${status}" data-confirm="${move?.confirm ? '1' : ''}" aria-current="${current ? 'page' : 'false'}" ${current || move ? '' : 'disabled'}>${label}</button>`;
-      }).join('');
-      const current = st.cycles?.intakeCycleId || null;
-      const receiving = current === cycle.id;
-      const holder = current && !receiving ? (st.cycles?.list || []).find((c) => c.id === current) : null;
-      const canToggle = recruitCan('admin') && (receiving || cycle.status === 'open');
-      // A note only when the box cannot simply be ticked.
-      const note = receiving ? ''
-        : holder ? `${holder.name} receives them now. Only one cycle can.`
-        : cycle.status !== 'open' ? 'Open the cycle first.'
-        : '';
-      return `<nav class="rc-seg rc-seg--status" aria-label="Status"><span class="rc-seg__thumb" aria-hidden="true"></span>${seg}</nav>
-        ${cycle.status === 'archived' ? `<p class="rc-set__note">Archived and read only${cycle.closedAt ? `, closed ${MD.esc(recruitDate(Number(cycle.closedAt)))}` : ''}. Unarchive it below to change anything.</p>` : ''}
-        <label class="rc-check rc-set__website"><input type="checkbox" data-action="recruit-website-toggle" ${receiving ? 'checked' : ''} ${canToggle ? '' : 'disabled'}> This cycle receives the forms on the website</label>
-        ${note ? `<p class="rc-set__note">${MD.esc(note)}</p>` : ''}`;
-    },
-  },
-  {
-    id: 'subteams', label: 'Subteams', when: () => recruitCan('lead'),
-    view: (cycle) => {
-      const teams = recruitSubteams(cycle);
-      return `<form class="rc-form rc-form--rows" data-action="recruit-settings-subteams">
-        <div class="rc-rows" data-rc="subteam-rows">${teams.map((t) => recruitSubteamRowHtml(t)).join('')}</div>
-        <div class="rc-form__foot"><button type="button" class="btn" data-action="recruit-subteam-add">${I.plus} Add subteam</button><button type="submit" class="btn btn--primary">Save</button></div>
-      </form>`;
-    },
-    submit: async (form, cycle) => {
-      const rows = $$('.rc-row', form);
-      const settings = [], seen = new Set();
-      for (const row of rows) {
-        const name = String($('[name="name"]', row)?.value || '').trim();
-        if (!name) continue;
-        const key = row.dataset.key || recruitSlug(name);
+      const teams = [], seen = new Set();
+      for (const row of $$('.rc-row', form)) {
+        const team = String($('[name="subteam"]', row)?.value || '').trim();
+        if (!team) continue;
+        const key = row.dataset.key || recruitSlug(team);
         if (!key || seen.has(key)) throw new Error(`Two subteams share the key "${key}".`);
         seen.add(key);
-        settings.push({ key, name });
+        teams.push({ key, name: team });
       }
-      await recruitPutSettings(cycle, 'subteams', settings);
+      const about = name !== cycle.name || (closesAt ?? null) !== (cycle.closesAt == null ? null : Number(cycle.closesAt));
+      const subteams = JSON.stringify(teams) !== JSON.stringify(recruitSubteams(cycle).map((t) => ({ key: t.key, name: t.name })));
+      if (about) {
+        const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}`, { method: 'PATCH', body: JSON.stringify({ version: cycle.version, name, closesAt }) });
+        recruitAdoptCycle(out.cycle);
+      }
+      if (subteams) await recruitPutSettings(recruitCycleRow() || cycle, 'subteams', teams);
       form.dataset.adminDirty = 'false';
-      toast('Subteams saved');
+      toast(about || subteams ? 'Saved' : 'Nothing changed');
       recruitAfterSettings();
     },
   },
@@ -634,7 +613,7 @@ const RECRUIT_SETTINGS = [
 
 function recruitSubteamRowHtml(t = {}) {
   return `<div class="rc-row" data-key="${MD.esc(t.key || '')}">
-    <input class="text-input" name="name" value="${MD.esc(t.name || '')}" placeholder="Subteam" maxlength="40" aria-label="Subteam name" autocomplete="off" spellcheck="false">
+    <input class="text-input" name="subteam" value="${MD.esc(t.name || '')}" placeholder="Subteam" maxlength="40" aria-label="Subteam name" autocomplete="off" spellcheck="false">
     <button type="button" class="icon-btn" data-action="recruit-subteam-remove" aria-label="Remove ${MD.esc(t.name || 'subteam')}">${I.x}</button>
   </div>`;
 }
@@ -656,8 +635,8 @@ async function recruitToggleIntake(on) {
     const body = { on: Boolean(on) };
     if (st.cycles?.settingsVersion !== null && st.cycles?.settingsVersion !== undefined) body.version = st.cycles.settingsVersion;
     const out = await RECRUIT.api(`/recruit/cycles/${encodeURIComponent(cycle.id)}/intake`, { method: 'POST', body: JSON.stringify(body) });
-    if (st.cycles) { st.cycles.intakeCycleId = out.intakeCycleId || null; if (out.settingsVersion !== undefined) st.cycles.settingsVersion = out.settingsVersion; }
-    toast(on ? `${cycle.name} receives the website's forms` : 'No cycle receives the website\'s forms now');
+    if (st.cycles) { st.cycles.intakeCycleId = out.intakeCycleId || null; const v = out.settingsVersion ?? out.version; if (v !== undefined) st.cycles.settingsVersion = v; }
+    toast(on ? `${cycle.name} feeds /apply` : 'No cycle feeds /apply now');
   } catch (e) { recruitVersionToast(e, cycle.id); }
   finally { st.busy.delete('intake'); recruitAfterSettings(); }
 }
@@ -692,7 +671,7 @@ RECRUIT.register({
       if (!rows) return;
       rows.insertAdjacentHTML('beforeend', recruitSubteamRowHtml());
       el.closest('form').dataset.adminDirty = 'true';
-      $$('.rc-row [name="name"]', rows).at(-1)?.focus();
+      $$('.rc-row [name="subteam"]', rows).at(-1)?.focus();
     },
     'recruit-subteam-remove': (el) => {
       const form = el.closest('form'), row = el.closest('.rc-row');
@@ -700,7 +679,7 @@ RECRUIT.register({
       const rows = row.parentElement;
       row.remove();
       if (form) form.dataset.adminDirty = 'true';
-      ($$('.rc-row [name="name"]', rows).at(-1) || $('[data-action="recruit-subteam-add"]', form))?.focus();
+      ($$('.rc-row [name="subteam"]', rows).at(-1) || $('[data-action="recruit-subteam-add"]', form))?.focus();
     },
   },
   dd: {

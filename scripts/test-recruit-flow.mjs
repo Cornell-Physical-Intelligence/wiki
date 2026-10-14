@@ -142,6 +142,22 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     assert.deepEqual(S.validateSite({ sections: { coffee: { form: null } } }, marked).landing, ['extra']);
     assert.equal(S.validateSite({ remove: ['extra'], sections: { coffee: { form: null } } }, marked).landing, null);
     assert.deepEqual(S.applyKeysOf({ doc: { site: { landing: 'coffee' } } }), ['coffee'], 'a cycle saved with one key reads as a list of one');
+    // /apply: the marked forms that are open, in the order listed; never an unmarked one.
+    const opened = { ...marked, doc: { site: S.validateSite({ sections: { extra: { open: true }, coffee: { open: true }, interest: { open: true } }, landing: ['coffee', 'extra'] }, marked) } };
+    assert.equal(S.landingFor(opened), 'coffee');
+    assert.deepEqual(S.applyFor(opened).choices.map((c) => c.key), ['coffee', 'extra'], 'choices follow the list, not the stage order');
+    const unmarked = { ...opened, doc: { site: { ...opened.doc.site, landing: null } } };
+    assert.equal(S.landingFor(unmarked), null, 'an open form that is not marked never stands in for /apply');
+    assert.deepEqual(S.applyFor(unmarked).choices, []);
+    // A form names the subteam its applicants join: one of the cycle's, or none.
+    const teamed = { ...withInterview, doc: { ...withInterview.doc, subteams: [{ key: 'electrical', name: 'Electrical' }] } };
+    assert.equal(S.validateSite({ sections: { coffee: { subteam: ' Electrical ' } } }, teamed).sections.coffee.subteam, 'Electrical');
+    assert.throws(() => S.validateSite({ sections: { coffee: { subteam: 'Bakery' } } }, teamed), /one of this cycle's subteams/);
+    assert.equal(S.validateSite({ sections: { coffee: { subteam: '' } } }, teamed).sections.coffee.subteam, undefined, 'none is stored as nothing');
+    assert.equal(S.validateSite({ sections: { interview: { subteam: 'Electrical' } } }, teamed).sections.interview.subteam, undefined, 'a stage without a form keeps none');
+    const kept = { ...teamed, doc: { ...teamed.doc, site: S.validateSite({ sections: { coffee: { subteam: 'Electrical' } } }, teamed) } };
+    assert.equal(S.sectionsFor(kept).coffee.subteam, 'Electrical', 'and it reads back');
+    assert.equal(S.validateSite({ sections: { coffee: { title: 'Chats' } } }, kept).sections.coffee.subteam, 'Electrical', 'an edit elsewhere keeps it');
     assert.throws(() => S.validateSite({ sections: { interview: { kind: 'party' } } }, withInterview), /form, meeting, review or step/);
     // Dropping the done checkbox from the fields clears `done` instead of failing.
     const cleared = S.validateSite({ sections: { interview: { fields: [{ key: 'notes', type: 'note', label: 'Notes' }] } } }, withInterview);
@@ -179,6 +195,8 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     const subteamForms = { coffee: { split: { stage: 'coffee', q: 'subteam', routes: { Electrical: 'ee', Software: 'cs', Mechanical: 'mech', Creative: 'mech' } } }, ee: {}, cs: {}, mech: {} };
     assert.deepEqual([...flow.stageSubteams(subteamForms)].sort(), [['cs', 'Software'], ['ee', 'Electrical']], "a form one subteam answer leads to is that subteam's; a shared one is nobody's");
     assert.deepEqual([...flow.stageSubteams(sections)], [], 'only a split by the subteam question names a subteam');
+    const named = { ...subteamForms, ee: { form: { questions: [] }, subteam: 'Mechanical' }, mech: { form: { questions: [] }, subteam: ' Creative ' }, gen: { form: null, subteam: 'Software' } };
+    assert.deepEqual([...flow.stageSubteams(named)].sort(), [['cs', 'Software'], ['ee', 'Mechanical'], ['mech', 'Creative']], 'a form\'s own subteam wins over a split; a stage without a form names none');
     for (const value of [undefined, null, '', []]) {
       assert.deepEqual([...flow.routeOf(split, sub({ team: value }))], ['gen'], 'a submitted empty optional answer takes Anyone else');
       assert.deepEqual([...flow.routeOf({ ...split, otherwise: null }, sub({ team: value }))], [], 'a submitted empty answer stops when Anyone else goes nowhere');
