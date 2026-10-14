@@ -1120,6 +1120,56 @@ function loadCycle(f, { role = 'admin', roles = ['admin'], sub = 'flow', params 
   const put3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
   same(put3.body.settings, { sections: {}, question: 'Which one?' });
   put3.resolve({ cycle: cycleRow({ version: 6, doc: { ...cycleRow().doc, site: { landing: ['interest', 'coffee'], question: 'Which one?' } } }), sections: { ...opened, coffee: { ...opened.coffee, choiceLabel: 'Chat first' } } }); await f.settle();
+  // Above the forms: headings, text and the deadline, added from one menu and saved at once.
+  const siteAt = (blocks, version) => cycleRow({ version, doc: { ...cycleRow().doc, site: { landing: ['interest', 'coffee'], question: 'Which one?', ...(blocks.length ? { blocks } : {}) } } });
+  const pageSections = { ...opened, coffee: { ...opened.coffee, choiceLabel: 'Chat first' } };
+  assert.ok(!f.app.querySelector('.ws-blocks'), 'an empty page lists no blocks');
+  await f.click(f.app.querySelector('[data-action="recruit-ws-block-add"]'));
+  same(f.menus.at(-1).items.map((i) => i.label), ['Heading', 'Text', 'Deadline']);
+  f.menus.at(-1).items.find((i) => i.label === 'Heading').run();
+  const head = st.cycle.data.doc.site.blocks[0];
+  assert.equal(head.type, 'heading');
+  assert.ok(f.app.querySelector(`.ws-block[data-block="${head.id}"]`), 'the new block shows before the save lands');
+  assert.ok(f.document.activeElement === f.app.querySelector(`.ws-block[data-block="${head.id}"] [data-m="recruit-ws-block"]`), 'and takes the focus');
+  const putB = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(putB.body.settings, { sections: {}, blocks: [{ id: head.id, type: 'heading', text: '' }] });
+  putB.resolve({ cycle: siteAt([{ id: head.id, type: 'heading', text: '' }], 7), sections: pageSections }); await f.settle();
+  f.type(f.app.querySelector(`[data-m="recruit-ws-block"][data-block="${head.id}"]`), 'Fall recruiting');
+  assert.equal(f.app.querySelector('.wp-block-h').textContent, 'Fall recruiting', 'the preview follows as it is typed');
+  assert.ok(f.run('RECRUIT.dirty()'));
+  f.change(f.app.querySelector(`[data-m="recruit-ws-block"][data-block="${head.id}"]`), 'Fall recruiting');
+  const putB2 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(putB2.body.settings, { sections: {}, blocks: [{ id: head.id, type: 'heading', text: 'Fall recruiting' }] });
+  putB2.resolve({ cycle: siteAt([{ id: head.id, type: 'heading', text: 'Fall recruiting' }], 8), sections: pageSections }); await f.settle();
+  assert.ok(!f.run('RECRUIT.dirty()'), 'saved words are no longer pending');
+  // The deadline reads the cycle's; without one it says so and offers to set it.
+  await f.click(f.app.querySelector('[data-action="recruit-ws-block-add"]'));
+  f.menus.at(-1).items.find((i) => i.label === 'Deadline').run();
+  const due = st.cycle.data.doc.site.blocks[1];
+  const putB3 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  putB3.resolve({ cycle: siteAt([{ id: head.id, type: 'heading', text: 'Fall recruiting' }, { id: due.id, type: 'deadline', text: '' }], 9), sections: pageSections }); await f.settle();
+  assert.match(f.app.querySelector(`.ws-block[data-block="${due.id}"] .ws-block__date`).textContent, /No deadline set/);
+  assert.ok(f.app.querySelector(`.ws-block[data-block="${due.id}"] [data-action="recruit-settings-open"]`), 'with a way to set one');
+  assert.equal(f.app.querySelectorAll('.wp-block-p').length, 0, 'and /apply shows no deadline line');
+  st.cycle.data = { ...st.cycle.data, closesAt: Date.UTC(2026, 9, 31, 3, 59, 59) };
+  f.mount();
+  assert.equal(f.app.querySelector(`.ws-block[data-block="${due.id}"] .ws-block__date`).textContent, 'Friday, October 30 at 11:59 PM EDT', 'the deadline in Eastern time, as the site words it');
+  assert.equal(f.app.querySelector('.wp-block-p').textContent, 'Applications are due Friday, October 30 at 11:59 PM EDT');
+  await f.click(f.app.querySelector('[data-action="recruit-ws-block-add"]'));
+  same(f.menus.at(-1).items.map((i) => i.label), ['Heading', 'Text'], 'one deadline is enough');
+  // Arrow keys reorder; a failed removal puts the block back.
+  assert.equal(f.run('RECRUIT.keydown.bind(RECRUIT)')({ key: 'ArrowUp', target: f.app.querySelector(`.ws-block[data-block="${due.id}"] .rc-grip`), preventDefault() {} }), true);
+  same(f.app.querySelectorAll('.ws-block').map((b) => b.dataset.block), [due.id, head.id]);
+  const putB4 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  same(putB4.body.settings.blocks.map((b) => b.type), ['deadline', 'heading']);
+  putB4.resolve({ cycle: { ...siteAt([{ id: due.id, type: 'deadline', text: '' }, { id: head.id, type: 'heading', text: 'Fall recruiting' }], 10), closesAt: Date.UTC(2026, 9, 31, 3, 59, 59) }, sections: pageSections }); await f.settle();
+  await f.click(f.app.querySelector(`[data-action="recruit-ws-block-remove"][data-block="${head.id}"]`));
+  same(f.app.querySelectorAll('.ws-block').map((b) => b.dataset.block), [due.id], 'removing shows at once');
+  const putB5 = await f.pending('/recruit/cycles/cy-a/settings/site', 'PUT');
+  putB5.reject(Object.assign(new Error('Busy'), { status: 500 })); await f.settle();
+  same(f.app.querySelectorAll('.ws-block').map((b) => b.dataset.block), [due.id, head.id], 'and comes back when the save fails');
+  st.cycle.data = { ...st.cycle.data, closesAt: null, doc: { ...st.cycle.data.doc, site: { ...st.cycle.data.doc.site, blocks: [] } } };
+  f.mount();
   // Picking a choice in the preview shows its form below, untitled, as on the site.
   await f.click(f.app.querySelector('.wp-choice[data-key="coffee"]'));
   assert.equal(f.app.querySelector('.wp-choice[data-key="coffee"]').getAttribute('aria-pressed'), 'true');

@@ -149,6 +149,17 @@ if (!process.env.RECRUIT_FLOW_TEST_ROOT) {
     const unmarked = { ...opened, doc: { site: { ...opened.doc.site, landing: null } } };
     assert.equal(S.landingFor(unmarked), null, 'an open form that is not marked never stands in for /apply');
     assert.deepEqual(S.applyFor(unmarked).choices, []);
+    // What /apply says above its forms: headings, text and the deadline, in order.
+    const paged = S.validateSite({ blocks: [{ id: 'h', type: 'heading', text: '  Join   us ' }, { id: 't', type: 'text', text: ' One\r\n\r\n\r\nTwo  ' }, { id: 'd', type: 'deadline', text: '' }, { id: 'e', type: 'text', text: '' }] }, opened);
+    assert.deepEqual(paged.blocks, [{ id: 'h', type: 'heading', text: 'Join us' }, { id: 't', type: 'text', text: 'One\n\nTwo' }, { id: 'd', type: 'deadline', text: '' }, { id: 'e', type: 'text', text: '' }], 'text keeps a paragraph break; headings are one line');
+    assert.throws(() => S.validateSite({ blocks: [{ type: 'video' }] }, opened), /heading, text or the deadline/);
+    assert.throws(() => S.validateSite({ blocks: Array.from({ length: 13 }, (_, i) => ({ id: 'x' + i, type: 'text', text: 'x' })) }, opened), /Up to 12/);
+    assert.throws(() => S.validateSite({ blocks: 'Join us' }, opened), /list of blocks/);
+    const withPage = { ...opened, closesAt: Date.UTC(2026, 9, 31, 3, 59, 59), doc: { site: { ...opened.doc.site, blocks: paged.blocks } } };
+    assert.deepEqual(S.validateSite({ sections: { coffee: { title: 'Chats' } } }, withPage).blocks, paged.blocks, 'an edit elsewhere keeps the page');
+    assert.equal(S.validateSite({ blocks: [] }, withPage).blocks, undefined, 'an empty page is stored as nothing');
+    assert.deepEqual(S.applyFor(withPage).blocks, [{ type: 'heading', text: 'Join us' }, { type: 'text', text: 'One\n\nTwo' }, { type: 'deadline', text: 'Applications are due', closesAt: Date.UTC(2026, 9, 31, 3, 59, 59) }], 'the feed leaves out empty blocks and words the deadline');
+    assert.deepEqual(S.applyFor({ ...withPage, closesAt: null }).blocks.map((b) => b.type), ['heading', 'text'], 'without a deadline the deadline block says nothing');
     // A form names the subteam its applicants join: one of the cycle's, or none.
     const teamed = { ...withInterview, doc: { ...withInterview.doc, subteams: [{ key: 'electrical', name: 'Electrical' }] } };
     assert.equal(S.validateSite({ sections: { coffee: { subteam: ' Electrical ' } } }, teamed).sections.coffee.subteam, 'Electrical');

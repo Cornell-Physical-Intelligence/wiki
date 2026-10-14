@@ -131,7 +131,7 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.equal(chose.status, 200, chose.text);
   assert.deepEqual(chose.data.cycle.doc.site.landing, ['coffee'], 'one key is saved as a list of one');
   assert.equal((await anon('GET', '/recruit/site')).data.landing, 'coffee', 'the chosen form is what /apply shows');
-  assert.deepEqual((await anon('GET', '/recruit/site')).data.apply, { question: 'What are you applying for?', choices: [{ key: 'coffee', label: 'Coffee chats' }] }, 'one marked form is the only choice, so /apply shows it alone');
+  assert.deepEqual((await anon('GET', '/recruit/site')).data.apply, { question: 'What are you applying for?', choices: [{ key: 'coffee', label: 'Coffee chats' }], blocks: [] }, 'one marked form is the only choice, so /apply shows it alone');
   assert.deepEqual((await anon('GET', '/recruit/site')).data.sections.find((s) => s.key === 'coffee').form.questions.map((q) => q.key), ['name', 'email', 'subteam', 'availability', 'snack'], 'choosing the /apply form leaves the sections alone');
   assert.deepEqual(coffee.form.questions.find((q) => q.key === 'subteam').options, ['Mechanical', 'Software'], 'saved subteam options belong to the form');
   // Several forms at /apply: applicants choose one, by its label, under the cycle's question.
@@ -141,12 +141,19 @@ if (!process.env.RECRUIT_SITE_TEST_ROOT) {
   assert.deepEqual(several.data.cycle.doc.site.landing, ['coffee', 'application', 'interest'], 'the list keeps each form once');
   assert.equal(several.data.cycle.doc.site.question, 'Which one?');
   const site3 = (await anon('GET', '/recruit/site')).data;
-  assert.deepEqual(site3.apply, { question: 'Which one?', choices: [{ key: 'coffee', label: 'Coffee chats' }, { key: 'interest', label: 'Join the list' }] }, 'open marked forms in the order the team listed them, by label or title; a closed one is left out');
+  assert.deepEqual(site3.apply, { question: 'Which one?', choices: [{ key: 'coffee', label: 'Coffee chats' }, { key: 'interest', label: 'Join the list' }], blocks: [] }, 'open marked forms in the order the team listed them, by label or title; a closed one is left out');
   assert.equal(site3.landing, 'coffee', 'a site that shows one form shows the first open one in the list');
   const relisted = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: several.data.cycle.version, settings: { sections: {}, landing: ['interest', 'application', 'coffee'] } });
   assert.equal(relisted.status, 200, relisted.text);
   assert.deepEqual((await anon('GET', '/recruit/site')).data.apply.choices.map((c) => c.key), ['interest', 'coffee'], 'reordering the list reorders the choices');
-  const back = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: relisted.data.cycle.version, settings: { sections: { interest: { choiceLabel: '' } }, landing: 'coffee', question: '' } });
+  const pageV = (await recruit('GET', '/recruit/cycles/cy-interest')).data.cycle.version;
+  const paged = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: pageV, settings: { sections: {}, blocks: [{ id: 'h', type: 'heading', text: 'Fall recruiting' }, { id: 'd', type: 'deadline', text: '' }] } });
+  assert.equal(paged.status, 200, paged.text);
+  assert.deepEqual((await anon('GET', '/recruit/site')).data.apply.blocks, [{ type: 'heading', text: 'Fall recruiting' }], 'the page says what the team wrote; a deadline block waits for a deadline');
+  assert.equal((await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: paged.data.cycle.version, settings: { sections: {}, blocks: [{ type: 'poll' }] } })).status, 400, 'only headings, text and the deadline');
+  const unpaged = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: paged.data.cycle.version, settings: { sections: {}, blocks: [] } });
+  assert.deepEqual((await anon('GET', '/recruit/site')).data.apply.blocks, [], 'and can say nothing');
+  const back = await recruit('PUT', '/recruit/cycles/cy-interest/settings/site', { version: unpaged.data.cycle.version, settings: { sections: { interest: { choiceLabel: '' } }, landing: 'coffee', question: '' } });
   assert.equal(back.status, 200, back.text);
   assert.equal(back.data.cycle.doc.site.question, undefined, 'an empty question falls back to the default');
   assert.equal(back.data.cycle.doc.site.sections.interest.choiceLabel, undefined, 'an empty label falls back to the title');
